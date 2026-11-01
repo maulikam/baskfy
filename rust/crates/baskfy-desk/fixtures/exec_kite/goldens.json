@@ -1,0 +1,4853 @@
+{
+ "cases": [
+  {
+   "name": "holdings well-formed",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings reply None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": null,
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "'NoneType' object is not iterable"
+   ]
+  },
+  {
+   "name": "holdings reply empty dict",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": {},
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": []
+  },
+  {
+   "name": "holdings reply a dict",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": {
+     "a": 1
+    },
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "string indices must be integers, not 'str'"
+   ]
+  },
+  {
+   "name": "holdings reply a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": "ab",
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "string indices must be integers, not 'str'"
+   ]
+  },
+  {
+   "name": "holdings reply an int",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": 5,
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not iterable"
+   ]
+  },
+  {
+   "name": "holdings row a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     "x"
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "string indices must be integers, not 'str'"
+   ]
+  },
+  {
+   "name": "holdings row a list",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     [
+      1
+     ]
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "list indices must be integers or slices, not str"
+   ]
+  },
+  {
+   "name": "holdings row None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     null
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "'NoneType' object is not subscriptable"
+   ]
+  },
+  {
+   "name": "holdings row empty",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {}
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "KeyError",
+    "'quantity'"
+   ]
+  },
+  {
+   "name": "holdings quantity None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": null,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "unsupported operand type(s) for +: 'NoneType' and 'int'"
+   ]
+  },
+  {
+   "name": "holdings quantity a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": "5",
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "can only concatenate str (not \"int\") to str"
+   ]
+  },
+  {
+   "name": "holdings all strings",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": "5",
+      "t1_quantity": "1",
+      "collateral_quantity": "2",
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "'<=' not supported between instances of 'str' and 'int'"
+   ]
+  },
+  {
+   "name": "holdings quantity a list",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": [
+       1
+      ],
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "can only concatenate list (not \"int\") to list"
+   ]
+  },
+  {
+   "name": "holdings t1 None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": null,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "unsupported operand type(s) for +: 'int' and 'NoneType'"
+   ]
+  },
+  {
+   "name": "holdings t1 and collateral missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings collateral a float",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 2.5,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 12.5,
+     "pledged_qty": 2.5,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings quantity a bool",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": true,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 1,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings quantity zero is skipped before the keys",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "quantity": 0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": []
+  },
+  {
+   "name": "holdings tradingsymbol missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "KeyError",
+    "'tradingsymbol'"
+   ]
+  },
+  {
+   "name": "holdings exchange missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "KeyError",
+    "'exchange'"
+   ]
+  },
+  {
+   "name": "holdings average_price missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "KeyError",
+    "'average_price'"
+   ]
+  },
+  {
+   "name": "holdings last_price missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "KeyError",
+    "'last_price'"
+   ]
+  },
+  {
+   "name": "holdings tradingsymbol a list",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": [
+       "x"
+      ],
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "unhashable type: 'list'"
+   ]
+  },
+  {
+   "name": "holdings tradingsymbol a dict",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": {
+       "x": 1
+      },
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings"
+   ],
+   "raise": [
+    "TypeError",
+    "unhashable type: 'dict'"
+   ]
+  },
+  {
+   "name": "holdings tradingsymbol an int",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": 5,
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": 5,
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings tradingsymbol None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": null,
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": null,
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings duplicate symbol: last wins, first position",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 1,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     },
+     {
+      "tradingsymbol": "TCS",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     },
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 7,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 7,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings int and float symbols 1 and 1.0 collide",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": 1,
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     },
+     {
+      "tradingsymbol": 1.0,
+      "exchange": "NSE",
+      "quantity": 3,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": 1.0,
+     "exchange": "NSE",
+     "quantity": 3,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "holdings negative total skipped",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": -5,
+      "t1_quantity": 2,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": []
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": []
+  },
+  {
+   "name": "positions raises",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "__raise__": [
+      "RuntimeError",
+      "network"
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "RuntimeError",
+    "could not read positions, so today's purchases cannot be counted: network"
+   ]
+  },
+  {
+   "name": "positions reply None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": null
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "RuntimeError",
+    "could not read positions, so today's purchases cannot be counted: 'NoneType' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions reply a list",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": []
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "RuntimeError",
+    "could not read positions, so today's purchases cannot be counted: 'list' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions reply a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": "x"
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "RuntimeError",
+    "could not read positions, so today's purchases cannot be counted: 'str' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions net missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {}
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions net None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": null
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions net a dict",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": {
+      "a": 1
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "AttributeError",
+    "'str' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions net an int",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": 5
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not iterable"
+   ]
+  },
+  {
+   "name": "positions net zero",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": 0
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions net a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": "ab"
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "AttributeError",
+    "'str' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions row a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      "x"
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "AttributeError",
+    "'str' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions row None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      null
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "AttributeError",
+    "'NoneType' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "positions well-formed new symbol",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 4,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions product missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions product an int",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": 5,
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions product MIS",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "MIS",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": "7",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 7,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity padded string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": " 12 ",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 12,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity underscored string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": "1_0",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity signed string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": "+3",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 3,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity a decimal string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": "1.5",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "ValueError",
+    "invalid literal for int() with base 10: '1.5'"
+   ]
+  },
+  {
+   "name": "positions quantity garbage string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": "abc",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "ValueError",
+    "invalid literal for int() with base 10: 'abc'"
+   ]
+  },
+  {
+   "name": "positions quantity a double underscore",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": "1__0",
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "ValueError",
+    "invalid literal for int() with base 10: '1__0'"
+   ]
+  },
+  {
+   "name": "positions quantity a float",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 2.9,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 2,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity a negative float",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": -2.9,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity a list",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": [
+        1
+       ],
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "TypeError",
+    "int() argument must be a string, a bytes-like object or a real number, not 'list'"
+   ]
+  },
+  {
+   "name": "positions quantity a bool",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": true,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 1,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions quantity None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": null,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions overnight a string",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 10,
+       "product": "CNC",
+       "overnight_quantity": "3",
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 7,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions overnight a dict",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": {
+        "a": 1
+       },
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "TypeError",
+    "int() argument must be a string, a bytes-like object or a real number, not 'dict'"
+   ]
+  },
+  {
+   "name": "positions tradingsymbol missing",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "KeyError",
+    "'tradingsymbol'"
+   ]
+  },
+  {
+   "name": "positions tradingsymbol missing on a sell",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "exchange": "NSE",
+       "quantity": -3,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions tradingsymbol a list",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": [
+        "x"
+       ],
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "raise": [
+    "TypeError",
+    "unhashable type: 'list'"
+   ]
+  },
+  {
+   "name": "positions tradingsymbol an int",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": 7,
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": 7,
+     "exchange": "NSE",
+     "quantity": 4,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions exchange missing and prices None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": null,
+       "last_price": 0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 4,
+     "pledged_qty": 0,
+     "average_price": 0.0,
+     "last_price": 0.0
+    }
+   ]
+  },
+  {
+   "name": "positions exchange None",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": null,
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 10,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    },
+    {
+     "symbol": "TCS",
+     "exchange": null,
+     "quantity": 4,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "positions fold into a float holding",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "TCS",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0.5,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 14.5,
+     "pledged_qty": 0.5,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions fold into an existing row",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [
+     {
+      "tradingsymbol": "INFY",
+      "exchange": "NSE",
+      "quantity": 10,
+      "t1_quantity": 0,
+      "collateral_quantity": 0,
+      "average_price": 100.0,
+      "last_price": 101.0
+     }
+    ],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "INFY",
+       "exchange": "NSE",
+       "quantity": 3,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "INFY",
+     "exchange": "NSE",
+     "quantity": 13,
+     "pledged_qty": 0,
+     "average_price": 100.0,
+     "last_price": 101.0
+    }
+   ]
+  },
+  {
+   "name": "positions twice for one new symbol",
+   "method": "holdings",
+   "args": [],
+   "replies": {
+    "holdings": [],
+    "positions": {
+     "net": [
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 4,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      },
+      {
+       "tradingsymbol": "TCS",
+       "exchange": "NSE",
+       "quantity": 2,
+       "product": "CNC",
+       "overnight_quantity": 0,
+       "average_price": 200.0,
+       "last_price": 201.0
+      }
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "holdings",
+    "positions"
+   ],
+   "ok": [
+    {
+     "symbol": "TCS",
+     "exchange": "NSE",
+     "quantity": 6,
+     "pledged_qty": 0,
+     "average_price": 200.0,
+     "last_price": 201.0
+    }
+   ]
+  },
+  {
+   "name": "ltp well-formed",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY",
+     "TCS"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": 1500.5
+     },
+     "NSE:TCS": {
+      "last_price": 4000
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "ok": {
+    "INFY": 1500.5,
+    "TCS": 4000.0
+   }
+  },
+  {
+   "name": "ltp reply None",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": null
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "AttributeError",
+    "'NoneType' object has no attribute 'items'"
+   ]
+  },
+  {
+   "name": "ltp reply a list",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": []
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "AttributeError",
+    "'list' object has no attribute 'items'"
+   ]
+  },
+  {
+   "name": "ltp entry without last_price",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {}
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "KeyError",
+    "'last_price'"
+   ]
+  },
+  {
+   "name": "ltp entry None",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": null
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "TypeError",
+    "'NoneType' object is not subscriptable"
+   ]
+  },
+  {
+   "name": "ltp entry a string",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": "x"
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "TypeError",
+    "string indices must be integers, not 'str'"
+   ]
+  },
+  {
+   "name": "ltp entry a list",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": [
+      1
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "TypeError",
+    "list indices must be integers or slices, not str"
+   ]
+  },
+  {
+   "name": "ltp entry an int",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": 5
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not subscriptable"
+   ]
+  },
+  {
+   "name": "ltp last_price a string",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": "12.5"
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "ok": {
+    "INFY": 12.5
+   }
+  },
+  {
+   "name": "ltp last_price a padded string",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": " 1e3 "
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "ok": {
+    "INFY": 1000.0
+   }
+  },
+  {
+   "name": "ltp last_price garbage",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": "abc"
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "ValueError",
+    "could not convert string to float: 'abc'"
+   ]
+  },
+  {
+   "name": "ltp last_price None",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": null
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "TypeError",
+    "float() argument must be a string or a real number, not 'NoneType'"
+   ]
+  },
+  {
+   "name": "ltp last_price a list",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": [
+       1
+      ]
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "TypeError",
+    "float() argument must be a string or a real number, not 'list'"
+   ]
+  },
+  {
+   "name": "ltp last_price a bool",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": true
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "ok": {
+    "INFY": 1.0
+   }
+  },
+  {
+   "name": "ltp key without an exchange",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "INFY": {
+      "last_price": 1.0
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "IndexError",
+    "list index out of range"
+   ]
+  },
+  {
+   "name": "ltp key with two colons",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:A:B": {
+      "last_price": 1.0
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "ok": {
+    "A:B": 1.0
+   }
+  },
+  {
+   "name": "ltp a bad entry after a good one",
+   "method": "ltp",
+   "args": [
+    [
+     "INFY",
+     "TCS"
+    ]
+   ],
+   "replies": {
+    "ltp": {
+     "NSE:INFY": {
+      "last_price": 1.0
+     },
+     "NSE:TCS": {}
+    }
+   },
+   "live": false,
+   "calls": [
+    "ltp"
+   ],
+   "raise": [
+    "KeyError",
+    "'last_price'"
+   ]
+  },
+  {
+   "name": "ltp nothing asked",
+   "method": "ltp",
+   "args": [
+    [
+     "",
+     ""
+    ]
+   ],
+   "replies": {
+    "ltp": null
+   },
+   "live": false,
+   "calls": [],
+   "ok": {}
+  },
+  {
+   "name": "quotes well-formed",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": {
+      "last_price": 1500.5,
+      "net_change": 3.5,
+      "volume": 0,
+      "volume_traded": 99,
+      "ohlc": {
+       "open": 1490,
+       "high": 1510,
+       "low": 1480,
+       "close": 1497
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {
+    "INFY": {
+     "last_price": 1500.5,
+     "net_change": 3.5,
+     "open": 1490,
+     "high": 1510,
+     "low": 1480,
+     "prev_close": 1497,
+     "volume": 99
+    }
+   }
+  },
+  {
+   "name": "quotes batch raises",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "__raise__": [
+      "RuntimeError",
+      "Too many"
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {}
+  },
+  {
+   "name": "quotes reply None",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": null
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'NoneType' object has no attribute 'items'"
+   ]
+  },
+  {
+   "name": "quotes reply a list",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": [
+     1
+    ]
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'list' object has no attribute 'items'"
+   ]
+  },
+  {
+   "name": "quotes entry an int",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": 5
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'int' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "quotes entry None",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": null
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'NoneType' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "quotes entry empty",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": {}
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {
+    "INFY": {
+     "last_price": null,
+     "net_change": null,
+     "open": null,
+     "high": null,
+     "low": null,
+     "prev_close": null,
+     "volume": null
+    }
+   }
+  },
+  {
+   "name": "quotes ohlc a list",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": {
+      "ohlc": [
+       1
+      ]
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'list' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "quotes ohlc an empty list",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": {
+      "ohlc": []
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {
+    "INFY": {
+     "last_price": null,
+     "net_change": null,
+     "open": null,
+     "high": null,
+     "low": null,
+     "prev_close": null,
+     "volume": null
+    }
+   }
+  },
+  {
+   "name": "quotes ohlc a string",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": {
+      "ohlc": "x"
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'str' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "quotes key without an exchange",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "INFY": {
+      "last_price": 1
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "IndexError",
+    "list index out of range"
+   ]
+  },
+  {
+   "name": "quotes key without an exchange and a bad ohlc",
+   "method": "quotes",
+   "args": [
+    [
+     "INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "INFY": {
+      "ohlc": 5
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "AttributeError",
+    "'int' object has no attribute 'get'"
+   ]
+  },
+  {
+   "name": "quotes nothing asked",
+   "method": "quotes",
+   "args": [
+    [
+     ""
+    ]
+   ],
+   "replies": {
+    "quote": null
+   },
+   "live": false,
+   "calls": [],
+   "ok": {}
+  },
+  {
+   "name": "trades None",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": null
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "ok": []
+  },
+  {
+   "name": "trades a dict",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": {
+     "a": 1,
+     "b": 2
+    }
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "ok": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "trades an int",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": 5
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not iterable"
+   ]
+  },
+  {
+   "name": "trades zero",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": 0
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "ok": []
+  },
+  {
+   "name": "trades a string",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": "ab"
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "ok": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "trades a list",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": [
+     {
+      "trade_id": "1"
+     }
+    ]
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "ok": [
+    {
+     "trade_id": "1"
+    }
+   ]
+  },
+  {
+   "name": "trades a bool",
+   "method": "trades",
+   "args": [],
+   "replies": {
+    "trades": true
+   },
+   "live": false,
+   "calls": [
+    "trades"
+   ],
+   "raise": [
+    "TypeError",
+    "'bool' object is not iterable"
+   ]
+  },
+  {
+   "name": "instruments a dict",
+   "method": "instruments",
+   "args": [],
+   "replies": {
+    "instruments": {
+     "a": 1
+    }
+   },
+   "live": false,
+   "calls": [
+    "instruments"
+   ],
+   "ok": [
+    "a"
+   ]
+  },
+  {
+   "name": "instruments None",
+   "method": "instruments",
+   "args": [],
+   "replies": {
+    "instruments": null
+   },
+   "live": false,
+   "calls": [
+    "instruments"
+   ],
+   "ok": []
+  },
+  {
+   "name": "historical a dict",
+   "method": "historical",
+   "args": [],
+   "replies": {
+    "historical_data": {
+     "a": 1
+    }
+   },
+   "live": false,
+   "calls": [
+    "historical_data"
+   ],
+   "ok": [
+    "a"
+   ]
+  },
+  {
+   "name": "historical a float",
+   "method": "historical",
+   "args": [],
+   "replies": {
+    "historical_data": 1.5
+   },
+   "live": false,
+   "calls": [
+    "historical_data"
+   ],
+   "raise": [
+    "TypeError",
+    "'float' object is not iterable"
+   ]
+  },
+  {
+   "name": "orders a string",
+   "method": "orders",
+   "args": [],
+   "replies": {
+    "orders": "xy"
+   },
+   "live": false,
+   "calls": [
+    "orders"
+   ],
+   "ok": [
+    "x",
+    "y"
+   ]
+  },
+  {
+   "name": "order_history None",
+   "method": "order_history",
+   "args": [],
+   "replies": {
+    "order_history": null
+   },
+   "live": false,
+   "calls": [
+    "order_history"
+   ],
+   "ok": []
+  },
+  {
+   "name": "get_gtts a dict",
+   "method": "get_gtts",
+   "args": [],
+   "replies": {
+    "get_gtts": {
+     "k": 1
+    }
+   },
+   "live": false,
+   "calls": [
+    "get_gtts"
+   ],
+   "ok": [
+    "k"
+   ]
+  },
+  {
+   "name": "get_gtts an int",
+   "method": "get_gtts",
+   "args": [],
+   "replies": {
+    "get_gtts": 3
+   },
+   "live": false,
+   "calls": [
+    "get_gtts"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not iterable"
+   ]
+  },
+  {
+   "name": "cash well-formed",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": 1234.5
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": 1234.5
+  },
+  {
+   "name": "cash an int",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": 12
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": 12.0
+  },
+  {
+   "name": "cash reply None",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": null
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "'NoneType' object is not subscriptable"
+   ]
+  },
+  {
+   "name": "cash reply empty",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {}
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "KeyError",
+    "'equity'"
+   ]
+  },
+  {
+   "name": "cash reply a list",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": []
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "list indices must be integers or slices, not str"
+   ]
+  },
+  {
+   "name": "cash reply a string",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": "x"
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "string indices must be integers, not 'str'"
+   ]
+  },
+  {
+   "name": "cash equity a list",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": [
+      1
+     ]
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "list indices must be integers or slices, not str"
+   ]
+  },
+  {
+   "name": "cash equity None",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": null
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "'NoneType' object is not subscriptable"
+   ]
+  },
+  {
+   "name": "cash available missing",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {}
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "KeyError",
+    "'available'"
+   ]
+  },
+  {
+   "name": "cash live_balance missing",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {}
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "KeyError",
+    "'live_balance'"
+   ]
+  },
+  {
+   "name": "cash live_balance a string",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": "12.5"
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": 12.5
+  },
+  {
+   "name": "cash live_balance garbage",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": "n/a"
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "ValueError",
+    "could not convert string to float: 'n/a'"
+   ]
+  },
+  {
+   "name": "cash live_balance None",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": null
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "float() argument must be a string or a real number, not 'NoneType'"
+   ]
+  },
+  {
+   "name": "cash live_balance a dict",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": {}
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "float() argument must be a string or a real number, not 'dict'"
+   ]
+  },
+  {
+   "name": "cash live_balance a bool",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": false
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": 0.0
+  },
+  {
+   "name": "cash live_balance an exponent string",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": " 1e3 "
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": 1000.0
+  },
+  {
+   "name": "cash live_balance an underscored string",
+   "method": "available_cash",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "available": {
+       "live_balance": "1_000.5"
+      }
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": 1000.5
+  },
+  {
+   "name": "margins a dict",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": {
+     "equity": {
+      "net": 1
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {
+    "equity": {
+     "net": 1
+    }
+   }
+  },
+  {
+   "name": "margins with a segment",
+   "method": "margins",
+   "args": [
+    "equity"
+   ],
+   "replies": {
+    "margins": {
+     "net": 1
+    }
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {
+    "net": 1
+   }
+  },
+  {
+   "name": "margins None",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": null
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "'NoneType' object is not iterable"
+   ]
+  },
+  {
+   "name": "margins an empty list",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": []
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {}
+  },
+  {
+   "name": "margins pairs",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     [
+      "a",
+      1
+     ],
+     [
+      "b",
+      [
+       2
+      ]
+     ]
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {
+    "a": 1,
+    "b": [
+     2
+    ]
+   }
+  },
+  {
+   "name": "margins two-char strings",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     "ab",
+     "cd"
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {
+    "a": "b",
+    "c": "d"
+   }
+  },
+  {
+   "name": "margins an int element",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     1
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "cannot convert dictionary update sequence element #0 to a sequence"
+   ]
+  },
+  {
+   "name": "margins a long element",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     "abc"
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "ValueError",
+    "dictionary update sequence element #0 has length 3; 2 is required"
+   ]
+  },
+  {
+   "name": "margins a long pair",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     [
+      "a",
+      1,
+      2
+     ]
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "ValueError",
+    "dictionary update sequence element #0 has length 3; 2 is required"
+   ]
+  },
+  {
+   "name": "margins a later bad element",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     [
+      "a",
+      1
+     ],
+     5
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "cannot convert dictionary update sequence element #1 to a sequence"
+   ]
+  },
+  {
+   "name": "margins a None element",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     null
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "cannot convert dictionary update sequence element #0 to a sequence"
+   ]
+  },
+  {
+   "name": "margins an int",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": 5
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not iterable"
+   ]
+  },
+  {
+   "name": "margins a string",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": "ab"
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "ValueError",
+    "dictionary update sequence element #0 has length 1; 2 is required"
+   ]
+  },
+  {
+   "name": "margins an empty string",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": ""
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {}
+  },
+  {
+   "name": "margins a bool",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": true
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "raise": [
+    "TypeError",
+    "'bool' object is not iterable"
+   ]
+  },
+  {
+   "name": "margins a dict element of two keys",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     {
+      "k": 1,
+      "v": 2
+     }
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {
+    "k": "v"
+   }
+  },
+  {
+   "name": "margins a repeated key",
+   "method": "margins",
+   "args": [],
+   "replies": {
+    "margins": [
+     [
+      "a",
+      1
+     ],
+     [
+      "b",
+      2
+     ],
+     [
+      "a",
+      3
+     ]
+    ]
+   },
+   "live": false,
+   "calls": [
+    "margins"
+   ],
+   "ok": {
+    "a": 3,
+    "b": 2
+   }
+  },
+  {
+   "name": "quote_raw a dict",
+   "method": "quote_raw",
+   "args": [
+    [
+     "NSE:INFY"
+    ]
+   ],
+   "replies": {
+    "quote": {
+     "NSE:INFY": {
+      "last_price": 1
+     }
+    }
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {
+    "NSE:INFY": {
+     "last_price": 1
+    }
+   }
+  },
+  {
+   "name": "quote_raw None",
+   "method": "quote_raw",
+   "args": [
+    [
+     "NSE:INFY"
+    ]
+   ],
+   "replies": {
+    "quote": null
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {}
+  },
+  {
+   "name": "quote_raw an empty list",
+   "method": "quote_raw",
+   "args": [
+    [
+     "NSE:INFY"
+    ]
+   ],
+   "replies": {
+    "quote": []
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {}
+  },
+  {
+   "name": "quote_raw zero",
+   "method": "quote_raw",
+   "args": [
+    [
+     "NSE:INFY"
+    ]
+   ],
+   "replies": {
+    "quote": 0
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {}
+  },
+  {
+   "name": "quote_raw an int",
+   "method": "quote_raw",
+   "args": [
+    [
+     "NSE:INFY"
+    ]
+   ],
+   "replies": {
+    "quote": 5
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "raise": [
+    "TypeError",
+    "'int' object is not iterable"
+   ]
+  },
+  {
+   "name": "quote_raw pairs",
+   "method": "quote_raw",
+   "args": [
+    [
+     "NSE:INFY"
+    ]
+   ],
+   "replies": {
+    "quote": [
+     [
+      "k",
+      "v"
+     ]
+    ]
+   },
+   "live": false,
+   "calls": [
+    "quote"
+   ],
+   "ok": {
+    "k": "v"
+   }
+  },
+  {
+   "name": "gtt live well-formed",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    12,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": "INFY",
+      "tick_size": 0.05
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 4242
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_PLACED",
+    "gtt_id": 4242,
+    "trigger": 1380.35,
+    "limit": 1373.45
+   }
+  },
+  {
+   "name": "gtt live tick 1",
+   "method": "place_gtt_stop",
+   "args": [
+    "OFSS",
+    3,
+    9876.4,
+    10000.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": "OFSS",
+      "tick_size": 1
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 1
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "OFSS",
+    "status": "GTT_PLACED",
+    "gtt_id": 1,
+    "trigger": 9876.0,
+    "limit": 9827.0
+   }
+  },
+  {
+   "name": "gtt live tick a string",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": "INFY",
+      "tick_size": "0.1"
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_PLACED",
+    "gtt_id": 2,
+    "trigger": 1380.4,
+    "limit": 1373.5
+   }
+  },
+  {
+   "name": "gtt live tick garbage",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": "INFY",
+      "tick_size": "abc"
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "could not convert string to float: 'abc'"
+   }
+  },
+  {
+   "name": "gtt live tick None",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": "INFY",
+      "tick_size": null
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_PLACED",
+    "gtt_id": 2,
+    "trigger": 1380.35,
+    "limit": 1373.45
+   }
+  },
+  {
+   "name": "gtt live tick a list",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": "INFY",
+      "tick_size": [
+       1
+      ]
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "float() argument must be a string or a real number, not 'list'"
+   }
+  },
+  {
+   "name": "gtt live instrument without a symbol",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tick_size": 1
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "'tradingsymbol'"
+   }
+  },
+  {
+   "name": "gtt live instrument a string",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     "x"
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "string indices must be integers, not 'str'"
+   }
+  },
+  {
+   "name": "gtt live instrument symbol a list",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": [
+       "x"
+      ]
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "unhashable type: 'list'"
+   }
+  },
+  {
+   "name": "gtt live instrument symbol an int",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [
+     {
+      "tradingsymbol": 5,
+      "tick_size": 1
+     }
+    ],
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_PLACED",
+    "gtt_id": 2,
+    "trigger": 1380.35,
+    "limit": 1373.45
+   }
+  },
+  {
+   "name": "gtt live instruments None",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": null,
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_PLACED",
+    "gtt_id": 2,
+    "trigger": 1380.35,
+    "limit": 1373.45
+   }
+  },
+  {
+   "name": "gtt live instruments raise",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": {
+     "__raise__": [
+      "RuntimeError",
+      "dump failed"
+     ]
+    },
+    "place_gtt": {
+     "trigger_id": 2
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "dump failed"
+   }
+  },
+  {
+   "name": "gtt live reply None",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [],
+    "place_gtt": null
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "'NoneType' object is not subscriptable"
+   }
+  },
+  {
+   "name": "gtt live reply empty",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [],
+    "place_gtt": {}
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "'trigger_id'"
+   }
+  },
+  {
+   "name": "gtt live reply a list",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [],
+    "place_gtt": []
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "list indices must be integers or slices, not str"
+   }
+  },
+  {
+   "name": "gtt live reply a string",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [],
+    "place_gtt": "x"
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "string indices must be integers, not 'str'"
+   }
+  },
+  {
+   "name": "gtt live reply trigger_id a string",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [],
+    "place_gtt": {
+     "trigger_id": "77"
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_PLACED",
+    "gtt_id": "77",
+    "trigger": 1380.35,
+    "limit": 1373.45
+   }
+  },
+  {
+   "name": "gtt live refused",
+   "method": "place_gtt_stop",
+   "args": [
+    "INFY",
+    2,
+    1380.37,
+    1500.0
+   ],
+   "replies": {
+    "instruments": [],
+    "place_gtt": {
+     "__raise__": [
+      "ValueError",
+      "Trigger price should be a multiple"
+     ]
+    }
+   },
+   "live": true,
+   "calls": [
+    "instruments",
+    "place_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "status": "GTT_ERROR",
+    "error": "Trigger price should be a multiple"
+   }
+  },
+  {
+   "name": "gtt delete live",
+   "method": "delete_gtt",
+   "args": [
+    9,
+    "INFY"
+   ],
+   "replies": {
+    "delete_gtt": {
+     "trigger_id": 9
+    }
+   },
+   "live": true,
+   "calls": [
+    "delete_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "gtt_id": 9,
+    "status": "GTT_DELETED"
+   }
+  },
+  {
+   "name": "gtt delete live refused",
+   "method": "delete_gtt",
+   "args": [
+    9,
+    "INFY"
+   ],
+   "replies": {
+    "delete_gtt": {
+     "__raise__": [
+      "RuntimeError",
+      "Invalid trigger"
+     ]
+    }
+   },
+   "live": true,
+   "calls": [
+    "delete_gtt"
+   ],
+   "ok": {
+    "symbol": "INFY",
+    "gtt_id": 9,
+    "status": "GTT_DELETE_ERROR",
+    "error": "Invalid trigger"
+   }
+  }
+ ]
+}

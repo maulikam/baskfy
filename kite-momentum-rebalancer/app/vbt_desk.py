@@ -55,6 +55,17 @@ RESCAN_MIN_INTERVAL_SECONDS: Final = 60
 IN_FLIGHT: Final[tuple[str, ...]] = RESCAN_IN_FLIGHT
 
 
+#: Postgres's SQLSTATE for ``FOR UPDATE NOWAIT`` finding the row held (``lock_not_available``).
+LOCK_NOT_AVAILABLE: Final = "55P03"
+#: The text hashed into the sleeve's per-user transaction lock (``pg_try_advisory_xact_lock``).
+SESSION_LOCK_KEY: Final = "vb_session"
+#: What a confirm that finds the session lock held answers (409, R8.VB1).
+SESSION_BUSY: Final = (
+    "SESSION_BUSY: another confirm of this session is in flight; nothing was sent — "
+    "confirm again"
+)
+
+
 def _ist_day(stamp: dt.datetime | None) -> dt.date | None:
     """The IST calendar day of a stored timestamp (UTC when naive)."""
     if stamp is None:
@@ -175,6 +186,9 @@ class PgVbtStore:
         self.user_id = int(user_id)
         self.schema = schema
         self.broker_account_id = broker_account_id
+        #: How many ``lock_session_for_update`` blocks are open on this store; only the
+        #: outermost opens and closes the transaction (R8.VB1).
+        self._lock_depth = 0
 
     def t(self, table: str) -> str:
         return f"{self.schema}.{table}" if self.schema else table
@@ -578,24 +592,76 @@ class PgVbtStore:
 
         The row is inserted first if absent: ``SELECT … FOR UPDATE`` locks nothing when there is
         nothing to lock, which is precisely the first confirm of a session.
+
+        **One transaction per confirm (R8.VB1, 30 Oct 2026).** The desk's connections are
+        autocommit (``analytics.pg.Connection``), so a ``FOR UPDATE`` on its own held its lock
+        for one statement and serialised nothing: two tabs could each read two entries taken
+        and each send a third. The outermost block now opens ``BEGIN``, takes the sleeve's
+        per-user transaction lock and the day's row ``NOWAIT``, and ``COMMIT``s on the way out —
+        on an exception too, so what was written before it stays written, as autocommit kept
+        it. The per-user lock is there because the cap counts the **IST day the orders were
+        sent** (LV10.2) while a confirm locks its **plan's** session row: a MORNING plan's line
+        (yesterday's row) and a LIVE plan's line (today's) would otherwise lock different rows
+        and still race for one cap. ``NOWAIT`` (``pg_try_…``) because the routes are ``async``
+        over a synchronous driver: a waiting lock would block the event loop its holder needs to
+        finish its broker call. A confirm that finds the lock held is refused 409 before
+        anything is read or sent, and can be confirmed again.
         """
+        # NOT EXISTS first: a bare ON CONFLICT waits on a row another confirm's open
+        # transaction has updated, which would block the event loop (R8.TD1/R8.VB1).
         self.conn.execute(
-            f"INSERT INTO {self.t('vb_session')} (user_id, session_date) VALUES (?, ?) "
-            "ON CONFLICT (user_id, session_date) DO NOTHING",
-            (self.user_id, day),
+            f"INSERT INTO {self.t('vb_session')} (user_id, session_date) SELECT ?, ? "
+            f"WHERE NOT EXISTS (SELECT 1 FROM {self.t('vb_session')} WHERE user_id = ? "
+            "AND session_date = ?) ON CONFLICT (user_id, session_date) DO NOTHING",
+            (self.user_id, day, self.user_id, day),
         )
+        opened = False
         if self.schema:
-            self.conn.execute(
-                f"SELECT 1 FROM {self.t('vb_session')} WHERE user_id = ? AND session_date = ? "
-                "FOR UPDATE",
-                (self.user_id, day),
-            )
-        else:
+            if self._lock_depth == 0:
+                self.conn.execute("BEGIN")
+                opened = True
+            try:
+                got = self.conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtext(?)) AS got",
+                    (f"{SESSION_LOCK_KEY}:{self.user_id}",),
+                ).fetchone()
+                if not got["got"]:
+                    raise HTTPException(409, SESSION_BUSY)
+                self.conn.execute(
+                    f"SELECT 1 FROM {self.t('vb_session')} WHERE user_id = ? "
+                    "AND session_date = ? FOR UPDATE NOWAIT",
+                    (self.user_id, day),
+                )
+            except Exception as exc:
+                if opened:
+                    self.conn.execute("ROLLBACK")
+                if getattr(exc, "sqlstate", None) == LOCK_NOT_AVAILABLE:
+                    raise HTTPException(409, SESSION_BUSY) from exc
+                raise
+        elif _in_transaction(self.conn) is False:
             # sqlite has no row locks and no `FOR UPDATE`. A test file has one writer, so the
             # lock has nothing to protect against; saying so here is better than a statement
             # that would be a syntax error on the backend the tests actually run on.
-            self.conn.execute("BEGIN IMMEDIATE") if _in_transaction(self.conn) is False else None
-        yield
+            self.conn.execute("BEGIN IMMEDIATE")
+            opened = True
+        self._lock_depth += 1
+        try:
+            yield
+        finally:
+            self._lock_depth -= 1
+            if opened:
+                self.conn.execute("COMMIT")
+
+    def order_for_signal(self, instrument_id: int, signal_date: dt.date) -> int | None:
+        """The ``vb_order`` already written for this name on this signal, in any state — what
+        ``uq_vb_order_one_per_signal`` allows exactly one of (R8.VB2). ``None`` when there is
+        none, which is the only case in which an entry may be sent."""
+        row = self.conn.execute(
+            f"SELECT id FROM {self.t('vb_order')} WHERE user_id = ? AND signal_date = ? "
+            "AND instrument_id = ? ORDER BY id LIMIT 1",
+            (self.user_id, signal_date, int(instrument_id)),
+        ).fetchone()
+        return None if row is None else int(row["id"])
 
     def entries_taken(self, day: dt.date) -> int:
         """``04`` §5.3's session cap, counted by the IST day the order was **sent**

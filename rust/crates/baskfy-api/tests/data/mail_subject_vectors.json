@@ -1,0 +1,66 @@
+[
+[
+"[decile/test] critical: The F&O bhavcopy for 2026-10-29 is MISSING after the 23:30 attempt: fo_contract_daily has no rows for it, so no FO mark, F2 trail or scan was written from it. Never interpolated (docs/fno/04 \u00a74); re-run `fno_cli ingest` once NSE publishes it.",
+"Subject: [decile/test] critical: The F&O bhavcopy for 2026-10-29 is MISSING\r\n after the 23:30 attempt: fo_contract_daily has no rows for it, so no FO mark,\r\n F2 trail or scan was written from it. Never interpolated (docs/fno/04 \r\n =?utf-8?q?_?==?utf-8?b?wqc0KTs=?= re-run `fno_cli ingest` once NSE publishes\r\n it.\r\n"
+],
+[
+"Short",
+"Subject: Short\r\n"
+],
+[
+"",
+"Subject:\r\n"
+],
+[
+"Caf\u00e9 \u20b9 1,000",
+"Subject: =?utf-8?b?Q2Fmw6kg4oK5?= 1,000\r\n"
+],
+[
+"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+"Subject:\r\n xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n"
+],
+[
+"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy tail",
+"Subject: =?utf-8?q?yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy?=\r\n =?utf-8?q?yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy?= tail\r\n"
+],
+[
+"word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+"Subject: word word word word word word word word word word word word word word\r\n word word word word word word word word word word word word word word word\r\n word \r\n"
+],
+[
+"\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9",
+"Subject: =?utf-8?b?w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOp?=\r\n =?utf-8?b?w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOp?=\r\n =?utf-8?b?w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOp?=\r\n =?utf-8?b?w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOp?=\r\n =?utf-8?b?w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOp?=\r\n =?utf-8?b?w6nDqcOp?=\r\n"
+],
+[
+"Your basket \u2014 rebalance rebalance rebalance rebalance rebalance rebalance rebalance rebalance rebalance rebalance rebalance rebalance \u2014 done",
+"Subject: Your basket =?utf-8?b?4oCU?= rebalance rebalance rebalance rebalance\r\n rebalance rebalance rebalance rebalance rebalance rebalance rebalance\r\n rebalance =?utf-8?b?4oCU?= done\r\n"
+],
+[
+"  leading and trailing  ",
+"Subject:   leading and trailing  \r\n"
+],
+[
+"tab\there and \u00a7 there\tagain tab\there and \u00a7 there\tagain tab\there and \u00a7 there\tagain tab\there and \u00a7 there\tagain ",
+"Subject: tab\there and =?utf-8?q?=C2=A7_there=09again_tab=09here_and_=C2=A7?=\r\n there\tagain tab\there and =?utf-8?q?=C2=A7_there=09again_tab=09here_and_?=\r\n =?utf-8?q?=C2=A7?= there\tagain \r\n"
+],
+[
+"Market Pulse \u00b7 NIFTY \u2191 1.2% \u00b7 Market Pulse \u00b7 NIFTY \u2191 1.2% \u00b7 Market Pulse \u00b7 NIFTY \u2191 1.2% \u00b7 Market Pulse \u00b7 NIFTY \u2191 1.2% \u00b7 Market Pulse \u00b7 NIFTY \u2191 1.2% \u00b7 ",
+"Subject: Market Pulse =?utf-8?b?wrcgTklGVFkg4oaRIDEuMiUgwrcgTWFya2V0IFB1bHNl?=\r\n =?utf-8?b?IMK3IE5JRlRZIOKGkSAxLjIlIMK3IE1hcmtldCBQdWxzZSDCtyBOSUZUWSDihpE=?=\r\n 1.2% =?utf-8?b?wrcgTWFya2V0IFB1bHNlIMK3IE5JRlRZIOKGkSAxLjIlIMK3?= Market\r\n Pulse =?utf-8?b?wrcgTklGVFkg4oaRIDEuMiUgwrc=?= \r\n"
+],
+[
+"[decile/test] warning: plain ascii but rather long subject line that needs folding at seventy eight chars",
+"Subject: [decile/test] warning: plain ascii but rather long subject line that\r\n needs folding at seventy eight chars\r\n"
+],
+[
+"a \u00e9 b \u00e9 c \u00e9 d \u00e9 e \u00e9 f \u00e9 g \u00e9 h \u00e9 i \u00e9 j \u00e9 k \u00e9 l \u00e9 m \u00e9 n \u00e9 o \u00e9 p \u00e9 q \u00e9 r \u00e9 s",
+"Subject: a =?utf-8?b?w6kgYiDDqSBjIMOpIGQgw6kgZSDDqSBmIMOpIGcgw6kgaCDDqSBp?=\r\n =?utf-8?b?IMOpIGogw6kgayDDqSBsIMOpIG0gw6kgbiDDqSBvIMOpIHAgw6kgcSDDqSByIMOp?=\r\n s\r\n"
+],
+[
+"\u65e5\u672c\u8a9e\u306e\u4ef6\u540d \u65e5\u672c\u8a9e\u306e\u4ef6\u540d \u65e5\u672c\u8a9e\u306e\u4ef6\u540d \u65e5\u672c\u8a9e\u306e\u4ef6\u540d \u65e5\u672c\u8a9e\u306e\u4ef6\u540d \u65e5\u672c\u8a9e\u306e\u4ef6\u540d ",
+"Subject: =?utf-8?b?5pel5pys6Kqe44Gu5Lu25ZCNIOaXpeacrOiqnuOBruS7tuWQjSDml6U=?=\r\n =?utf-8?b?5pys6Kqe44Gu5Lu25ZCNIOaXpeacrOiqnuOBruS7tuWQjSDml6XmnKzoqp7jga4=?=\r\n =?utf-8?b?5Lu25ZCNIOaXpeacrOiqnuOBruS7tuWQjQ==?= \r\n"
+],
+[
+"emoji \ud83d\ude00 in the middle of a fairly long subject that keeps on going past the limit \ud83d\ude80 end",
+"Subject: emoji =?utf-8?q?=F0=9F=98=80?= in the middle of a fairly long subject\r\n that keeps on going past the limit =?utf-8?q?=F0=9F=9A=80?= end\r\n"
+]
+]

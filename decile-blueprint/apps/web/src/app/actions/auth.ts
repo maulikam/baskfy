@@ -73,3 +73,23 @@ export async function signInWithGoogle(
     throw error;
   }
 }
+
+/**
+ * Sign in as the operator on their own Mac (`lib/auth/api-auth.ts` `localSignInPublicId`). The
+ * provider is registered only where the deployment names the account, so on a website this
+ * fails as an unknown provider rather than signing anybody in.
+ */
+export async function signInOnThisMac(
+  _previous: FormResult | null,
+  formData: FormData,
+): Promise<FormResult> {
+  try {
+    await signIn("local", { redirectTo: destination(formData) });
+    return { ok: true, message: "Signed in." };
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { ok: false, message: "Local sign-in failed. Is the API running?" };
+    }
+    throw error;
+  }
+}

@@ -1,0 +1,9 @@
+{
+ "note": "Lane weekly_plan's plan kind beyond the corpus uploads --plans already builds: the GENERATED weekly plan (generate_for, R8.WP1), its carried columns from the retained Investing export, over the bed's bars. Dates are kept before 2021 so neither desk loads more than ~1M bars at once.",
+ "cases": [
+  {"name": "weekly generated: retain the Investing export", "method": "POST", "path": "/analyze", "clock": "open", "files": {"scan": {"path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/scan_1787143663_Investing_001__1_.csv", "filename": "Investing (001) [1].csv"}}, "plan": true},
+  {"name": "weekly generated plan 2018-03-01", "method": "POST", "path": "/analyze", "form": {"generate_for": "2018-03-01"}, "plan": true},
+  {"name": "weekly generated plan 2019-08-01", "method": "POST", "path": "/analyze", "form": {"generate_for": "2019-08-01"}, "plan": true},
+  {"name": "weekly generated plan 2020-04-01 (three unadjusted symbols warn)", "method": "POST", "path": "/analyze", "form": {"generate_for": "2020-04-01"}, "plan": true}
+ ]
+}

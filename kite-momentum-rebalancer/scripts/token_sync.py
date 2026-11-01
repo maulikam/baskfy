@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -123,6 +124,11 @@ def _extract(blob: bytes, remote_key: str) -> str:
         return AccessTokenStore(path, remote_key).load().value
 
 
+def _proxies() -> dict[str, str] | None:
+    url = os.getenv("BASKFY_KITE_PROXY_URL", "").strip()
+    return {"http": url, "https": url} if url else None
+
+
 def _verify(api_key: str, token: str) -> str:
     """One cheap authenticated call. Returns a description; never the token.
 
@@ -131,7 +137,7 @@ def _verify(api_key: str, token: str) -> str:
     """
     from kiteconnect import KiteConnect  # noqa: PLC0415
 
-    kc = KiteConnect(api_key=api_key)
+    kc = KiteConnect(api_key=api_key, proxies=_proxies())
     kc.set_access_token(token)
     profile = kc.profile()
     return str(profile.get("user_type", "unknown"))

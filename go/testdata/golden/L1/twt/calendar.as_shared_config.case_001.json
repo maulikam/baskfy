@@ -1,0 +1,108 @@
+{
+ "fn": "baskfy_core.twt.calendar.as_shared_config",
+ "inputs": {
+  "config": {
+   "bars_required": 260,
+   "etf_name_pattern": "\\bETF\\b",
+   "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+   "etf_universe_slug": "etf",
+   "instrument_type": "EQ",
+   "keep_null_series": true,
+   "rolling_min_share": 0.9,
+   "series_allowed": [
+    "EQ",
+    "BE",
+    "BZ"
+   ],
+   "thin_session_min_periods": 5,
+   "thin_session_min_share": 0.25,
+   "thin_session_window_bars": 41
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the default DataConfig, spelled into VBT's shape. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "breadth": {
+   "dma_bars": 200,
+   "min_pct_above_dma": 40.0
+  },
+  "costs": {
+   "cost_pct_per_side": 0.25
+  },
+  "data": {
+   "etf_name_pattern": "\\bETF\\b",
+   "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+   "etf_universe_slug": "etf",
+   "instrument_type": "EQ",
+   "keep_null_series": true,
+   "rolling_min_share": 0.9,
+   "series_allowed": [
+    "EQ",
+    "BE",
+    "BZ"
+   ],
+   "thin_session_min_periods": 5,
+   "thin_session_min_share": 0.25,
+   "thin_session_window_bars": 41
+  },
+  "entry": {
+   "fill_through_pct": 0.0,
+   "limit_at": "SIGNAL_CLOSE",
+   "valid_sessions": 3
+  },
+  "exits": {
+   "gtt_band_max_pct": 0.15,
+   "gtt_band_min_pct": 0.005,
+   "gtt_limit_fraction": 0.97,
+   "no_bar_tolerance_sessions": 5,
+   "qulla": {
+    "breakeven_after_r": 1.0,
+    "fast_trail_min_adr_pct": 6.0,
+    "max_stop_adr_multiple": 1.0,
+    "max_stop_distance_pct": 10.0,
+    "partial_denominator": 3,
+    "partial_earliest_bar": 3,
+    "partial_latest_bar": 5,
+    "partial_numerator": 1
+   },
+   "qulla_exits": true,
+   "stop_pct": 12.0,
+   "trail_ema_bars": 21
+  },
+  "scan": {
+   "min_change_pct": 6.5,
+   "min_close_raw_inr": 30.0,
+   "min_vol_sma": 25000.0,
+   "min_volume": 50000.0,
+   "vol_mult": 3.0,
+   "vol_sma_bars": 50
+  },
+  "sizing": {
+   "first_live_sessions": 5,
+   "max_entries_per_name": 2,
+   "max_new_entries_per_session": 3,
+   "max_position_pct": 12.5,
+   "max_position_vs_turnover": 0.01,
+   "max_slots": 10,
+   "min_trade_value_inr": "10000",
+   "pyramiding": true,
+   "risk_multiplier_first_live": 0.5
+  },
+  "trend": {
+   "breakout_high_bars": 20,
+   "dma_bars": 200,
+   "max_change_pct": 15.0,
+   "max_ret_20_pct": 25.0,
+   "min_close_position": 0.6,
+   "min_turnover_avg_inr": 20000000.0,
+   "ret_bars": 20,
+   "turnover_bars": 20
+  }
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "fn": "baskfy_core.screener.ScreenResult.to_json",
+ "inputs": {
+  "as_of": "2026-08-18",
+  "columns": [
+   "symbol",
+   "name",
+   "sorting_factor",
+   "ret_12m",
+   "vol_12m",
+   "close_raw"
+  ],
+  "data_version": 4,
+  "rows": [],
+  "sorting_factor": {
+   "direction": "desc",
+   "key": "ret_12m",
+   "label": "ABSOLUTE RETURN 1 YEAR",
+   "position": 1
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "no rows. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "result_count": 0,
+  "symbols": [],
+  "to_json": "{\"as_of\":\"2026-08-18\",\"data_version\":4,\"result_count\":0,\"sorting_factor\":{\"key\":\"ret_12m\",\"label\":\"ABSOLUTE RETURN 1 YEAR\"},\"columns\":[\"symbol\",\"name\",\"sorting_factor\",\"ret_12m\",\"vol_12m\",\"close_raw\"],\"rows\":[]}"
+ }
+}

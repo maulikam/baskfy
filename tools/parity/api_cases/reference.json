@@ -1,0 +1,6617 @@
+{
+  "lane": "api-reference",
+  "note": "RS5 lane api-reference: every GET of meta, market_data, instruments, search, explore, kite, desk, and public's refusal (D9). Run with --env BASKFY_SOLE_USER_ID=1 (the bed has no seeded e2e account; owner, id 1, is the sole tenant). Every case must be EQUAL. Cases prefixed verify- were added by the adversarial review (auth variants on every authenticated route, HEAD/POST/PUT and trailing slashes, path oddities, pydantic lax date/int/decimal/bool forms, huge and tiny Decimal amounts, every published basket's card/constituents/performance/kite).",
+  "cases": [
+    {
+      "name": "meta-universes",
+      "method": "GET",
+      "path": "/api/v1/meta/universes"
+    },
+    {
+      "name": "meta-universes-owner",
+      "method": "GET",
+      "path": "/api/v1/meta/universes",
+      "user": "owner"
+    },
+    {
+      "name": "meta-ranking-presets",
+      "method": "GET",
+      "path": "/api/v1/meta/ranking-presets"
+    },
+    {
+      "name": "meta-status",
+      "method": "GET",
+      "path": "/api/v1/meta/status"
+    },
+    {
+      "name": "meta-status-owner",
+      "method": "GET",
+      "path": "/api/v1/meta/status",
+      "user": "owner"
+    },
+    {
+      "name": "meta-status-garbage-token",
+      "method": "GET",
+      "path": "/api/v1/meta/status",
+      "user": "garbage"
+    },
+    {
+      "name": "live-marks-anon",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=RELIANCE",
+      "note": "401: AuthenticatedDep"
+    },
+    {
+      "name": "live-marks-owner",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=RELIANCE,tcs,%20reliance%20,,INFY",
+      "user": "owner",
+      "mask": [
+        "served_at"
+      ],
+      "note": "distinct, stripped, upper-cased; closed or no-session answer (served_at is wall clock)"
+    },
+    {
+      "name": "live-marks-none",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "user": "plain",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "live-marks-blank",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=",
+      "user": "subscriber",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "live-marks-last-wins",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=A&symbols=B,C",
+      "user": "owner",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "live-marks-stale-epoch",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=X",
+      "user": "stale_epoch"
+    },
+    {
+      "name": "live-marks-expired",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "user": "expired"
+    },
+    {
+      "name": "dashboard",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard"
+    },
+    {
+      "name": "dashboard-owner",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "user": "owner"
+    },
+    {
+      "name": "dashboard-date",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-01"
+      }
+    },
+    {
+      "name": "dashboard-weekend-snaps",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-04"
+      }
+    },
+    {
+      "name": "dashboard-early",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2024-11-05"
+      }
+    },
+    {
+      "name": "dashboard-before-start",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2024-01-01"
+      },
+      "note": "422 no-trading-day"
+    },
+    {
+      "name": "dashboard-future",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2030-01-01"
+      }
+    },
+    {
+      "name": "dashboard-bad-date",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-02-30"
+      }
+    },
+    {
+      "name": "dashboard-blank-date",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": "date="
+    },
+    {
+      "name": "dashboard-if-none-match",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "headers": {
+        "If-None-Match": "*"
+      }
+    },
+    {
+      "name": "health",
+      "method": "GET",
+      "path": "/api/v1/market-health"
+    },
+    {
+      "name": "health-nifty-50",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-50"
+      }
+    },
+    {
+      "name": "health-dated",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-smallcap-250",
+        "date": "2026-09-15"
+      }
+    },
+    {
+      "name": "health-start",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-500",
+        "date": "2024-11-01"
+      }
+    },
+    {
+      "name": "health-allcap",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-allcap"
+      }
+    },
+    {
+      "name": "health-fno-refused",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-fno"
+      }
+    },
+    {
+      "name": "health-etf-refused",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "etf"
+      }
+    },
+    {
+      "name": "health-sme-refused",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nse-sme-emerge"
+      }
+    },
+    {
+      "name": "health-bogus",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "bogus"
+      }
+    },
+    {
+      "name": "health-bad-date-and-bogus",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "bogus",
+        "date": "nope"
+      },
+      "note": "validation first"
+    },
+    {
+      "name": "health-before-start",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2023-05-05"
+      }
+    },
+    {
+      "name": "history",
+      "method": "GET",
+      "path": "/api/v1/market-health/history"
+    },
+    {
+      "name": "history-window",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-50",
+        "from": "2026-06-01",
+        "to": "2026-07-01"
+      }
+    },
+    {
+      "name": "history-from-only",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "history-to-weekend",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "to": "2026-10-04",
+        "universe": "nifty-midcap-150"
+      }
+    },
+    {
+      "name": "history-reversed",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-20",
+        "to": "2026-10-10"
+      }
+    },
+    {
+      "name": "history-too-long",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2019-01-01"
+      }
+    },
+    {
+      "name": "history-to-future",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "to": "2031-01-01"
+      }
+    },
+    {
+      "name": "history-bogus",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "x"
+      }
+    },
+    {
+      "name": "history-bad-dates",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": "from=a&to=b"
+    },
+    {
+      "name": "listings",
+      "method": "GET",
+      "path": "/api/v1/listings"
+    },
+    {
+      "name": "listings-limit",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "3"
+      }
+    },
+    {
+      "name": "listings-cursor",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "3",
+        "cursor": "MjAyNi0xMC0yOXxCT05EQURB"
+      }
+    },
+    {
+      "name": "listings-series-search",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "2",
+        "search": "bank",
+        "series": "eq"
+      }
+    },
+    {
+      "name": "listings-series-search-cursor",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "2",
+        "search": "bank",
+        "series": "eq",
+        "cursor": "MjAyNC0wMi0xNHxKU0ZC"
+      }
+    },
+    {
+      "name": "listings-search-spaces",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "search": "  tata  ",
+        "limit": "5"
+      }
+    },
+    {
+      "name": "listings-range",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2025-01-01",
+        "to": "2025-03-31",
+        "limit": "7"
+      }
+    },
+    {
+      "name": "listings-range-empty",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2025-03-31",
+        "to": "2025-01-01"
+      }
+    },
+    {
+      "name": "listings-series-sm",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "series": "SM",
+        "limit": "4"
+      }
+    },
+    {
+      "name": "listings-empty-search",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "search": "zzzzqqqxx"
+      }
+    },
+    {
+      "name": "listings-blank-filters",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": "series=&search=&limit=2"
+    },
+    {
+      "name": "listings-limit-zero",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "0"
+      }
+    },
+    {
+      "name": "listings-limit-big",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "501"
+      }
+    },
+    {
+      "name": "listings-limit-text",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "ten"
+      }
+    },
+    {
+      "name": "listings-limit-underscore",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "1_0"
+      }
+    },
+    {
+      "name": "listings-series-long",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "series": "ABCDEFGHI"
+      }
+    },
+    {
+      "name": "listings-search-long",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "search": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    },
+    {
+      "name": "listings-cursor-garbage",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "not-a-cursor!!"
+      }
+    },
+    {
+      "name": "listings-cursor-blank",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": "cursor="
+    },
+    {
+      "name": "listings-cursor-nodate",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "fFJFTElBTkNF"
+      },
+      "note": "'|RELIANCE': no date"
+    },
+    {
+      "name": "listings-cursor-compact-date",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNjEwMjl8Qk9OREFEQQ",
+        "limit": "2"
+      },
+      "note": "20261029|BONDADA: fromisoformat's basic form"
+    },
+    {
+      "name": "listings-multi-error",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": "limit=0&series=ABCDEFGHI&from=x"
+    },
+    {
+      "name": "inst-search",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "RELI"
+      }
+    },
+    {
+      "name": "inst-search-lower-limit",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "reliance",
+        "limit": "3"
+      }
+    },
+    {
+      "name": "inst-search-cup",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "cup",
+        "limit": "10"
+      }
+    },
+    {
+      "name": "inst-search-name",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "bank",
+        "limit": "50"
+      }
+    },
+    {
+      "name": "inst-search-blank-needle",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "   "
+      }
+    },
+    {
+      "name": "inst-search-percent",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "%",
+        "limit": "4"
+      }
+    },
+    {
+      "name": "inst-search-missing",
+      "method": "GET",
+      "path": "/api/v1/instruments"
+    },
+    {
+      "name": "inst-search-empty",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": "search="
+    },
+    {
+      "name": "inst-search-long",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "inst-search-limit-51",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "x",
+        "limit": "51"
+      }
+    },
+    {
+      "name": "inst-search-limit-float",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "x",
+        "limit": "5.0"
+      }
+    },
+    {
+      "name": "inst-search-limit-frac",
+      "method": "GET",
+      "path": "/api/v1/instruments",
+      "query": {
+        "search": "x",
+        "limit": "5.5"
+      }
+    },
+    {
+      "name": "factsheet-RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE"
+    },
+    {
+      "name": "factsheet-reliance",
+      "method": "GET",
+      "path": "/api/v1/instruments/reliance"
+    },
+    {
+      "name": "factsheet-TCS",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "user": "owner"
+    },
+    {
+      "name": "factsheet-KPIGREEN",
+      "method": "GET",
+      "path": "/api/v1/instruments/KPIGREEN"
+    },
+    {
+      "name": "factsheet-SIGMAADV",
+      "method": "GET",
+      "path": "/api/v1/instruments/SIGMAADV"
+    },
+    {
+      "name": "factsheet-NIFTYBEES",
+      "method": "GET",
+      "path": "/api/v1/instruments/NIFTYBEES"
+    },
+    {
+      "name": "factsheet-0ABCL31-N0",
+      "method": "GET",
+      "path": "/api/v1/instruments/0ABCL31-N0"
+    },
+    {
+      "name": "factsheet-20MICRONS",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS"
+    },
+    {
+      "name": "factsheet-CCAVENUE",
+      "method": "GET",
+      "path": "/api/v1/instruments/CCAVENUE"
+    },
+    {
+      "name": "factsheet-dated",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "query": {
+        "as_of": "2026-10-01"
+      }
+    },
+    {
+      "name": "factsheet-weekend",
+      "method": "GET",
+      "path": "/api/v1/instruments/INFY",
+      "query": {
+        "as_of": "2026-10-04"
+      }
+    },
+    {
+      "name": "factsheet-early",
+      "method": "GET",
+      "path": "/api/v1/instruments/HDFCBANK",
+      "query": {
+        "as_of": "2024-11-04"
+      }
+    },
+    {
+      "name": "factsheet-before-start",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "query": {
+        "as_of": "2020-01-01"
+      }
+    },
+    {
+      "name": "factsheet-bad-date",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "query": {
+        "as_of": "yesterday"
+      }
+    },
+    {
+      "name": "factsheet-unknown",
+      "method": "GET",
+      "path": "/api/v1/instruments/NOSUCHSTOCK"
+    },
+    {
+      "name": "factsheet-unknown-quote",
+      "method": "GET",
+      "path": "/api/v1/instruments/it's"
+    },
+    {
+      "name": "history-default",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history"
+    },
+    {
+      "name": "history-close-raw",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "close_raw",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "history-volume",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "field": "volume",
+        "from": "2026-10-01",
+        "to": "2026-10-20"
+      }
+    },
+    {
+      "name": "history-marketcap",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "field": "marketcap_cr",
+        "from": "2026-08-01"
+      }
+    },
+    {
+      "name": "history-pe-lower",
+      "method": "GET",
+      "path": "/api/v1/instruments/infy/history",
+      "query": {
+        "field": "pe"
+      }
+    },
+    {
+      "name": "history-vol",
+      "method": "GET",
+      "path": "/api/v1/instruments/INFY/history",
+      "query": {
+        "field": "vol_12m",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "history-median-vol",
+      "method": "GET",
+      "path": "/api/v1/instruments/KPIGREEN/history",
+      "query": {
+        "field": "median_vol_12m",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "history-bogus-field",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "open"
+      }
+    },
+    {
+      "name": "history-bogus-field-unknown-symbol",
+      "method": "GET",
+      "path": "/api/v1/instruments/NOSUCH/history",
+      "query": {
+        "field": "open"
+      },
+      "note": "the field check comes first"
+    },
+    {
+      "name": "history-reversed-range",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "from": "2026-10-20",
+        "to": "2026-10-01"
+      }
+    },
+    {
+      "name": "history-too-long-range",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "from": "2000-01-01"
+      }
+    },
+    {
+      "name": "history-future",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "to": "2030-01-01"
+      }
+    },
+    {
+      "name": "history-unknown",
+      "method": "GET",
+      "path": "/api/v1/instruments/NOSUCH/history"
+    },
+    {
+      "name": "history-old-window",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "from": "2012-01-01",
+        "to": "2012-02-01",
+        "field": "close"
+      },
+      "note": "to before data start: 422"
+    },
+    {
+      "name": "corp-actions",
+      "method": "GET",
+      "path": "/api/v1/instruments/KPIGREEN/corporate-actions"
+    },
+    {
+      "name": "corp-actions-lower",
+      "method": "GET",
+      "path": "/api/v1/instruments/bhandari/corporate-actions"
+    },
+    {
+      "name": "corp-actions-none",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/corporate-actions"
+    },
+    {
+      "name": "corp-actions-unknown",
+      "method": "GET",
+      "path": "/api/v1/instruments/NOSUCH/corporate-actions"
+    },
+    {
+      "name": "appearances-anon",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances"
+    },
+    {
+      "name": "appearances-garbage",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "garbage"
+    },
+    {
+      "name": "appearances-owner-20MICRONS",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-owner-SIGMAADV",
+      "method": "GET",
+      "path": "/api/v1/instruments/SIGMAADV/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-owner-CCAVENUE",
+      "method": "GET",
+      "path": "/api/v1/instruments/CCAVENUE/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-owner-ACUTAAS",
+      "method": "GET",
+      "path": "/api/v1/instruments/ACUTAAS/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-owner-ADSL",
+      "method": "GET",
+      "path": "/api/v1/instruments/ADSL/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-owner-HITECHCORP",
+      "method": "GET",
+      "path": "/api/v1/instruments/HITECHCORP/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-owner-RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "appearances-plain-20MICRONS",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/appearances",
+      "user": "plain",
+      "note": "tenant: templates only, no strategy scans"
+    },
+    {
+      "name": "appearances-subscriber-20MICRONS",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/appearances",
+      "user": "subscriber",
+      "note": "another tenant's own screen"
+    },
+    {
+      "name": "appearances-unknown",
+      "method": "GET",
+      "path": "/api/v1/instruments/NOSUCH/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "rank-history",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "rank-history-limit",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "1db2573befaa",
+        "limit": "5"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "rank-history-other-tenant",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "8eb9259c87e9"
+      },
+      "user": "plain",
+      "note": "R5.28 (fixed 30 Oct 2026, Python first): another account's private screen is a 404, the same as no such screen"
+    },
+    {
+      "name": "rank-history-private-anonymous",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf"
+      },
+      "note": "R5.28: an anonymous caller cannot read a private screen's history (it could until 30 Oct 2026)"
+    },
+    {
+      "name": "rank-history-private-plain",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "1db2573befaa",
+        "limit": "5"
+      },
+      "user": "plain",
+      "note": "R5.28: another signed-in account gets the 404"
+    },
+    {
+      "name": "rank-history-private-subscriber-own",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "8eb9259c87e9"
+      },
+      "user": "subscriber",
+      "note": "R5.28: the owner of 8eb9259c87e9 (user 6) reads its own history"
+    },
+    {
+      "name": "rank-history-template-plain",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/rank-history",
+      "query": {
+        "screen": "exmpl0000004"
+      },
+      "user": "plain",
+      "note": "R5.28: a system screen stays everyone's"
+    },
+    {
+      "name": "rank-history-template",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/rank-history",
+      "query": {
+        "screen": "exmpl0000004"
+      }
+    },
+    {
+      "name": "rank-history-missing-screen",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history"
+    },
+    {
+      "name": "rank-history-unknown-screen",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "nope"
+      }
+    },
+    {
+      "name": "rank-history-unknown-symbol",
+      "method": "GET",
+      "path": "/api/v1/instruments/NOSUCH/rank-history",
+      "query": {
+        "screen": "nope"
+      }
+    },
+    {
+      "name": "rank-history-limit-zero",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "0"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "rank-history-limit-big",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "501"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "search-anon",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "reli"
+      }
+    },
+    {
+      "name": "search-nifty-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "nifty",
+        "limit": "10"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "search-momentum-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "momentum"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "search-momentum-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "momentum"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "search-momentum-anon",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "momentum"
+      }
+    },
+    {
+      "name": "search-screen-subscriber",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "untitled"
+      },
+      "user": "subscriber"
+    },
+    {
+      "name": "search-screen-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "untitled"
+      },
+      "user": "plain",
+      "note": "another tenant's screen is not a hit"
+    },
+    {
+      "name": "search-index",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "NIFTY 50",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "search-spaces",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "   "
+      }
+    },
+    {
+      "name": "search-trimmed",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "  tcs  "
+      }
+    },
+    {
+      "name": "search-missing",
+      "method": "GET",
+      "path": "/api/v1/search"
+    },
+    {
+      "name": "search-empty",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q="
+    },
+    {
+      "name": "search-long",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+      }
+    },
+    {
+      "name": "search-limit-21",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "a",
+        "limit": "21"
+      }
+    },
+    {
+      "name": "search-limit-zero",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "a",
+        "limit": "0"
+      }
+    },
+    {
+      "name": "search-percent",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "%",
+        "limit": "3"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "search-underscore",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "_",
+        "limit": "3"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "search-basket-slug",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "trend-stack"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-anon",
+      "method": "GET",
+      "path": "/api/v1/explore"
+    },
+    {
+      "name": "explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "owner"
+    },
+    {
+      "name": "explore-plain",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "plain"
+    },
+    {
+      "name": "explore-ret-desc",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "ret_1y",
+        "order": "desc"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-cagr5",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "cagr_5y",
+        "order": "desc"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-min-amount",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "min_amount"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-launched",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "launched_at",
+        "order": "desc"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-volatility",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "volatility"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-bad-sort",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "x"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-bad-order",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "order": "up"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-access",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "access": "FREE"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-access-fee",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "access": "FEE"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-access-lower",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "access": "free"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-vol-low",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "volatility": "LOW"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-category",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "category": "momentum"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-category-none",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "category": "nope"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-category-long",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "category": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-rebalance",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "rebalance_frequency": "MONTHLY"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-rebalance-bad",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "rebalance_frequency": "DAILY"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-type",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "basket_type": "STOCK"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-type-bad",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "basket_type": "ETF"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-no-new",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "false"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-no-new-word",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "off"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-new-bad",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "maybe"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-q",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "momentum"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-q-spaces",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "  sharpe "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-q-long",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-page",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "limit": "2",
+        "offset": "1"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-offset-past-end",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "999999999999999999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-offset-negative",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "-1"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-limit-big",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "limit": "201"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-max-min-amount",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "100000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-max-min-amount-exp",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-max-min-amount-bad",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "abc"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-max-min-amount-nan",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "nan"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "explore-many-errors",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": "sort=x&order=y&access=z&limit=0&offset=-2&include_new=q",
+      "user": "owner"
+    },
+    {
+      "name": "explore-many-errors-anon",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": "sort=x",
+      "note": "401 before validation"
+    },
+    {
+      "name": "explore-managers",
+      "method": "GET",
+      "path": "/api/v1/explore/managers",
+      "user": "owner"
+    },
+    {
+      "name": "explore-managers-anon",
+      "method": "GET",
+      "path": "/api/v1/explore/managers"
+    },
+    {
+      "name": "explore-manager",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "owner"
+    },
+    {
+      "name": "explore-manager-engine",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/baskfy-engine",
+      "user": "plain"
+    },
+    {
+      "name": "explore-manager-unknown",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/nobody",
+      "user": "owner"
+    },
+    {
+      "name": "explore-manager-long",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+      "user": "owner"
+    },
+    {
+      "name": "explore-manager-long-anon",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+      "note": "401 before path validation"
+    },
+    {
+      "name": "explore-collections",
+      "method": "GET",
+      "path": "/api/v1/explore/collections",
+      "user": "owner"
+    },
+    {
+      "name": "explore-collection",
+      "method": "GET",
+      "path": "/api/v1/explore/collections/start-here",
+      "user": "owner"
+    },
+    {
+      "name": "explore-collection-quarterly",
+      "method": "GET",
+      "path": "/api/v1/explore/collections/quarterly",
+      "user": "subscriber"
+    },
+    {
+      "name": "explore-collection-unknown",
+      "method": "GET",
+      "path": "/api/v1/explore/collections/nope",
+      "user": "owner"
+    },
+    {
+      "name": "explore-basket",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan",
+      "user": "owner"
+    },
+    {
+      "name": "explore-basket-maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/maulik",
+      "user": "owner"
+    },
+    {
+      "name": "explore-basket-unknown",
+      "method": "GET",
+      "path": "/api/v1/explore/nope",
+      "user": "owner"
+    },
+    {
+      "name": "explore-basket-anon",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan"
+    },
+    {
+      "name": "explore-basket-long",
+      "method": "GET",
+      "path": "/api/v1/explore/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "user": "owner"
+    },
+    {
+      "name": "explore-constituents-momentum-scan",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/constituents",
+      "user": "owner"
+    },
+    {
+      "name": "explore-performance-momentum-scan",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/performance",
+      "user": "owner"
+    },
+    {
+      "name": "explore-constituents-maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/maulik/constituents",
+      "user": "owner"
+    },
+    {
+      "name": "explore-performance-maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/maulik/performance",
+      "user": "owner"
+    },
+    {
+      "name": "explore-constituents-trend-stack",
+      "method": "GET",
+      "path": "/api/v1/explore/trend-stack/constituents",
+      "user": "owner"
+    },
+    {
+      "name": "explore-performance-trend-stack",
+      "method": "GET",
+      "path": "/api/v1/explore/trend-stack/performance",
+      "user": "owner"
+    },
+    {
+      "name": "explore-constituents-unknown",
+      "method": "GET",
+      "path": "/api/v1/explore/nope/constituents",
+      "user": "owner"
+    },
+    {
+      "name": "explore-performance-unknown",
+      "method": "GET",
+      "path": "/api/v1/explore/nope/performance",
+      "user": "owner"
+    },
+    {
+      "name": "explore-performance-broad",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/performance",
+      "user": "plain"
+    },
+    {
+      "name": "watchlist-owner",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "owner",
+      "note": "the sole tenant (BASKFY_SOLE_USER_ID=1)"
+    },
+    {
+      "name": "watchlist-plain",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "plain",
+      "note": "not the sole tenant: 404 with reason"
+    },
+    {
+      "name": "watchlist-anon",
+      "method": "GET",
+      "path": "/api/v1/watchlist"
+    },
+    {
+      "name": "kite-plan",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "owner"
+    },
+    {
+      "name": "kite-plan-plain",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "plain"
+    },
+    {
+      "name": "kite-plan-anon",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite"
+    },
+    {
+      "name": "kite-basket",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "100000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-big",
+      "method": "GET",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "2500000.50"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-small",
+      "method": "GET",
+      "path": "/api/v1/explore/maulik/kite",
+      "query": {
+        "amount": "1"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-exp",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1e6"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-missing-amount",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-zero",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-negative",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "-5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-text",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "lots"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-inf",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "inf"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-unknown",
+      "method": "GET",
+      "path": "/api/v1/explore/nope/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "kite-basket-anon",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1000"
+      }
+    },
+    {
+      "name": "desk-performance",
+      "method": "GET",
+      "path": "/api/v1/desk/performance",
+      "user": "owner"
+    },
+    {
+      "name": "desk-performance-anon",
+      "method": "GET",
+      "path": "/api/v1/desk/performance"
+    },
+    {
+      "name": "desk-holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "owner"
+    },
+    {
+      "name": "desk-holdings-anon",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings"
+    },
+    {
+      "name": "desk-tradebook",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "user": "owner"
+    },
+    {
+      "name": "desk-tradebook-anon",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook"
+    },
+    {
+      "name": "desk-regime",
+      "method": "GET",
+      "path": "/api/v1/desk/regime",
+      "user": "owner"
+    },
+    {
+      "name": "desk-regime-anon",
+      "method": "GET",
+      "path": "/api/v1/desk/regime"
+    },
+    {
+      "name": "desk-reconcile",
+      "method": "GET",
+      "path": "/api/v1/desk/reconcile",
+      "user": "owner"
+    },
+    {
+      "name": "desk-reconcile-anon",
+      "method": "GET",
+      "path": "/api/v1/desk/reconcile"
+    },
+    {
+      "name": "desk-holdings-plain",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "plain",
+      "note": "desk needs only a signed-in caller"
+    },
+    {
+      "name": "desk-tradebook-limit",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "desk-tradebook-max",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "1000"
+      },
+      "user": "subscriber"
+    },
+    {
+      "name": "desk-tradebook-zero",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "desk-tradebook-big",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "1001"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "desk-tradebook-anon-bad-limit",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "0"
+      },
+      "note": "401 before validation"
+    },
+    {
+      "name": "public-terms",
+      "method": "GET",
+      "path": "/api/public/v1/terms"
+    },
+    {
+      "name": "public-status",
+      "method": "GET",
+      "path": "/api/public/v1/status"
+    },
+    {
+      "name": "public-breadth",
+      "method": "GET",
+      "path": "/api/public/v1/breadth"
+    },
+    {
+      "name": "public-openapi.json",
+      "method": "GET",
+      "path": "/api/public/v1/openapi.json"
+    },
+    {
+      "name": "public-docs",
+      "method": "GET",
+      "path": "/api/public/v1/docs"
+    },
+    {
+      "name": "public-instruments/RELIANCE/factors",
+      "method": "GET",
+      "path": "/api/public/v1/instruments/RELIANCE/factors"
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-stale_epoch-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "stale_epoch",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-expired-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "expired",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-too_long-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "too_long",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-wrong_key-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "wrong_key",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-unknown-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "unknown",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-alg_none-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "alg_none",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-garbage-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "garbage",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_explore",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_watchlist",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_desk_holdings",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_search",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": "q=reli",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_instruments_RELIANCE_appearances",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_explore_momentum-scan_kite",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": "amount=1000",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_baskets_plan_kite",
+      "method": "GET",
+      "path": "/api/v1/baskets/plan/kite",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_meta_live-marks",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": "symbols=TCS",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_instruments_RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-auth-empty_bearer-_api_v1_explore_managers_maulik",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/maulik",
+      "user": "empty_bearer",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-watchlist-subscriber",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-desk-performance-subscriber",
+      "method": "GET",
+      "path": "/api/v1/desk/performance",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-desk-tradebook-subscriber",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-desk-regime-subscriber",
+      "method": "GET",
+      "path": "/api/v1/desk/regime",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-desk-reconcile-subscriber",
+      "method": "GET",
+      "path": "/api/v1/desk/reconcile",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-explore-subscriber",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-collections-subscriber",
+      "method": "GET",
+      "path": "/api/v1/explore/collections",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-kite-subscriber",
+      "method": "GET",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "50000"
+      },
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-appear-subscriber-RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-watchlist-plain",
+      "method": "GET",
+      "path": "/api/v1/watchlist",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-desk-performance-plain",
+      "method": "GET",
+      "path": "/api/v1/desk/performance",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-desk-tradebook-plain",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-desk-regime-plain",
+      "method": "GET",
+      "path": "/api/v1/desk/regime",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-desk-reconcile-plain",
+      "method": "GET",
+      "path": "/api/v1/desk/reconcile",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-explore-plain",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-collections-plain",
+      "method": "GET",
+      "path": "/api/v1/explore/collections",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-kite-plain",
+      "method": "GET",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "50000"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-appear-plain-RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/appearances",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-post_api_v1_meta_status",
+      "method": "POST",
+      "path": "/api/v1/meta/status",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-head_api_v1_meta_status",
+      "method": "HEAD",
+      "path": "/api/v1/meta/status",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-put_api_v1_meta_status",
+      "method": "PUT",
+      "path": "/api/v1/meta/status",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-post_api_v1_explore",
+      "method": "POST",
+      "path": "/api/v1/explore",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-head_api_v1_explore",
+      "method": "HEAD",
+      "path": "/api/v1/explore",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-put_api_v1_explore",
+      "method": "PUT",
+      "path": "/api/v1/explore",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-post_api_v1_desk_holdings",
+      "method": "POST",
+      "path": "/api/v1/desk/holdings",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-head_api_v1_desk_holdings",
+      "method": "HEAD",
+      "path": "/api/v1/desk/holdings",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-put_api_v1_desk_holdings",
+      "method": "PUT",
+      "path": "/api/v1/desk/holdings",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-post_api_v1_explore_momentum-scan_kite",
+      "method": "POST",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-head_api_v1_explore_momentum-scan_kite",
+      "method": "HEAD",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-put_api_v1_explore_momentum-scan_kite",
+      "method": "PUT",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-post_api_v1_instruments_RELIANCE",
+      "method": "POST",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-head_api_v1_instruments_RELIANCE",
+      "method": "HEAD",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-put_api_v1_instruments_RELIANCE",
+      "method": "PUT",
+      "path": "/api/v1/instruments/RELIANCE",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-post_api_v1_listings",
+      "method": "POST",
+      "path": "/api/v1/listings",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-head_api_v1_listings",
+      "method": "HEAD",
+      "path": "/api/v1/listings",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-put_api_v1_listings",
+      "method": "PUT",
+      "path": "/api/v1/listings",
+      "user": "owner",
+      "body": {}
+    },
+    {
+      "name": "verify-x-slash_api_v1_explore_",
+      "method": "GET",
+      "path": "/api/v1/explore/",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-slash_api_v1_listings_",
+      "method": "GET",
+      "path": "/api/v1/listings/",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-slash_api_v1_instruments_RELIANCE_",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-slash_api_v1_meta_status_",
+      "method": "GET",
+      "path": "/api/v1/meta/status/",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-slash_api_v1_desk_holdings_",
+      "method": "GET",
+      "path": "/api/v1/desk/holdings/",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-fact-RELIANCE%20",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE%20"
+    },
+    {
+      "name": "verify-x-hist-RELIANCE%20",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE%20/history"
+    },
+    {
+      "name": "verify-x-ca-RELIANCE%20",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE%20/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-%20RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/%20RELIANCE"
+    },
+    {
+      "name": "verify-x-hist-%20RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/%20RELIANCE/history"
+    },
+    {
+      "name": "verify-x-ca-%20RELIANCE",
+      "method": "GET",
+      "path": "/api/v1/instruments/%20RELIANCE/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-reli%C3%A9",
+      "method": "GET",
+      "path": "/api/v1/instruments/reli%C3%A9"
+    },
+    {
+      "name": "verify-x-hist-reli%C3%A9",
+      "method": "GET",
+      "path": "/api/v1/instruments/reli%C3%A9/history"
+    },
+    {
+      "name": "verify-x-ca-reli%C3%A9",
+      "method": "GET",
+      "path": "/api/v1/instruments/reli%C3%A9/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-A%2FB",
+      "method": "GET",
+      "path": "/api/v1/instruments/A%2FB"
+    },
+    {
+      "name": "verify-x-hist-A%2FB",
+      "method": "GET",
+      "path": "/api/v1/instruments/A%2FB/history"
+    },
+    {
+      "name": "verify-x-ca-A%2FB",
+      "method": "GET",
+      "path": "/api/v1/instruments/A%2FB/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-%EF%AC%81",
+      "method": "GET",
+      "path": "/api/v1/instruments/%EF%AC%81"
+    },
+    {
+      "name": "verify-x-hist-%EF%AC%81",
+      "method": "GET",
+      "path": "/api/v1/instruments/%EF%AC%81/history"
+    },
+    {
+      "name": "verify-x-ca-%EF%AC%81",
+      "method": "GET",
+      "path": "/api/v1/instruments/%EF%AC%81/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-stra%C3%9Fe",
+      "method": "GET",
+      "path": "/api/v1/instruments/stra%C3%9Fe"
+    },
+    {
+      "name": "verify-x-hist-stra%C3%9Fe",
+      "method": "GET",
+      "path": "/api/v1/instruments/stra%C3%9Fe/history"
+    },
+    {
+      "name": "verify-x-ca-stra%C3%9Fe",
+      "method": "GET",
+      "path": "/api/v1/instruments/stra%C3%9Fe/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-..",
+      "method": "GET",
+      "path": "/api/v1/instruments/.."
+    },
+    {
+      "name": "verify-x-hist-..",
+      "method": "GET",
+      "path": "/api/v1/instruments/../history"
+    },
+    {
+      "name": "verify-x-ca-..",
+      "method": "GET",
+      "path": "/api/v1/instruments/../corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-%00",
+      "method": "GET",
+      "path": "/api/v1/instruments/%00"
+    },
+    {
+      "name": "verify-x-hist-%00",
+      "method": "GET",
+      "path": "/api/v1/instruments/%00/history"
+    },
+    {
+      "name": "verify-x-ca-%00",
+      "method": "GET",
+      "path": "/api/v1/instruments/%00/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-RELIANCE.NS",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE.NS"
+    },
+    {
+      "name": "verify-x-hist-RELIANCE.NS",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE.NS/history"
+    },
+    {
+      "name": "verify-x-ca-RELIANCE.NS",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE.NS/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-M%26M",
+      "method": "GET",
+      "path": "/api/v1/instruments/M%26M"
+    },
+    {
+      "name": "verify-x-hist-M%26M",
+      "method": "GET",
+      "path": "/api/v1/instruments/M%26M/history"
+    },
+    {
+      "name": "verify-x-ca-M%26M",
+      "method": "GET",
+      "path": "/api/v1/instruments/M%26M/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-m&m",
+      "method": "GET",
+      "path": "/api/v1/instruments/m&m"
+    },
+    {
+      "name": "verify-x-hist-m&m",
+      "method": "GET",
+      "path": "/api/v1/instruments/m&m/history"
+    },
+    {
+      "name": "verify-x-ca-m&m",
+      "method": "GET",
+      "path": "/api/v1/instruments/m&m/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-BAJAJ-AUTO",
+      "method": "GET",
+      "path": "/api/v1/instruments/BAJAJ-AUTO"
+    },
+    {
+      "name": "verify-x-hist-BAJAJ-AUTO",
+      "method": "GET",
+      "path": "/api/v1/instruments/BAJAJ-AUTO/history"
+    },
+    {
+      "name": "verify-x-ca-BAJAJ-AUTO",
+      "method": "GET",
+      "path": "/api/v1/instruments/BAJAJ-AUTO/corporate-actions"
+    },
+    {
+      "name": "verify-x-fact-bajaj-auto",
+      "method": "GET",
+      "path": "/api/v1/instruments/bajaj-auto"
+    },
+    {
+      "name": "verify-x-hist-bajaj-auto",
+      "method": "GET",
+      "path": "/api/v1/instruments/bajaj-auto/history"
+    },
+    {
+      "name": "verify-x-ca-bajaj-auto",
+      "method": "GET",
+      "path": "/api/v1/instruments/bajaj-auto/corporate-actions"
+    },
+    {
+      "name": "verify-x-appear-MM",
+      "method": "GET",
+      "path": "/api/v1/instruments/M%26M/appearances",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-dash-date-2026-10-01T00:00:00",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-01T00:00:00"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026-10-01T00:00:00",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026-10-01T00:00:00"
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026-10-01T00:00:00",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026-10-01T00:00:00"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026-10-01T00:00:00",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026-10-01T00:00:00"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026-10-01T00:00:00",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026-10-01T00:00:00",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026-10-01T00:00:00",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-01T00:00:00"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-2026-10-01T00:00:00Z",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026-10-01T00:00:00Z",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026-10-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026-10-01T00:00:00Z",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026-10-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026-10-01T00:00:00Z",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026-10-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026-10-01T00:00:00Z",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026-10-01T00:00:00Z",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026-10-01T00:00:00Z",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-2026-10-01T05:00:00",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-01T05:00:00"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026-10-01T05:00:00",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026-10-01T05:00:00"
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026-10-01T05:00:00",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026-10-01T05:00:00"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026-10-01T05:00:00",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026-10-01T05:00:00"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026-10-01T05:00:00",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026-10-01T05:00:00",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026-10-01T05:00:00",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-01T05:00:00"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-1727740800",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "1727740800"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-1727740800",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "1727740800"
+      }
+    },
+    {
+      "name": "verify-x-health-date-1727740800",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "1727740800"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-1727740800",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "1727740800"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-1727740800",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "1727740800",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-1727740800",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "1727740800"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-20261001",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "20261001"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-20261001",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "20261001"
+      }
+    },
+    {
+      "name": "verify-x-health-date-20261001",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "20261001"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-20261001",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "20261001"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-20261001",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "20261001",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-20261001",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "20261001"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-2026-10-1",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-1"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026-10-1",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026-10-1"
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026-10-1",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026-10-1"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026-10-1",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026-10-1"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026-10-1",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026-10-1",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026-10-1",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-1"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-2026-10-01 ",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-01 "
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026-10-01 ",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026-10-01 "
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026-10-01 ",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026-10-01 "
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026-10-01 ",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026-10-01 "
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026-10-01 ",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026-10-01 ",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026-10-01 ",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-01 "
+      }
+    },
+    {
+      "name": "verify-x-dash-date-+2026-10-01",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "+2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-+2026-10-01",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "+2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-health-date-+2026-10-01",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "+2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-+2026-10-01",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "+2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-+2026-10-01",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "+2026-10-01",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-+2026-10-01",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "+2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-2026/10/01",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026/10/01"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026/10/01",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026/10/01"
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026/10/01",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026/10/01"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026/10/01",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026/10/01"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026/10/01",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026/10/01",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026/10/01",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026/10/01"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-0",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "0"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-0",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "0"
+      }
+    },
+    {
+      "name": "verify-x-health-date-0",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "0"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-0",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "0"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-0",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "0",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-0",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "0"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-1e9",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "1e9"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-1e9",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "1e9"
+      }
+    },
+    {
+      "name": "verify-x-health-date-1e9",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "1e9"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-1e9",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "1e9"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-1e9",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "1e9",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-1e9",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "1e9"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-2026-10-01T00:00",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "2026-10-01T00:00"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-2026-10-01T00:00",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "2026-10-01T00:00"
+      }
+    },
+    {
+      "name": "verify-x-health-date-2026-10-01T00:00",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "2026-10-01T00:00"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-2026-10-01T00:00",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "2026-10-01T00:00"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-2026-10-01T00:00",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "2026-10-01T00:00",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-2026-10-01T00:00",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "2026-10-01T00:00"
+      }
+    },
+    {
+      "name": "verify-x-dash-date-２０２６-10-01",
+      "method": "GET",
+      "path": "/api/v1/indices/dashboard",
+      "query": {
+        "date": "２０２６-10-01"
+      }
+    },
+    {
+      "name": "verify-x-fact-asof-２０２６-10-01",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS",
+      "query": {
+        "as_of": "２０２６-10-01"
+      }
+    },
+    {
+      "name": "verify-x-health-date-２０２６-10-01",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "date": "２０２６-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-from-２０２６-10-01",
+      "method": "GET",
+      "path": "/api/v1/instruments/TCS/history",
+      "query": {
+        "from": "２０２６-10-01"
+      }
+    },
+    {
+      "name": "verify-x-listing-from-２０２６-10-01",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "from": "２０２６-10-01",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-mh-hist-２０２６-10-01",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "from": "２０２６-10-01"
+      }
+    },
+    {
+      "name": "verify-x-listings-limit-[ 5]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": " 5"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[ 5]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": " 5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[ 5]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": " 5"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[ 5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": " 5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[ 5]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": " 5"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[5 ]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "5 "
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[5 ]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "5 "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[5 ]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "5 "
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[5 ]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "5 "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[5 ]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "5 "
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[+5]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "+5"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[+5]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "+5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[+5]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "+5"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[+5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "+5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[+5]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "+5"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[05]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "05"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[05]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "05"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[05]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "05"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[05]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "05"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[05]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "05"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[0x5]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "0x5"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[0x5]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "0x5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[0x5]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "0x5"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[0x5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "0x5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[0x5]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "0x5"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[5e0]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "5e0"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[5e0]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "5e0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[5e0]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "5e0"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[5e0]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "5e0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[5e0]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "5e0"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[5.00]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "5.00"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[5.00]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "5.00"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[5.00]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "5.00"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[5.00]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "5.00"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[5.00]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "5.00"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[-0]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "-0"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[-0]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "-0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[-0]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "-0"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[-0]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "-0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[-0]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "-0"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[١٠]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "١٠"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[١٠]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "١٠"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[١٠]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "١٠"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[١٠]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "١٠"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[١٠]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "١٠"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[999999999999999999999999]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "999999999999999999999999"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[999999999999999999999999]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "999999999999999999999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[999999999999999999999999]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "999999999999999999999999"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[999999999999999999999999]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "999999999999999999999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[999999999999999999999999]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "999999999999999999999999"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[5_]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "5_"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[5_]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "5_"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[5_]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "5_"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[5_]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "5_"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[5_]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "5_"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[_5]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "_5"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[_5]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "_5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[_5]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "_5"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[_5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "_5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[_5]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "_5"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[5__0]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "5__0"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[5__0]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "5__0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[5__0]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "5__0"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[5__0]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "5__0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[5__0]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "5__0"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[true]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": "true"
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[true]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": "true"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[true]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": "true"
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[true]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": "true"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[true]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": "true"
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-listings-limit-[]",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "limit": ""
+      }
+    },
+    {
+      "name": "verify-x-desk-tb-limit-[]",
+      "method": "GET",
+      "path": "/api/v1/desk/tradebook",
+      "query": {
+        "limit": ""
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-limit-[]",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "tcs",
+        "limit": ""
+      }
+    },
+    {
+      "name": "verify-x-explore-off-[]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "offset": ""
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-rh-limit-[]",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf",
+        "limit": ""
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
+    },
+    {
+      "name": "verify-x-kite-amt-[1e-2]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1e-2"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[1e-2]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e-2"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[0.001]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "0.001"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[0.001]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0.001"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[100000.005]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "100000.005"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[100000.005]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "100000.005"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[1E+5]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1E+5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[1E+5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1E+5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[-0]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "-0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[-0]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "-0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[0.0]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "0.0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[0.0]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0.0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[  100 ]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "  100 "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[  100 ]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "  100 "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[100_000]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "100_000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[100_000]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "100_000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[1_0.5]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1_0.5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[1_0.5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1_0.5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[Infinity]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "Infinity"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[Infinity]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "Infinity"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[-inf]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "-inf"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[-inf]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "-inf"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[sNaN]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "sNaN"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[sNaN]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "sNaN"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[1e30]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1e30"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[1e30]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e30"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[1e-30]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1e-30"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[1e-30]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e-30"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[123456789012345678901234567890.5]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "123456789012345678901234567890.5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[123456789012345678901234567890.5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "123456789012345678901234567890.5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[.5]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": ".5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[.5]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": ".5"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[5.]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "5."
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[5.]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "5."
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[0x10]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "0x10"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[0x10]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0x10"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[1,000]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1,000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[1,000]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1,000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-amt-[１０００]",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "１０００"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-mma-[１０００]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "１０００"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[0]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "0"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[1]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "1"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[yes]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "yes"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[no]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "no"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[on]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "on"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[OFF]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "OFF"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[True]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "True"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[FALSE]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "FALSE"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[t]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "t"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[f]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "f"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[y]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "y"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[n]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "n"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[ true]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": " true"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-new-[true ]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "include_new": "true "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-sort-[NAME]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "NAME"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-sort-[name ]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "sort": "name "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-order-[DESC]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "order": "DESC"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-access-[FREE\n]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "access": "FREE\n"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-access-[]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "access": ""
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-volatility-[MED]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "volatility": "MED"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-volatility-[HIGH]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "volatility": "HIGH"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-category-[]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "category": ""
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-q-[]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": ""
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-q-[   ]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "   "
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-q-[%]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "%"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-q-[_]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "_"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-q-[mo%]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "q": "mo%"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-rebalance_frequency-[NEED_BASIS]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "rebalance_frequency": "NEED_BASIS"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-rebalance_frequency-[WEEKLY]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "rebalance_frequency": "WEEKLY"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-basket_type-[MF]",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "basket_type": "MF"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-dup",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": "limit=1&limit=3&sort=x&sort=ret_1y",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-limit-1",
+      "method": "GET",
+      "path": "/api/v1/explore",
+      "query": {
+        "limit": "1",
+        "offset": "8"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-momentum-scan",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-momentum-scan",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-momentum-scan",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-scan-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-scan-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-scan-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-scan-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-avg-sharp-12-1m",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-avg-sharp-12-1m",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-avg-sharp-12-1m",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-avg-sharp-12-1m-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-avg-sharp-12-1m-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-avg-sharp-12-1m-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-avg-sharp-12-1m-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/avg-sharp-12-1m/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-broad-market-sharpe",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-broad-market-sharpe",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-broad-market-sharpe",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-broad-market-sharpe-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-broad-market-sharpe-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-broad-market-sharpe-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-broad-market-sharpe-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/broad-market-sharpe/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-liquid-momentum",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-liquid-momentum",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-liquid-momentum",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-liquid-momentum-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-liquid-momentum-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-liquid-momentum-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-liquid-momentum-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/liquid-momentum/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-momentum-low-volatility",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-momentum-low-volatility",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-momentum-low-volatility",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-low-volatility-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-low-volatility-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-low-volatility-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-momentum-low-volatility-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/momentum-low-volatility/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-quality-momentum",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-quality-momentum",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-quality-momentum",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-quality-momentum-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-quality-momentum-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-quality-momentum-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-quality-momentum-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/quality-momentum/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-card-six-month-sharpe",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe",
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-cons-six-month-sharpe",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe/constituents",
+      "user": "subscriber"
+    },
+    {
+      "name": "verify-x-perf-six-month-sharpe",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-six-month-sharpe-1000",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe/kite",
+      "query": {
+        "amount": "1000"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-six-month-sharpe-12345.67",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe/kite",
+      "query": {
+        "amount": "12345.67"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-six-month-sharpe-99999999",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe/kite",
+      "query": {
+        "amount": "99999999"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-kite-six-month-sharpe-0.01",
+      "method": "GET",
+      "path": "/api/v1/explore/six-month-sharpe/kite",
+      "query": {
+        "amount": "0.01"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-anon-bad",
+      "method": "GET",
+      "path": "/api/v1/explore/managers/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+    },
+    {
+      "name": "verify-x-explore-slug-long-kite",
+      "method": "GET",
+      "path": "/api/v1/explore/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/kite",
+      "query": {
+        "amount": "x"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-slug-long-cons",
+      "method": "GET",
+      "path": "/api/v1/explore/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/constituents",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-explore-slug-long-perf",
+      "method": "GET",
+      "path": "/api/v1/explore/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/performance",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-collection-long",
+      "method": "GET",
+      "path": "/api/v1/explore/collections/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-cursor-MjAyNi0xMC0yOXxCT05EQURB==",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNi0xMC0yOXxCT05EQURB==",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-MjAyNi0xMC0yOXxCT05EQURB=",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNi0xMC0yOXxCT05EQURB=",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-MjAyNi0xMC0yOXxCT05E QURB",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNi0xMC0yOXxCT05E QURB",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-MjAyNi0xMC0yOXw",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNi0xMC0yOXw",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-fA",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "fA",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-MjAyNi0xMC0yOQ",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNi0xMC0yOQ",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-8J+Ygw",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "8J+Ygw",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-////",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "////",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-cursor-MjAyNi0xMy0yOXxB",
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "query": {
+        "cursor": "MjAyNi0xMy0yOXxB",
+        "limit": "2"
+      }
+    },
+    {
+      "name": "verify-x-lm-many",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": {
+        "symbols": "S0,S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22,S23,S24,S25,S26,S27,S28,S29,S30,S31,S32,S33,S34,S35,S36,S37,S38,S39,S40,S41,S42,S43,S44,S45,S46,S47,S48,S49,S50,S51,S52,S53,S54,S55,S56,S57,S58,S59,S60,S61,S62,S63,S64,S65,S66,S67,S68,S69,S70,S71,S72,S73,S74,S75,S76,S77,S78,S79,S80,S81,S82,S83,S84,S85,S86,S87,S88,S89,S90,S91,S92,S93,S94,S95,S96,S97,S98,S99,S100,S101,S102,S103,S104,S105,S106,S107,S108,S109,S110,S111,S112,S113,S114,S115,S116,S117,S118,S119,S120,S121,S122,S123,S124,S125,S126,S127,S128,S129,S130,S131,S132,S133,S134,S135,S136,S137,S138,S139,S140,S141,S142,S143,S144,S145,S146,S147,S148,S149,S150,S151,S152,S153,S154,S155,S156,S157,S158,S159,S160,S161,S162,S163,S164,S165,S166,S167,S168,S169,S170,S171,S172,S173,S174,S175,S176,S177,S178,S179,S180,S181,S182,S183,S184,S185,S186,S187,S188,S189,S190,S191,S192,S193,S194,S195,S196,S197,S198,S199,S200,S201,S202,S203,S204,S205,S206,S207,S208,S209,S210,S211,S212,S213,S214,S215,S216,S217,S218,S219,S220,S221,S222,S223,S224,S225,S226,S227,S228,S229,S230,S231,S232,S233,S234,S235,S236,S237,S238,S239,S240,S241,S242,S243,S244,S245,S246,S247,S248,S249,S250,S251,S252,S253,S254,S255,S256,S257,S258,S259,S260,S261,S262,S263,S264,S265,S266,S267,S268,S269,S270,S271,S272,S273,S274,S275,S276,S277,S278,S279,S280,S281,S282,S283,S284,S285,S286,S287,S288,S289,S290,S291,S292,S293,S294,S295,S296,S297,S298,S299"
+      },
+      "user": "owner",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-lm-unicode",
+      "method": "GET",
+      "path": "/api/v1/meta/live-marks",
+      "query": {
+        "symbols": "ﬁ,straße,ıi"
+      },
+      "user": "owner",
+      "mask": [
+        "served_at"
+      ]
+    },
+    {
+      "name": "verify-x-hist-field-close",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "close",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-close_raw",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "close_raw",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-volume",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "volume",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-marketcap_cr",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "marketcap_cr",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-pe",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "pe",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-vol_12m",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "vol_12m",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-median_vol_12m",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "median_vol_12m",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-turnover",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "turnover",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-CLOSE",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "CLOSE",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-pb",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "pb",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-dividend_yield",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "dividend_yield",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-ret_12m",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "ret_12m",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-hist-field-",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/history",
+      "query": {
+        "field": "",
+        "from": "2026-10-01"
+      }
+    },
+    {
+      "name": "verify-x-health-NIFTY-50",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "NIFTY-50"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-NIFTY-50",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "NIFTY-50",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-next-50",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-next-50"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-next-50",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-next-50",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-100",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-100"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-100",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-100",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-200",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-200"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-200",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-200",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-midcap-150",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-midcap-150"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-midcap-150",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-midcap-150",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-microcap-250",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-microcap-250"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-microcap-250",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-microcap-250",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-mid-small-400",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-mid-small-400"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-mid-small-400",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-mid-small-400",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-500",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-500"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-500",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-500",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-nifty-total-market",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": "nifty-total-market"
+      }
+    },
+    {
+      "name": "verify-x-health-hist-nifty-total-market",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "nifty-total-market",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-health-",
+      "method": "GET",
+      "path": "/api/v1/market-health",
+      "query": {
+        "universe": ""
+      }
+    },
+    {
+      "name": "verify-x-health-hist-",
+      "method": "GET",
+      "path": "/api/v1/market-health/history",
+      "query": {
+        "universe": "",
+        "from": "2026-09-01"
+      }
+    },
+    {
+      "name": "verify-x-search-RELIANCE-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "RELIANCE",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-RELIANCE-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "RELIANCE",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-RELIANCE-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "RELIANCE",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-nif-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "nif",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-nif-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "nif",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-nif-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "nif",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-Nifty 5-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "Nifty 5",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-Nifty 5-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "Nifty 5",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-Nifty 5-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "Nifty 5",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-trend-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "trend",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-trend-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "trend",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-trend-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "trend",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-sharpe-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "sharpe",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-sharpe-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "sharpe",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-sharpe-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "sharpe",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-maulik-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "maulik",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-maulik-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "maulik",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-maulik-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "maulik",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-exmpl-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "exmpl",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-exmpl-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "exmpl",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-exmpl-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "exmpl",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-a'b-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "a'b",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-a'b-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "a'b",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-a'b-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "a'b",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-\\-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "\\",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-\\-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "\\",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-\\-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "\\",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-ﬁ-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "ﬁ",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-ﬁ-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "ﬁ",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-ﬁ-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "ﬁ",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-xxxxxxxxxx-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-xxxxxxxxxx-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-xxxxxxxxxx-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-x-search-ab-None",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "ab",
+        "limit": "20"
+      }
+    },
+    {
+      "name": "verify-x-search-ab-owner",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "ab",
+        "limit": "20"
+      },
+      "user": "owner"
+    },
+    {
+      "name": "verify-x-search-ab-plain",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "query": {
+        "q": "ab",
+        "limit": "20"
+      },
+      "user": "plain"
+    },
+    {
+      "name": "verify-k-1e30",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "1e30"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-5e27",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "5e27"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-1e28",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "1e28"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-123456789012345678901234567890.5",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "123456789012345678901234567890.5"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-1e100",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "1e100"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-1e4200",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "1e4200"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-1e4290",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "1e4290"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-k-1e-100000",
+      "path": "/api/v1/explore/trend-stack/kite",
+      "query": {
+        "amount": "1e-100000"
+      },
+      "user": "owner",
+      "note": "Huge amounts: Python's quantities are unbounded ints (verifier; DECISIONS-RS R5.12)."
+    },
+    {
+      "name": "verify-m-9999999999999999.99",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "9999999999999999.99"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-1e16",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e16"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-1e17",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e17"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-1e18",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e18"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-99999999999999999.995",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "99999999999999999.995"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-999999999999999999.994",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "999999999999999999.994"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-0.001",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0.001"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-0.005",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0.005"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-0.004",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0.004"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-100000.005",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "100000.005"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-1e10000",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e10000"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-1e-10000",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e-10000"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m--1e10000",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "-1e10000"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m-1e-100000",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e-100000"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m--5",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "-5"
+      },
+      "user": "owner",
+      "note": "max_min_amount is bound as SQLAlchemy renders it, $n::NUMERIC(20, 2): rounded half away from zero, 1e18+ overflows (500), exponent < -16383 is asyncpg's encode failure (500)."
+    },
+    {
+      "name": "verify-m2-0e99999",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0e99999"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2--0e5",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "-0e5"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-0.00",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0.00"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-0e-16383",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0e-16383"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-0e-16384",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "0e-16384"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-1e-16383",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e-16383"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-1.5e-16384",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1.5e-16384"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-1e-16384",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1e-16384"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-999999999999999999.995",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "999999999999999999.995"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-1000000000000000000.5",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "1000000000000000000.5"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-5e17",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "5e17"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-m2-123456789e10",
+      "path": "/api/v1/explore",
+      "query": {
+        "max_min_amount": "123456789e10"
+      },
+      "user": "owner",
+      "note": "max_min_amount cast and asyncpg limits (verifier)."
+    },
+    {
+      "name": "verify-k2-1e-16384",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "1e-16384"
+      },
+      "user": "owner",
+      "note": "Huge/tiny amounts (verifier)."
+    },
+    {
+      "name": "verify-k2-0.0000001",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "0.0000001"
+      },
+      "user": "owner",
+      "note": "Huge/tiny amounts (verifier)."
+    },
+    {
+      "name": "verify-k2-7e28",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "7e28"
+      },
+      "user": "owner",
+      "note": "Huge/tiny amounts (verifier)."
+    },
+    {
+      "name": "verify-k2-9.99e27",
+      "path": "/api/v1/explore/momentum-scan/kite",
+      "query": {
+        "amount": "9.99e27"
+      },
+      "user": "owner",
+      "note": "Huge/tiny amounts (verifier)."
+    }
+  ]
+}

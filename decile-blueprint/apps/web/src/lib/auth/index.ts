@@ -1,8 +1,9 @@
 import NextAuth, { type DefaultSession } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 
 import { ACCESS_TOKEN_TTL_SECONDS, mintAccessToken } from "@/lib/auth/jwt";
-import { exchangeGoogleIdToken } from "@/lib/auth/api-auth";
+import { exchangeGoogleIdToken, localSignInPublicId, signInLocally } from "@/lib/auth/api-auth";
 
 /**
  * Auth.js v5 — Google is the only provider (`docs/DECISIONS-MERGE.md` M46).
@@ -104,6 +105,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
       },
     }),
+    /* The operator's own Mac (`api-auth.ts` `localSignInPublicId`). Registered only when the
+       local deployment names the account; it takes no input, so the browser chooses nothing. */
+    ...(localSignInPublicId()
+      ? [
+          Credentials({
+            id: "local",
+            name: "This Mac",
+            credentials: {},
+            authorize: () => {
+              const publicId = localSignInPublicId();
+              return publicId ? { id: publicId } : null;
+            },
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     async jwt({ token, account }) {
@@ -131,6 +147,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
            dying. The number has to be frozen at issue for the comparison downstream to mean
            anything. */
         claims.sessionEpoch = exchanged.sessionEpoch;
+        return token;
+      }
+
+      /* Local sign-in: the account comes from this deployment's environment, never from the
+         request, and must still exist and be live at the API. */
+      if (account?.provider === "local") {
+        const publicId = localSignInPublicId();
+        const local = publicId
+          ? await signInLocally(
+              publicId,
+              secret(),
+              process.env.BASKFY_JWT_ISSUER,
+              process.env.BASKFY_JWT_AUDIENCE,
+            )
+          : null;
+        if (!local) {
+          throw new Error("The accounts service rejected the local sign-in.");
+        }
+        // Google fills these from its profile; the local provider has only /me.
+        token.email = local.email;
+        token.name = local.name;
+        claims.publicId = local.publicId;
+        claims.accessToken = local.accessToken;
+        claims.accessTokenExpiresAt = local.accessTokenExpiresAt;
+        claims.sessionEpoch = local.sessionEpoch;
         return token;
       }
 

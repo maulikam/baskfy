@@ -1,0 +1,104 @@
+{
+ "fn": "baskfy_core.fno.ledger.figures",
+ "inputs": {
+  "as_of": "2026-10-09",
+  "marks": [],
+  "trades": [
+   {
+    "closed_at": "2026-08-24T15:00:00",
+    "closed_on": "2026-08-24",
+    "closed_reason": "PROFIT_TAKE",
+    "net_pnl_inr": "8000",
+    "position_id": 1,
+    "r_multiple": "0.45",
+    "rolls": 0,
+    "simulated": true,
+    "sleeve": "F1N",
+    "symbol": "NIFTY"
+   },
+   {
+    "closed_at": "2026-09-28T15:00:00",
+    "closed_on": "2026-09-28",
+    "closed_reason": "LOSS_CLOSE",
+    "net_pnl_inr": "-12000",
+    "position_id": 2,
+    "r_multiple": "-0.68",
+    "rolls": 0,
+    "simulated": true,
+    "sleeve": "F1N",
+    "symbol": "NIFTY"
+   },
+   {
+    "closed_at": "2026-10-05T11:00:00",
+    "closed_on": "2026-10-05",
+    "closed_reason": "LOSS_CLOSE",
+    "net_pnl_inr": "-3000",
+    "position_id": 3,
+    "r_multiple": "-0.2",
+    "rolls": 0,
+    "simulated": true,
+    "sleeve": "F1B",
+    "symbol": "BANKNIFTY"
+   },
+   {
+    "closed_at": null,
+    "closed_on": "2026-10-09",
+    "closed_reason": "TIME_EXIT",
+    "net_pnl_inr": "15000",
+    "position_id": 4,
+    "r_multiple": "0.5",
+    "rolls": 1,
+    "simulated": true,
+    "sleeve": "F2",
+    "symbol": "RELIANCE"
+   },
+   {
+    "closed_at": "2026-10-09T10:00:00",
+    "closed_on": "2026-10-09",
+    "closed_reason": "STOP",
+    "net_pnl_inr": "-30000",
+    "position_id": 5,
+    "r_multiple": "-1",
+    "rolls": 0,
+    "simulated": true,
+    "sleeve": "F2",
+    "symbol": "TCS"
+   },
+   {
+    "closed_at": "2026-11-02T10:00:00",
+    "closed_on": "2026-11-02",
+    "closed_reason": "STOP",
+    "net_pnl_inr": "1000",
+    "position_id": 7,
+    "r_multiple": "0.03",
+    "rolls": 0,
+    "simulated": true,
+    "sleeve": "F2",
+    "symbol": "INFY"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a trade after as_of is not counted. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "closed": 5,
+  "max_drawdown_inr": "30000",
+  "max_drawdown_r": "1.38",
+  "mtd_closed": 3,
+  "mtd_realised_inr": "-18000",
+  "mtd_realised_r": "-0.7",
+  "open_marked_inr": "0",
+  "open_positions": 0,
+  "realised_inr": "-22000",
+  "realised_r": "-0.93",
+  "total_inr": "-22000",
+  "win_rate": "0.4",
+  "wins": 2
+ }
+}

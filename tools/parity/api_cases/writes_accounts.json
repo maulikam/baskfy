@@ -1,0 +1,3498 @@
+{
+ "mode": "writes",
+ "lane": "writes-accounts",
+ "note": "Wave 4c lane writes-accounts: the writes of api_keys, alerts, webhook_endpoints, support, admin and billing as one scenario on fresh clones of the bed. Run with: python3 tools/parity/api_diff.py --writes --lane <lane> --smtp-port <port> --redis-db-py <a> --redis-db-rs <b> --py-port P --rs-port R --cases tools/parity/api_cases/writes_accounts.json. TZ=UTC so Python stores a naive datetime as UTC, as it does in every container (DECISIONS-RS R6.34). Razorpay is configured with test-only values and an API base on a closed local port, so no call ever leaves the box: a checkout that reaches the gateway is refused by the connection (503) on both sides; the webhook secret is a test value the cases sign with.",
+ "env": {
+  "TZ": "UTC",
+  "BASKFY_WEBHOOK_SIGNING_SECRET": "rs-parity-webhook-signing-test-only",
+  "BASKFY_RAZORPAY_KEY_ID": "rzp_test_rsparity",
+  "BASKFY_RAZORPAY_KEY_SECRET": "rs-parity-razorpay-key-test-only",
+  "BASKFY_RAZORPAY_WEBHOOK_SECRET": "rs-parity-razorpay-webhook-test-only",
+  "BASKFY_RAZORPAY_API_BASE": "http://127.0.0.1:9/v1",
+  "BASKFY_RAZORPAY_TIMEOUT_SECONDS": "2",
+  "BASKFY_RAZORPAY_PLAN_ID_YEARLY": "plan_rsparity_yearly"
+ },
+ "seed_sql": [
+  "INSERT INTO api_key (public_id, user_id, name, prefix, token_hash, scopes, rate_limit_per_minute, created_at, expires_at) VALUES ('rspk00000001', 2, 'seeded one', 'a00000000001', encode(sha256('rs-parity-key-1'::bytea), 'hex'), '[\"screens:read\", \"factors:read\", \"breadth:read\", \"meta:read\"]', NULL, '2026-10-01T00:00:00Z', NULL), ('rspk00000002', 2, 'seeded two', 'a00000000002', encode(sha256('rs-parity-key-2'::bytea), 'hex'), '[\"meta:read\"]', 60, '2026-10-02T00:00:00Z', '2027-03-01T12:00:00Z'), ('rspk00000003', 2, 'seeded expired', 'a00000000003', encode(sha256('rs-parity-key-3'::bytea), 'hex'), '[\"screens:read\"]', NULL, '2026-10-03T00:00:00Z', '2026-01-01T00:00:00Z'), ('rspk00000004', 2, 'seeded four', 'a00000000004', encode(sha256('rs-parity-key-4'::bytea), 'hex'), '[\"screens:read\"]', NULL, '2026-10-04T00:00:00Z', NULL), ('rspk00000010', 6, 'subscriber seeded', 'a00000000010', encode(sha256('rs-parity-key-10'::bytea), 'hex'), '[\"screens:read\"]', NULL, '2026-10-05T00:00:00Z', NULL)",
+  "INSERT INTO api_key_usage_daily (api_key_id, date, requests, throttled, updated_at) SELECT id, current_date - 1, 40, 2, '2026-10-29T00:00:00Z' FROM api_key WHERE public_id = 'rspk00000001'",
+  "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash, created_at, updated_at) VALUES ('rspa00000001', 2, 10, 'weekly', 4, 20, 2, false, true, '4586fd2fe4cf962f4a47bf489bdd7cf7bc2415c9eee4e5e480b9a1f8c2eabd92', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z'), ('rspa00000002', 2, 11, 'daily', NULL, NULL, 1, true, true, encode(sha256('rs-parity-alert-2'::bytea), 'hex'), '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z')",
+  "INSERT INTO screen_alert_delivery (alert_id, as_of, previous_as_of, status, entry_count, exit_count, change_count, detail, created_at) SELECT id, '2026-10-28', '2026-10-27', 'sent', 3, 1, 4, '{\"reason\": null}', '2026-10-28T12:00:00Z' FROM screen_alert WHERE public_id = 'rspa00000001'",
+  "INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, secret_version, events, is_active, consecutive_failures, disabled_at, disabled_reason, created_at, updated_at) VALUES ('rspw00000001', 2, 10, 'https://8.8.8.8/seeded', 1, '[\"screen.entries\", \"screen.exits\", \"screen.legacy\"]', false, 5, '2026-10-20T00:00:00Z', 'five consecutive failures', '2026-10-01T00:00:00Z', '2026-10-20T00:00:00Z'), ('rspw00000002', 2, 10, 'https://8.8.4.4/second', 3, '[\"screen.exits\"]', true, 0, NULL, NULL, '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z')",
+  "INSERT INTO webhook_delivery (endpoint_id, event, idempotency_key, payload, status, attempts, created_at) SELECT id, 'screen.entries', 'rs-parity-delivery-1', '{\"entries\": []}', 'delivered', 1, '2026-10-21T00:00:00Z' FROM webhook_endpoint WHERE public_id = 'rspw00000001'",
+  "INSERT INTO subscription (user_id, plan_id, status, started_at, current_period_end, razorpay_subscription_id) VALUES (2, 1, 'past_due', '2026-10-01T00:00:00Z', NULL, 'sub_rsparity1'), (4, 2, 'active', '2026-09-01T00:00:00Z', '2027-09-01T00:00:00Z', 'sub_rsparity2')",
+  "INSERT INTO payment (user_id, subscription_id, amount_inr, status, razorpay_payment_id, created_at) SELECT 2, id, 500.00, 'captured', 'pay_rsparity_seeded', '2026-10-01T00:00:00Z' FROM subscription WHERE razorpay_subscription_id = 'sub_rsparity1'"
+ ],
+ "db_mask": {
+  "api_key": [
+   "public_id",
+   "prefix",
+   "token_hash",
+   "created_at",
+   "revoked_at"
+  ],
+  "screen_alert": [
+   "public_id",
+   "unsubscribe_token_hash",
+   "created_at",
+   "updated_at"
+  ],
+  "webhook_endpoint": [
+   "public_id",
+   "created_at",
+   "updated_at"
+  ],
+  "admin_action": [
+   "detail",
+   "created_at"
+  ],
+  "entitlement_override": [
+   "created_at"
+  ],
+  "webhook_event": [
+   "received_at",
+   "processed_at"
+  ],
+  "subscription": [
+   "started_at"
+  ],
+  "payment": [
+   "created_at"
+  ]
+ },
+ "tables": [
+  "api_key",
+  "api_key_usage_daily",
+  "screen_alert",
+  "screen_alert_delivery",
+  "webhook_endpoint",
+  "webhook_delivery",
+  "admin_action",
+  "entitlement_override",
+  "webhook_event",
+  "subscription",
+  "payment",
+  "invoice_counter"
+ ],
+ "cases": [
+  {
+   "name": "keys-create-anonymous",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "body": {
+    "name": "x"
+   }
+  },
+  {
+   "name": "keys-create-anonymous-bad-json",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "raw_body": "{\"name\": ",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "note": "the body is parsed before the principal is resolved"
+  },
+  {
+   "name": "keys-create-stale-epoch",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "stale_epoch",
+   "body": {
+    "name": "x"
+   }
+  },
+  {
+   "name": "keys-create-expired",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "expired",
+   "body": {
+    "name": "x"
+   }
+  },
+  {
+   "name": "keys-create-no-body",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain"
+  },
+  {
+   "name": "keys-create-null",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "raw_body": "null",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "keys-create-array",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": [
+    "name"
+   ]
+  },
+  {
+   "name": "keys-create-text-plain",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "raw_body": "{\"name\": \"x\"}",
+   "headers": {
+    "Content-Type": "text/plain"
+   }
+  },
+  {
+   "name": "keys-create-empty",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "keys-create-every-error",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "",
+    "scopes": "screens:read",
+    "rate_limit_per_minute": 0,
+    "expires_at": "tomorrow",
+    "zz": 1,
+    "aa": 2
+   }
+  },
+  {
+   "name": "keys-create-long-name",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+   }
+  },
+  {
+   "name": "keys-create-name-number",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": 5
+   }
+  },
+  {
+   "name": "keys-create-name-null",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": null
+   }
+  },
+  {
+   "name": "keys-create-scope-items",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "scopes": [
+     1,
+     "screens:read",
+     null
+    ]
+   }
+  },
+  {
+   "name": "keys-create-scope-unknown",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "scopes": [
+     "screens:read",
+     "screens:write",
+     "nope"
+    ]
+   }
+  },
+  {
+   "name": "keys-create-scope-empty",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "scopes": []
+   }
+  },
+  {
+   "name": "keys-create-rate-fraction",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "rate_limit_per_minute": 5.5
+   }
+  },
+  {
+   "name": "keys-create-rate-string-junk",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "rate_limit_per_minute": "lots"
+   }
+  },
+  {
+   "name": "keys-create-rate-object",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "rate_limit_per_minute": {
+     "a": 1
+    }
+   }
+  },
+  {
+   "name": "keys-create-rate-nan",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "raw_body": "{\"name\": \"x\", \"rate_limit_per_minute\": NaN}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "keys-create-rate-huge-float",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "rate_limit_per_minute": 1e+20
+   }
+  },
+  {
+   "name": "keys-create-rate-above-ceiling",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "rate_limit_per_minute": 601
+   }
+  },
+  {
+   "name": "keys-create-rate-bigint",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "raw_body": "{\"name\": \"x\", \"rate_limit_per_minute\": 100000000000000000000000000000}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "keys-create-blank-name",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "   "
+   }
+  },
+  {
+   "name": "keys-create-expiry-bad",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "expires_at": "2027-02-30T00:00:00Z"
+   }
+  },
+  {
+   "name": "keys-create-expiry-bool",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "expires_at": true
+   }
+  },
+  {
+   "name": "keys-create-expiry-nan",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "raw_body": "{\"name\": \"x\", \"expires_at\": NaN}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "keys-create-expiry-far",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "x",
+    "expires_at": 253402300800000
+   }
+  },
+  {
+   "name": "keys-create-plain-default",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "  CI deploy  "
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ],
+   "capture": {
+    "k1": "json:/key/public_id",
+    "s1": "json:/secret"
+   },
+   "note": "every scope, no expiry; the name is stripped"
+  },
+  {
+   "name": "keys-create-plain-narrow",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "reader",
+    "scopes": [
+     "meta:read",
+     "screens:read",
+     "meta:read"
+    ],
+    "rate_limit_per_minute": "60",
+    "expires_at": "2027-06-30T18:30:00+05:30"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ],
+   "capture": {
+    "k2": "json:/key/public_id"
+   },
+   "note": "the offset is echoed as sent (Python returns the parsed object)"
+  },
+  {
+   "name": "keys-create-plain-naive-expiry",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "naive",
+    "expires_at": "2027-01-01 10:20"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ],
+   "capture": {
+    "k3": "json:/key/public_id"
+   },
+   "note": "naive: echoed naive, stored as UTC (TZ=UTC)"
+  },
+  {
+   "name": "keys-create-plain-timestamp-expiry",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "ts",
+    "expires_at": 1893456000.25,
+    "rate_limit_per_minute": true
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ],
+   "capture": {
+    "k4": "json:/key/public_id"
+   }
+  },
+  {
+   "name": "keys-create-plain-expired",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "body": {
+    "name": "already expired",
+    "expires_at": "2020-01-01"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ],
+   "capture": {
+    "kexp": "json:/key/public_id"
+   },
+   "note": "a past expiry is accepted; the key is born inactive"
+  },
+  {
+   "name": "keys-list-plain",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "mask": [
+    "/keys/0/public_id",
+    "/keys/0/display",
+    "/keys/0/created_at",
+    "/keys/0/revoked_at",
+    "/keys/1/public_id",
+    "/keys/1/display",
+    "/keys/1/created_at",
+    "/keys/1/revoked_at",
+    "/keys/2/public_id",
+    "/keys/2/display",
+    "/keys/2/created_at",
+    "/keys/2/revoked_at",
+    "/keys/3/public_id",
+    "/keys/3/display",
+    "/keys/3/created_at",
+    "/keys/3/revoked_at",
+    "/keys/4/public_id",
+    "/keys/4/display",
+    "/keys/4/created_at",
+    "/keys/4/revoked_at",
+    "/keys/5/public_id",
+    "/keys/5/display",
+    "/keys/5/created_at",
+    "/keys/5/revoked_at",
+    "/keys/6/public_id",
+    "/keys/6/display",
+    "/keys/6/created_at",
+    "/keys/6/revoked_at"
+   ]
+  },
+  {
+   "name": "keys-rotate-anonymous",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/rotate"
+  },
+  {
+   "name": "keys-rotate-other-tenant",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/rotate",
+   "user": "owner"
+  },
+  {
+   "name": "keys-rotate-unknown",
+   "method": "POST",
+   "path": "/api/v1/keys/nosuchkey/rotate",
+   "user": "plain"
+  },
+  {
+   "name": "keys-rotate-expired-key",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000003/rotate",
+   "user": "plain"
+  },
+  {
+   "name": "keys-rotate-plain",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000002/rotate",
+   "user": "plain",
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ],
+   "capture": {
+    "k2b": "json:/key/public_id",
+    "s2b": "json:/secret"
+   },
+   "note": "the replacement keeps scopes, limit and expiry; the original is revoked 'rotated'"
+  },
+  {
+   "name": "keys-rotate-plain-again",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000002/rotate",
+   "user": "plain"
+  },
+  {
+   "name": "keys-revoke-no-body",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "user": "plain"
+  },
+  {
+   "name": "keys-revoke-anonymous",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "body": {}
+  },
+  {
+   "name": "keys-revoke-long-reason",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "user": "plain",
+   "body": {
+    "reason": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+   }
+  },
+  {
+   "name": "keys-revoke-null-reason",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "user": "plain",
+   "body": {
+    "reason": null
+   }
+  },
+  {
+   "name": "keys-revoke-other-tenant",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "keys-revoke-unknown",
+   "method": "POST",
+   "path": "/api/v1/keys/nosuchkey/revoke",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "keys-revoke-plain",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "user": "plain",
+   "body": {
+    "reason": "leaked in a log"
+   },
+   "mask": [
+    "public_id",
+    "display",
+    "created_at",
+    "revoked_at"
+   ]
+  },
+  {
+   "name": "keys-revoke-plain-again",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000001/revoke",
+   "user": "plain",
+   "body": {},
+   "mask": [
+    "public_id",
+    "display",
+    "created_at",
+    "revoked_at"
+   ],
+   "note": "idempotent: the first reason stays"
+  },
+  {
+   "name": "keys-revoke-default-reason",
+   "method": "POST",
+   "path": "/api/v1/keys/${k3}/revoke",
+   "user": "plain",
+   "body": {},
+   "mask": [
+    "public_id",
+    "display",
+    "created_at",
+    "revoked_at"
+   ]
+  },
+  {
+   "name": "keys-delete-anonymous",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000001"
+  },
+  {
+   "name": "keys-delete-active",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000004",
+   "user": "plain"
+  },
+  {
+   "name": "keys-delete-other-tenant",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000001",
+   "user": "owner"
+  },
+  {
+   "name": "keys-delete-unknown",
+   "method": "DELETE",
+   "path": "/api/v1/keys/nosuchkey",
+   "user": "plain"
+  },
+  {
+   "name": "keys-delete-rotated-from",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000002",
+   "user": "plain",
+   "note": "another key names it in rotated_from_id: the foreign key refuses (500), rolled back"
+  },
+  {
+   "name": "keys-delete-plain",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000001",
+   "user": "plain"
+  },
+  {
+   "name": "keys-delete-plain-again",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000001",
+   "user": "plain"
+  },
+  {
+   "name": "keys-delete-expired",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000003",
+   "user": "plain"
+  },
+  {
+   "name": "keys-usage-rotated",
+   "method": "GET",
+   "path": "/api/v1/keys/${k2b}/usage",
+   "user": "plain",
+   "mask": [
+    "public_id",
+    "from",
+    "to"
+   ]
+  },
+  {
+   "name": "keys-list-plain-after",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "plain",
+   "mask": [
+    "public_id",
+    "display",
+    "created_at",
+    "revoked_at"
+   ]
+  },
+  {
+   "name": "keys-put",
+   "method": "PUT",
+   "path": "/api/v1/keys/rspk00000001",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "keys-get-single",
+   "method": "GET",
+   "path": "/api/v1/keys/rspk00000004",
+   "user": "plain"
+  },
+  {
+   "name": "keys-create-fill-0",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 0"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-1",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 1"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-2",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 2"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-3",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 3"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-4",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 4"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-5",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 5"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-6",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 6"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-7",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 7"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-fill-8",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "fill 8"
+   },
+   "mask": [
+    "/key/public_id",
+    "/key/display",
+    "/key/created_at",
+    "/secret"
+   ]
+  },
+  {
+   "name": "keys-create-eleventh",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "user": "subscriber",
+   "body": {
+    "name": "one too many"
+   }
+  },
+  {
+   "name": "keys-rotate-at-the-limit",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000010/rotate",
+   "user": "subscriber",
+   "note": "the key being rotated still counts: KeyLimitReached, nothing written"
+  },
+  {
+   "name": "alerts-create-anonymous",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "body": {
+    "screen_public_id": "exmpl0000001"
+   }
+  },
+  {
+   "name": "alerts-create-anonymous-bad-json",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "raw_body": "{]",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "alerts-create-no-body",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-create-every-error",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "frequency": "monthly",
+    "weekday": 7,
+    "top_n": 0,
+    "min_move": "x",
+    "digest": "maybe",
+    "extra": true
+   }
+  },
+  {
+   "name": "alerts-create-nulls",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": null,
+    "frequency": null,
+    "weekday": null,
+    "top_n": null,
+    "min_move": null,
+    "digest": null
+   }
+  },
+  {
+   "name": "alerts-create-weekday-negative",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "weekday": -1,
+    "digest": 2
+   }
+  },
+  {
+   "name": "alerts-create-weekday-float",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "weekday": 2.5,
+    "top_n": [
+     1
+    ]
+   }
+  },
+  {
+   "name": "alerts-create-unknown-screen",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "nosuchscreen"
+   }
+  },
+  {
+   "name": "alerts-create-other-tenant-screen",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "da1dae3992bf"
+   }
+  },
+  {
+   "name": "alerts-create-plain-daily",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "weekday": 3
+   },
+   "mask": [
+    "public_id"
+   ],
+   "capture": {
+    "a1": "json:/public_id"
+   },
+   "note": "a daily alert drops the weekday; min_move defaults to the setting"
+  },
+  {
+   "name": "alerts-create-duplicate",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001"
+   }
+  },
+  {
+   "name": "alerts-create-plain-weekly",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000006",
+    "frequency": "weekly",
+    "weekday": "2",
+    "top_n": 25.0,
+    "min_move": 3,
+    "digest": "yes"
+   },
+   "mask": [
+    "public_id"
+   ],
+   "capture": {
+    "a2": "json:/public_id"
+   }
+  },
+  {
+   "name": "alerts-create-plain-weekly-no-day",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000004",
+    "frequency": "weekly"
+   },
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-create-top-n-overflow",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000005",
+    "top_n": 3000000000
+   },
+   "note": "int32 overflow: asyncpg refuses before sending, 500"
+  },
+  {
+   "name": "alerts-create-subscriber-own",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "digest": 1
+   },
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-create-owner-private",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "da1dae3992bf",
+    "frequency": "weekly",
+    "weekday": 0
+   },
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-list-plain",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-patch-anonymous",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "body": {}
+  },
+  {
+   "name": "alerts-patch-no-body",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-patch-unknown",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/nosuchalert",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "alerts-patch-other-tenant",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "alerts-patch-errors",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "frequency": "hourly",
+    "weekday": 9,
+    "top_n": -2,
+    "min_move": 0,
+    "digest": "nah",
+    "is_active": [],
+    "x": 1
+   }
+  },
+  {
+   "name": "alerts-patch-empty",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {},
+   "note": "no net change: no UPDATE, updated_at unchanged"
+  },
+  {
+   "name": "alerts-patch-same-values",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "frequency": "weekly",
+    "weekday": 4,
+    "top_n": 20,
+    "min_move": 2,
+    "digest": false,
+    "is_active": true
+   }
+  },
+  {
+   "name": "alerts-patch-to-daily",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "frequency": "daily",
+    "weekday": 1
+   },
+   "note": "daily clears the weekday; the weekday is ignored on a daily alert"
+  },
+  {
+   "name": "alerts-patch-weekday-on-daily",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "weekday": 5
+   }
+  },
+  {
+   "name": "alerts-patch-to-weekly",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "frequency": "weekly",
+    "weekday": 6,
+    "top_n": 5,
+    "min_move": 4,
+    "digest": true,
+    "is_active": false
+   }
+  },
+  {
+   "name": "alerts-patch-null-fields",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "frequency": null,
+    "weekday": null,
+    "top_n": null,
+    "is_active": null
+   }
+  },
+  {
+   "name": "alerts-patch-overflow",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "min_move": 2147483648
+   }
+  },
+  {
+   "name": "alerts-patch-created",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/${a1}",
+   "user": "plain",
+   "body": {
+    "is_active": "off"
+   },
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-patch-unsubscribe-path",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/unsubscribe",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "alerts-delete-unsubscribe-path",
+   "method": "DELETE",
+   "path": "/api/v1/alerts/unsubscribe",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-get-unsubscribe-path",
+   "method": "GET",
+   "path": "/api/v1/alerts/unsubscribe",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-post-public-id",
+   "method": "POST",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "alerts-deliveries-seeded",
+   "method": "GET",
+   "path": "/api/v1/alerts/rspa00000001/deliveries",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-unsubscribe-no-body",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe"
+  },
+  {
+   "name": "alerts-unsubscribe-long",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "body": {
+    "token": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+   }
+  },
+  {
+   "name": "alerts-unsubscribe-number",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "body": {
+    "token": 12345,
+    "x": 1
+   }
+  },
+  {
+   "name": "alerts-unsubscribe-stale-token",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "user": "stale_epoch",
+   "body": {
+    "token": "8227b4b355e613dadc2f9b5add08b6aa"
+   }
+  },
+  {
+   "name": "alerts-unsubscribe-wrong",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "body": {
+    "token": "00000000000000000000000000000000"
+   },
+   "note": "unknown token: the same 200, no screen name"
+  },
+  {
+   "name": "alerts-unsubscribe-empty",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "body": {
+    "token": ""
+   }
+  },
+  {
+   "name": "alerts-unsubscribe-seeded-active-check",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "body": {
+    "is_active": true
+   }
+  },
+  {
+   "name": "alerts-unsubscribe-seeded",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "body": {
+    "token": "8227b4b355e613dadc2f9b5add08b6aa"
+   },
+   "note": "turns the alert off; answers its screen's name"
+  },
+  {
+   "name": "alerts-unsubscribe-seeded-again",
+   "method": "POST",
+   "path": "/api/v1/alerts/unsubscribe",
+   "user": "subscriber",
+   "body": {
+    "token": "8227b4b355e613dadc2f9b5add08b6aa"
+   },
+   "note": "idempotent; any caller"
+  },
+  {
+   "name": "alerts-list-plain-after-unsubscribe",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-delete-anonymous",
+   "method": "DELETE",
+   "path": "/api/v1/alerts/rspa00000001"
+  },
+  {
+   "name": "alerts-delete-other-tenant",
+   "method": "DELETE",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "subscriber"
+  },
+  {
+   "name": "alerts-delete-seeded",
+   "method": "DELETE",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain",
+   "note": "cascades its delivery history"
+  },
+  {
+   "name": "alerts-delete-seeded-again",
+   "method": "DELETE",
+   "path": "/api/v1/alerts/rspa00000001",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-deliveries-deleted",
+   "method": "GET",
+   "path": "/api/v1/alerts/rspa00000001/deliveries",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-delete-created",
+   "method": "DELETE",
+   "path": "/api/v1/alerts/${a2}",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-list-plain-after",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "alerts-create-again-after-delete",
+   "method": "POST",
+   "path": "/api/v1/alerts",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000006",
+    "frequency": "weekly",
+    "weekday": 1
+   },
+   "mask": [
+    "public_id"
+   ]
+  },
+  {
+   "name": "hooks-create-anonymous",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/hook"
+   }
+  },
+  {
+   "name": "hooks-create-anonymous-bad-json",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "raw_body": "{\"url\": \"x\"",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "hooks-create-no-body",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-create-every-error",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": 5,
+    "url": "http:/",
+    "events": [
+     "screen.entries",
+     "x",
+     3
+    ],
+    "secret": "no"
+   }
+  },
+  {
+   "name": "hooks-create-events-string",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/hook",
+    "events": "screen.entries"
+   }
+  },
+  {
+   "name": "hooks-create-events-null",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/hook",
+    "events": null
+   }
+  },
+  {
+   "name": "hooks-create-url-long",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   }
+  },
+  {
+   "name": "hooks-create-ftp",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "ftp://8.8.8.8/hook"
+   }
+  },
+  {
+   "name": "hooks-create-no-scheme",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "8.8.8.8/hook/path"
+   }
+  },
+  {
+   "name": "hooks-create-no-host",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https:///nohost"
+   }
+  },
+  {
+   "name": "hooks-create-empty-hostname",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://:443/path"
+   }
+  },
+  {
+   "name": "hooks-create-userinfo-only",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://user@:80/x"
+   }
+  },
+  {
+   "name": "hooks-create-loopback",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://127.0.0.1/hook"
+   }
+  },
+  {
+   "name": "hooks-create-rfc1918",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://10.0.0.5:8080/x"
+   }
+  },
+  {
+   "name": "hooks-create-cgnat",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://100.64.0.1/x"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ],
+   "note": "100.64.0.0/10 is not private in Python 3.12: it passes the guard"
+  },
+  {
+   "name": "hooks-create-metadata-ip",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://169.254.169.254/latest/meta-data/"
+   }
+  },
+  {
+   "name": "hooks-create-ipv6-loopback",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://[::1]:9000/hook"
+   }
+  },
+  {
+   "name": "hooks-create-ipv6-mapped",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://[::ffff:10.0.0.1]/x"
+   }
+  },
+  {
+   "name": "hooks-create-ipv6-ula",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://[fd00::1]/x"
+   }
+  },
+  {
+   "name": "hooks-create-ipv6-zone",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://[fe80::1%25en0]/x"
+   }
+  },
+  {
+   "name": "hooks-create-multicast",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://224.0.0.1/x"
+   }
+  },
+  {
+   "name": "hooks-create-reserved",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://250.1.1.1/x"
+   }
+  },
+  {
+   "name": "hooks-create-unspecified",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://0.0.0.0/x"
+   }
+  },
+  {
+   "name": "hooks-create-broadcast",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://255.255.255.255/x"
+   }
+  },
+  {
+   "name": "hooks-create-localhost",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://localhost:3000/x"
+   }
+  },
+  {
+   "name": "hooks-create-sub-localhost",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://api.LocalHost/x"
+   }
+  },
+  {
+   "name": "hooks-create-gcp-metadata",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://METADATA.google.internal/x"
+   }
+  },
+  {
+   "name": "hooks-create-short-ipv4",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://127.1/hook"
+   },
+   "note": "not a literal to ipaddress; getaddrinfo resolves it to 127.0.0.1"
+  },
+  {
+   "name": "hooks-create-decimal-ipv4",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://2130706433/x"
+   }
+  },
+  {
+   "name": "hooks-create-leading-zero",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://127.000.000.001/x"
+   }
+  },
+  {
+   "name": "hooks-create-userinfo-trick",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8@127.0.0.1/x"
+   }
+  },
+  {
+   "name": "hooks-create-bracket-unbalanced",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://[::1/x"
+   },
+   "note": "urlparse raises ValueError: the 500 catch-all"
+  },
+  {
+   "name": "hooks-create-bracket-ipv4",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://[8.8.8.8]/x"
+   }
+  },
+  {
+   "name": "hooks-create-port-range",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8:99999/x"
+   }
+  },
+  {
+   "name": "hooks-create-port-text",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8:abc/x"
+   }
+  },
+  {
+   "name": "hooks-create-empty-label",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "http://a..b.example/x"
+   },
+   "note": "the idna codec refuses an empty label: 500"
+  },
+  {
+   "name": "hooks-create-unresolvable",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://rs-parity.invalid/hook"
+   }
+  },
+  {
+   "name": "hooks-create-no-events",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/hook",
+    "events": []
+   }
+  },
+  {
+   "name": "hooks-create-unknown-screen",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "nosuchscreen",
+    "url": "https://8.8.8.8/hook"
+   }
+  },
+  {
+   "name": "hooks-create-other-tenant",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "da1dae3992bf",
+    "url": "https://8.8.8.8/hook"
+   }
+  },
+  {
+   "name": "hooks-create-plain",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/hook"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ],
+   "capture": {
+    "w1": "json:/endpoint/public_id"
+   }
+  },
+  {
+   "name": "hooks-create-duplicate",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000001",
+    "url": "https://8.8.8.8/hook"
+   }
+  },
+  {
+   "name": "hooks-create-same-url-other-screen",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "url": "https://8.8.8.8/hook",
+    "events": [
+     "screen.exits",
+     "screen.exits"
+    ]
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-create-padded",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000003",
+    "url": "  https://1.1.1.1/padded"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ],
+   "note": "urlsplit strips leading spaces; the URL is stored as sent"
+  },
+  {
+   "name": "hooks-list-plain",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "mask": [
+    "public_id",
+    "created_at"
+   ]
+  },
+  {
+   "name": "hooks-patch-anonymous",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "body": {}
+  },
+  {
+   "name": "hooks-patch-no-body",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-patch-unknown",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/nosuchhook",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "hooks-patch-other-tenant",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "owner",
+   "body": {
+    "is_active": true
+   }
+  },
+  {
+   "name": "hooks-patch-errors",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "url": "short",
+    "events": "x",
+    "is_active": "maybe",
+    "extra": 1
+   }
+  },
+  {
+   "name": "hooks-patch-private-url",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "url": "http://192.168.1.10/x",
+    "is_active": true
+   },
+   "note": "refused before anything is written"
+  },
+  {
+   "name": "hooks-patch-no-events",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "events": []
+   }
+  },
+  {
+   "name": "hooks-patch-empty",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "hooks-patch-nulls",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "url": null,
+    "events": null,
+    "is_active": null
+   }
+  },
+  {
+   "name": "hooks-patch-reenable",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "is_active": "true"
+   },
+   "note": "re-enabling clears the circuit breaker"
+  },
+  {
+   "name": "hooks-patch-same-values",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "url": "https://8.8.8.8/seeded",
+    "is_active": true
+   }
+  },
+  {
+   "name": "hooks-patch-url-events",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "url": "https://9.9.9.9/moved",
+    "events": [
+     "screen.exits"
+    ]
+   }
+  },
+  {
+   "name": "hooks-patch-collide",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {
+    "url": "https://8.8.4.4/second"
+   },
+   "note": "the unique (user, screen, url) constraint: 500, rolled back"
+  },
+  {
+   "name": "hooks-patch-disable",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000002",
+   "user": "plain",
+   "body": {
+    "is_active": false
+   }
+  },
+  {
+   "name": "hooks-patch-created",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/${w1}",
+   "user": "plain",
+   "body": {
+    "events": [
+     "screen.entries"
+    ]
+   },
+   "mask": [
+    "public_id",
+    "created_at"
+   ]
+  },
+  {
+   "name": "hooks-rotate-anonymous",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints/rspw00000001/rotate-secret"
+  },
+  {
+   "name": "hooks-rotate-unknown",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints/nosuchhook/rotate-secret",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-rotate-other-tenant",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints/rspw00000001/rotate-secret",
+   "user": "subscriber"
+  },
+  {
+   "name": "hooks-rotate-seeded",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints/rspw00000001/rotate-secret",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-rotate-seeded-again",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints/rspw00000001/rotate-secret",
+   "user": "plain",
+   "body": {
+    "ignored": true
+   }
+  },
+  {
+   "name": "hooks-post-public-id",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "hooks-get-public-id",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-deliveries-seeded",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/rspw00000001/deliveries",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-delete-anonymous",
+   "method": "DELETE",
+   "path": "/api/v1/webhook-endpoints/rspw00000001"
+  },
+  {
+   "name": "hooks-delete-other-tenant",
+   "method": "DELETE",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "owner"
+  },
+  {
+   "name": "hooks-delete-seeded",
+   "method": "DELETE",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain",
+   "note": "cascades its delivery history"
+  },
+  {
+   "name": "hooks-delete-seeded-again",
+   "method": "DELETE",
+   "path": "/api/v1/webhook-endpoints/rspw00000001",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-deliveries-deleted",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/rspw00000001/deliveries",
+   "user": "plain"
+  },
+  {
+   "name": "hooks-list-plain-after",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain",
+   "mask": [
+    "public_id",
+    "created_at"
+   ]
+  },
+  {
+   "name": "hooks-fill-0",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/0"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-1",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/1"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-2",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/2"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-3",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/3"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-4",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/4"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-5",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/5"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-6",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/6"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-7",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/7"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-8",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/8"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-9",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/9"
+   },
+   "mask": [
+    "/endpoint/public_id",
+    "/endpoint/created_at",
+    "/signing_secret"
+   ]
+  },
+  {
+   "name": "hooks-fill-eleventh",
+   "method": "POST",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber",
+   "body": {
+    "screen_public_id": "8eb9259c87e9",
+    "url": "https://8.8.8.8/fill/10"
+   }
+  },
+  {
+   "name": "support-no-body",
+   "method": "POST",
+   "path": "/api/v1/support"
+  },
+  {
+   "name": "support-bad-json",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "raw_body": "{\"name\": \"x\",",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "support-every-error",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "name": "",
+    "email": "not-an-email",
+    "topic": "Other",
+    "message": "too short",
+    "phone": "123"
+   }
+  },
+  {
+   "name": "support-missing-fields",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "topic": "My account"
+   }
+  },
+  {
+   "name": "support-long-message",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "name": "Asha",
+    "email": "asha@example.com",
+    "topic": "A number looks wrong",
+    "message": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+   }
+  },
+  {
+   "name": "support-long-name",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+    "email": "asha@example.com",
+    "topic": "A number looks wrong",
+    "message": "The breadth number on the dashboard looks off by one day."
+   }
+  },
+  {
+   "name": "support-topic-case",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "name": "Asha",
+    "email": "asha@example.com",
+    "topic": "my account",
+    "message": "The breadth number on the dashboard looks off by one day."
+   }
+  },
+  {
+   "name": "support-email-number",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "name": "Asha",
+    "email": 42,
+    "topic": "A number looks wrong",
+    "message": "The breadth number on the dashboard looks off by one day."
+   }
+  },
+  {
+   "name": "support-stale-token",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "user": "stale_epoch",
+   "body": {
+    "name": "Asha",
+    "email": "asha@example.com",
+    "topic": "A number looks wrong",
+    "message": "The breadth number on the dashboard looks off by one day."
+   }
+  },
+  {
+   "name": "support-anonymous",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "body": {
+    "name": "Asha",
+    "email": "asha@example.com",
+    "topic": "A number looks wrong",
+    "message": "The breadth number on the dashboard looks off by one day."
+   },
+   "note": "to support (Reply-To the sender) and a receipt to the sender"
+  },
+  {
+   "name": "support-signed-in",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "user": "plain",
+   "body": {
+    "name": "Plain <User> & Co",
+    "email": "asha@example.com",
+    "topic": "Billing or invoices",
+    "message": "The breadth number on the dashboard looks off by one day."
+   },
+   "note": "attributed to the account; the name is escaped in the HTML part"
+  },
+  {
+   "name": "support-pretty-email",
+   "method": "POST",
+   "path": "/api/v1/support",
+   "user": "owner",
+   "body": {
+    "name": "Asha",
+    "email": "Jane Doe <Jane.Doe@Example.COM>",
+    "topic": "Something else",
+    "message": "Line one.\nLine two with \"quotes\" and 'apostrophes' — and ₹."
+   }
+  },
+  {
+   "name": "support-get",
+   "method": "GET",
+   "path": "/api/v1/support"
+  },
+  {
+   "name": "admin-rerun-anonymous",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29/rerun"
+  },
+  {
+   "name": "admin-rerun-not-staff",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29/rerun",
+   "user": "plain"
+  },
+  {
+   "name": "admin-rerun-stale",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29/rerun",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "admin-rerun-not-staff-bad-date",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/nope/rerun",
+   "user": "plain",
+   "note": "the staff gate (a router dependency) runs before the path is validated"
+  },
+  {
+   "name": "admin-rerun-bad-month",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-13-01/rerun",
+   "user": "owner"
+  },
+  {
+   "name": "admin-rerun-not-a-date",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/yesterday/rerun",
+   "user": "owner"
+  },
+  {
+   "name": "admin-rerun-inexact",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29T10:00:00/rerun",
+   "user": "owner"
+  },
+  {
+   "name": "admin-rerun-trailing-space",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29%20/rerun",
+   "user": "owner"
+  },
+  {
+   "name": "admin-rerun",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29/rerun",
+   "user": "owner",
+   "mask": [
+    "task_id"
+   ],
+   "note": "publishes baskfy.pipeline.nightly to the default queue; one admin_action row"
+  },
+  {
+   "name": "admin-rerun-midnight-datetime",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-28T00:00:00Z/rerun",
+   "user": "subscriber",
+   "mask": [
+    "task_id"
+   ]
+  },
+  {
+   "name": "admin-rerun-timestamp",
+   "method": "POST",
+   "path": "/api/v1/admin/pipeline/runs/1761696000/rerun",
+   "user": "owner",
+   "mask": [
+    "task_id"
+   ],
+   "note": "a unix timestamp at midnight UTC is a date to pydantic"
+  },
+  {
+   "name": "admin-rerun-get",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/2026-10-29/rerun",
+   "user": "owner"
+  },
+  {
+   "name": "admin-reprocess-anonymous",
+   "method": "POST",
+   "path": "/api/v1/admin/instruments/RELIANCE/reprocess"
+  },
+  {
+   "name": "admin-reprocess-not-staff",
+   "method": "POST",
+   "path": "/api/v1/admin/instruments/RELIANCE/reprocess",
+   "user": "plain"
+  },
+  {
+   "name": "admin-reprocess-unknown",
+   "method": "POST",
+   "path": "/api/v1/admin/instruments/nope.x/reprocess",
+   "user": "owner"
+  },
+  {
+   "name": "admin-reprocess-too-long",
+   "method": "POST",
+   "path": "/api/v1/admin/instruments/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/reprocess",
+   "user": "owner"
+  },
+  {
+   "name": "admin-reprocess-lower",
+   "method": "POST",
+   "path": "/api/v1/admin/instruments/reliance/reprocess",
+   "user": "owner",
+   "mask": [
+    "task_id"
+   ],
+   "note": "matched upper-cased; publishes to the compute queue"
+  },
+  {
+   "name": "admin-reprocess-tcs",
+   "method": "POST",
+   "path": "/api/v1/admin/instruments/TCS/reprocess",
+   "user": "owner",
+   "mask": [
+    "task_id"
+   ]
+  },
+  {
+   "name": "admin-resync-anonymous",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "30"
+   }
+  },
+  {
+   "name": "admin-resync-not-staff",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "user": "plain",
+   "query": {
+    "days": "30"
+   }
+  },
+  {
+   "name": "admin-resync-zero",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "query": {
+    "days": "0"
+   }
+  },
+  {
+   "name": "admin-resync-text",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "query": {
+    "days": "x"
+   }
+  },
+  {
+   "name": "admin-resync-too-many",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "query": {
+    "days": "6001"
+   }
+  },
+  {
+   "name": "admin-resync-30",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "mask": [
+    "task_id"
+   ],
+   "note": "days=30 only (R5.33: a wider window holds inferred holidays, which would probe NSE)",
+   "query": {
+    "days": "30"
+   }
+  },
+  {
+   "name": "admin-resync-1",
+   "method": "POST",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "mask": [
+    "task_id"
+   ],
+   "query": {
+    "days": "1"
+   }
+  },
+  {
+   "name": "admin-put-anonymous",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "body": {
+    "feature": "api_access",
+    "effect": "grant",
+    "reason": "trial"
+   }
+  },
+  {
+   "name": "admin-put-not-staff",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "plain",
+   "body": {
+    "feature": "api_access",
+    "effect": "grant",
+    "reason": "trial"
+   }
+  },
+  {
+   "name": "admin-put-not-staff-bad-json",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "plain",
+   "raw_body": "{\"feature\": }",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "note": "the body is parsed before the staff gate"
+  },
+  {
+   "name": "admin-put-no-body",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner"
+  },
+  {
+   "name": "admin-put-every-error",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "effect": "maybe",
+    "value": -1,
+    "reason": "no",
+    "expires_at": "soon",
+    "who": "me"
+   }
+  },
+  {
+   "name": "admin-put-value-float",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "max_screens",
+    "effect": "grant",
+    "value": 2.5,
+    "reason": "abc"
+   }
+  },
+  {
+   "name": "admin-put-unknown-feature",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "universes",
+    "effect": "grant",
+    "reason": "abc"
+   }
+  },
+  {
+   "name": "admin-put-max-screens-no-value",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "max_screens",
+    "effect": "grant",
+    "reason": "abc"
+   }
+  },
+  {
+   "name": "admin-put-unknown-user",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/ghost0000000/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "api_access",
+    "effect": "grant",
+    "reason": "abc"
+   }
+  },
+  {
+   "name": "admin-put-unknown-user-huge-value",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/ghost0000000/entitlements",
+   "user": "owner",
+   "raw_body": "{\"feature\": \"max_screens\", \"effect\": \"grant\", \"value\": 100000000000000000000, \"reason\": \"abc\"}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "admin-put-huge-value",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "raw_body": "{\"feature\": \"max_screens\", \"effect\": \"grant\", \"value\": 100000000000000000000, \"reason\": \"abc\"}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "admin-put-grant",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "api_access",
+    "effect": "grant",
+    "reason": "API trial",
+    "expires_at": "2027-01-01T00:00:00+05:30"
+   },
+   "mask": [
+    "created_at"
+   ],
+   "note": "the override echoes the request's offset; the effective entitlements include it"
+  },
+  {
+   "name": "admin-put-regrant-naive",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "subscriber",
+   "body": {
+    "feature": "api_access",
+    "effect": "revoke",
+    "reason": "trial ended",
+    "expires_at": "2027-02-01T10:00:00",
+    "value": 3
+   },
+   "mask": [
+    "created_at"
+   ],
+   "note": "an update: previous recorded; another staff member becomes the granter"
+  },
+  {
+   "name": "admin-put-max-screens",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "max_screens",
+    "effect": "grant",
+    "value": "12",
+    "reason": "power user"
+   },
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "admin-put-expired",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "backtests",
+    "effect": "grant",
+    "reason": "expired already",
+    "expires_at": 1700000000
+   },
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "admin-put-same-again",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner",
+   "body": {
+    "feature": "max_screens",
+    "effect": "grant",
+    "value": 12,
+    "reason": "power user"
+   },
+   "mask": [
+    "created_at"
+   ],
+   "note": "no net change to the row; still audited"
+  },
+  {
+   "name": "admin-user-after-put",
+   "method": "GET",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e",
+   "user": "owner",
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "admin-delete-anonymous",
+   "method": "DELETE",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements/api_access"
+  },
+  {
+   "name": "admin-delete-not-staff",
+   "method": "DELETE",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements/api_access",
+   "user": "plain"
+  },
+  {
+   "name": "admin-delete-unknown-user",
+   "method": "DELETE",
+   "path": "/api/v1/admin/users/ghost0000000/entitlements/api_access",
+   "user": "owner"
+  },
+  {
+   "name": "admin-delete-absent",
+   "method": "DELETE",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements/screener",
+   "user": "owner",
+   "note": "absent is not an error, and nothing is audited"
+  },
+  {
+   "name": "admin-delete",
+   "method": "DELETE",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements/api_access",
+   "user": "owner"
+  },
+  {
+   "name": "admin-delete-again",
+   "method": "DELETE",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements/api_access",
+   "user": "owner"
+  },
+  {
+   "name": "admin-entitlements-get",
+   "method": "GET",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e/entitlements",
+   "user": "owner"
+  },
+  {
+   "name": "admin-user-after-delete",
+   "method": "GET",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e",
+   "user": "owner",
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "admin-actions-after",
+   "method": "GET",
+   "path": "/api/v1/admin/actions",
+   "user": "owner",
+   "mask": [
+    "created_at",
+    "/data/0/detail/task_id",
+    "/data/1/detail/task_id",
+    "/data/2/detail/task_id",
+    "/data/3/detail/task_id",
+    "/data/4/detail/task_id",
+    "/data/5/detail/task_id",
+    "/data/6/detail/task_id",
+    "/data/7/detail/task_id",
+    "/data/8/detail/task_id",
+    "/data/9/detail/task_id",
+    "/data/10/detail/task_id",
+    "/data/11/detail/task_id",
+    "/data/12/detail/task_id",
+    "/data/13/detail/task_id",
+    "/data/14/detail/task_id",
+    "/data/15/detail/task_id",
+    "/data/16/detail/task_id",
+    "/data/17/detail/task_id",
+    "/data/18/detail/task_id",
+    "/data/19/detail/task_id"
+   ],
+   "query": {
+    "limit": "20"
+   }
+  },
+  {
+   "name": "checkout-anonymous",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "body": {
+    "plan_code": "monthly"
+   }
+  },
+  {
+   "name": "checkout-anonymous-bad-json",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "raw_body": "{\"plan_code\"",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "checkout-no-body",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "plain"
+  },
+  {
+   "name": "checkout-empty-code",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "plain",
+   "body": {
+    "plan_code": ""
+   }
+  },
+  {
+   "name": "checkout-long-code",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "plain",
+   "body": {
+    "plan_code": "ppppppppppppppppppppppppppppppppp",
+    "extra": 1
+   }
+  },
+  {
+   "name": "checkout-unknown-plan",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "plain",
+   "body": {
+    "plan_code": "platinum"
+   }
+  },
+  {
+   "name": "checkout-forever",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "plain",
+   "body": {
+    "plan_code": "forever"
+   },
+   "note": "a one-time order: the gateway (a closed port) refuses the connection, 503; nothing written"
+  },
+  {
+   "name": "checkout-monthly-no-plan-id",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "plain",
+   "body": {
+    "plan_code": "monthly"
+   },
+   "note": "the customer call comes first and is refused: 503"
+  },
+  {
+   "name": "checkout-yearly",
+   "method": "POST",
+   "path": "/api/v1/checkout/session",
+   "user": "subscriber",
+   "body": {
+    "plan_code": "yearly"
+   }
+  },
+  {
+   "name": "checkout-get",
+   "method": "GET",
+   "path": "/api/v1/checkout/session",
+   "user": "plain"
+  },
+  {
+   "name": "webhook-get",
+   "method": "GET",
+   "path": "/api/v1/webhooks/razorpay"
+  },
+  {
+   "name": "webhook-no-signature",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.authorized\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": ""
+   }
+  },
+  {
+   "name": "webhook-wrong-signature",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.authorized\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "0000000000000000000000000000000000000000000000000000000000000000"
+   }
+  },
+  {
+   "name": "webhook-signature-of-other-bytes",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.authorized\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "47609322f999f54587a1a6d1cc2497560d510396dd2e69a19a6b2a691c071434"
+   }
+  },
+  {
+   "name": "webhook-not-json",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "this is not json",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "2a0a7f9f0b3c2281a8b79223848ca4c27d265a9a09bfa05d00fe7a24e797f5a7"
+   },
+   "note": "request.json() raises: the 500 catch-all"
+  },
+  {
+   "name": "webhook-array",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "[1, 2]",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "8a2ed2ac085fdd1ee23dfa4ed68870137c73b4cb58bb6f1718db627effcef297"
+   }
+  },
+  {
+   "name": "webhook-nan",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\": \"payment.authorized\", \"x\": NaN}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "193798cc988e1dcc4e7373f4fad67f3b11a5bb2e21987347ebd1f941592a107a",
+    "X-Razorpay-Event-Id": "evt_nan"
+   },
+   "note": "json.dumps writes NaN, which jsonb refuses: 500, nothing kept"
+  },
+  {
+   "name": "webhook-no-action",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.authorized\",\"payload\":{}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "334676a9bb5770d3de24b46d9cae2bd5f7ae8a03d812bc2e568058a61c27251d",
+    "X-Razorpay-Event-Id": "evt_rsparity_1"
+   }
+  },
+  {
+   "name": "webhook-replay",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.authorized\",\"payload\":{}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "334676a9bb5770d3de24b46d9cae2bd5f7ae8a03d812bc2e568058a61c27251d",
+    "X-Razorpay-Event-Id": "evt_rsparity_1"
+   },
+   "note": "dedupe by event id: ignored, no second row (the sequence still moves)"
+  },
+  {
+   "name": "webhook-no-event-id",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"refund.created\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "47d666efbc9bd931dbb3505537f0d93d19ce9306a82071d8bed33fc1790c27e7"
+   },
+   "note": "keyed by the signature instead"
+  },
+  {
+   "name": "webhook-no-event-id-replay",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"refund.created\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "47d666efbc9bd931dbb3505537f0d93d19ce9306a82071d8bed33fc1790c27e7"
+   }
+  },
+  {
+   "name": "webhook-event-missing",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"payload\":{}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "85daee8c0cc93df3cbe70152e6bfa88d40875466e605a8646927639554281049",
+    "X-Razorpay-Event-Id": "evt_rsparity_2"
+   }
+  },
+  {
+   "name": "webhook-event-not-a-string",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":5}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "ebffe0a8f4f87f60022924d11e47abadaa2bdc1ef43fe99a665261a2bb36fd7f",
+    "X-Razorpay-Event-Id": "evt_rsparity_3"
+   }
+  },
+  {
+   "name": "webhook-event-null",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":null}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "a659d54c4be1488b086f762501398f09ae7f1e285a41a3ec311b0d76090231e4",
+    "X-Razorpay-Event-Id": "evt_rsparity_3b"
+   }
+  },
+  {
+   "name": "webhook-activated",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.activated\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity1\",\"current_end\":1798761600}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "935f54a31ae9b421aee2d6ea843a3459e66f7cca0f795ca7e544d90f137a7fba",
+    "X-Razorpay-Event-Id": "evt_rsparity_4"
+   },
+   "note": "past_due -> active, the period end from current_end"
+  },
+  {
+   "name": "webhook-halted-unknown",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.halted\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_nosuch\"}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "cf1e18975573e148d761da02479663650250806d1f3515d39d646c8dbfd3db1a",
+    "X-Razorpay-Event-Id": "evt_rsparity_5"
+   }
+  },
+  {
+   "name": "webhook-cancelled-no-id",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.cancelled\",\"payload\":{\"subscription\":{\"entity\":{}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "16190c7cf61a8730ca20dbea009dadd5ccdcf25346792c2d5953ccd8dadd6766",
+    "X-Razorpay-Event-Id": "evt_rsparity_6"
+   }
+  },
+  {
+   "name": "webhook-cancelled-int-id",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.cancelled\",\"payload\":{\"subscription\":{\"entity\":{\"id\":12345}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "7542f71ef9b04c2f36c3b2dd53f3b9c09d27bd6384e968d67347377ac884c2b9",
+    "X-Razorpay-Event-Id": "evt_rsparity_7"
+   }
+  },
+  {
+   "name": "webhook-paused",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.paused\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":0,\"end_at\":true}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "3168a6ea1957fb641631427414466b9ba8923f1a61aaa866da9515624763ff7c",
+    "X-Razorpay-Event-Id": "evt_rsparity_8"
+   },
+   "note": "a bool is an int in Python: end_at=true is the epoch's first second"
+  },
+  {
+   "name": "webhook-completed",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.completed\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"charge_at\":-5}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "4e80aab1d55fe1d447efee9a597f102a09910d30533236d834984913358558f0",
+    "X-Razorpay-Event-Id": "evt_rsparity_9"
+   }
+  },
+  {
+   "name": "webhook-payment-not-captured",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_x1\",\"status\":\"authorized\"}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "c2ede1a7ead059efd56c507dd7e5c310bb543540d7d28acffcde7b059aec9665",
+    "X-Razorpay-Event-Id": "evt_rsparity_10"
+   }
+  },
+  {
+   "name": "webhook-payment-already",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"order.paid\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_rsparity_seeded\",\"status\":\"captured\"}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "5c04eb25e11a3689f21bd794560c697bdc5c3b38c6636b787669c3537eb640a6",
+    "X-Razorpay-Event-Id": "evt_rsparity_11"
+   }
+  },
+  {
+   "name": "webhook-payment-unattributed",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_x2\",\"notes\":{\"baskfy_plan_code\":\"monthly\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "f5464ce4a3c58d1fd871833e2ed3673bd07bcf724a13579a363a7eee783eca08",
+    "X-Razorpay-Event-Id": "evt_rsparity_12"
+   }
+  },
+  {
+   "name": "webhook-payment-unknown-user",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_x3\",\"notes\":{\"baskfy_user_public_id\":\"ghost0000000\",\"baskfy_plan_code\":\"monthly\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "e00b0bc3c1a4e6ff91a3245ae3b4c2f84d72bcc975a2317881531b45152a7fe0",
+    "X-Razorpay-Event-Id": "evt_rsparity_13"
+   }
+  },
+  {
+   "name": "webhook-charged-unattributed",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity1\"}},\"payment\":{\"entity\":{\"id\":\"pay_x4\"}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "4aaa5fc0dad52aac2191bc2c57b67a72d5db45f008a08dcd3d45abbca17719f1",
+    "X-Razorpay-Event-Id": "evt_rsparity_14"
+   },
+   "note": "the lifecycle runs, then the payment cannot be attributed (no user in notes): ignored"
+  },
+  {
+   "name": "webhook-charged-no-payment",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":1830297600}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "d6987a03495b784f08ebaf3060056877236a703a593091fac81a0bca4b10a3e2",
+    "X-Razorpay-Event-Id": "evt_rsparity_15"
+   }
+  },
+  {
+   "name": "webhook-captured-by-notes",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_rsparity_c1\",\"status\":\"captured\",\"amount\":50000,\"order_id\":\"order_rsparity_1\",\"notes\":{\"baskfy_user_public_id\":\"a0a1fd14fa3e\",\"baskfy_plan_code\":\"monthly\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "10f74af67d70e97760501010d6b13f6387c1fda2a549169ce1a3893e99705a52",
+    "X-Razorpay-Event-Id": "evt_rsparity_20"
+   },
+   "note": "attributed by notes to the plain account's monthly grant: one payment row, invoice DCL/<FY>/000001, its PDF in the archive"
+  },
+  {
+   "name": "webhook-captured-again",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_rsparity_c1\",\"status\":\"captured\",\"amount\":50000}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "bf00991bc0550741da62b15e245cb32d276aa9eea1cbf85535603ecd6c5cd9e1",
+    "X-Razorpay-Event-Id": "evt_rsparity_21"
+   }
+  },
+  {
+   "name": "webhook-charged-with-payment",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":1830297600}},\"payment\":{\"entity\":{\"id\":\"pay_rsparity_c2\",\"amount\":399900,\"notes\":{\"baskfy_user_public_id\":\"7fc7e9b08307\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "3b5750414bbaff194d83c8a295ab15bd1b4dbbad6cd31967b6200682a6658bcf",
+    "X-Razorpay-Event-Id": "evt_rsparity_22"
+   },
+   "note": "the lifecycle sets the period end; the invoice prints the period; the next number"
+  },
+  {
+   "name": "webhook-order-paid-forever",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"order.paid\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_rsparity_c3\",\"status\":\"captured\",\"notes\":{\"baskfy_user_public_id\":\"0159baaac142\",\"baskfy_plan_code\":\"forever\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "0d945d8b82ac953d24594f8fed4b992c2e2e6bb3b1acd1445fb5f57debac23f2",
+    "X-Razorpay-Event-Id": "evt_rsparity_23"
+   },
+   "note": "no amount: the plan's price; the subscriber's existing grant stays active"
+  },
+  {
+   "name": "webhook-captured-new-grant",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_rsparity_c4\",\"amount\":true,\"notes\":{\"baskfy_user_public_id\":\"09f1943b0c09\",\"baskfy_plan_code\":\"yearly\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "2d9c38abef3ca48ad2240b82ab2a8d512f6cb1aba986ace7f6f4ea11fd344a1e",
+    "X-Razorpay-Event-Id": "evt_rsparity_24"
+   },
+   "note": "no grant yet: an active subscription row is created; amount=true is one paisa (a bool is an int)"
+  },
+  {
+   "name": "invoices-plain-after",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "plain"
+  },
+  {
+   "name": "invoices-subscriber-after",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "subscriber"
+  },
+  {
+   "name": "invoice-pdf-plain",
+   "method": "GET",
+   "path": "/api/v1/invoices/DCL/2026-27/000001/pdf",
+   "user": "plain",
+   "note": "the PDF each side stored, byte for byte"
+  },
+  {
+   "name": "invoice-pdf-darshil-as-plain",
+   "method": "GET",
+   "path": "/api/v1/invoices/DCL/2026-27/000002/pdf",
+   "user": "plain"
+  },
+  {
+   "name": "webhook-signed-in-caller",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.failed\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "57ca6567a21e1b73918340edb819e38a1b0d429f746733c8da64eb2f92941ece",
+    "X-Razorpay-Event-Id": "evt_rsparity_16"
+   },
+   "user": "plain"
+  },
+  {
+   "name": "webhook-stale-token",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.failed\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "57ca6567a21e1b73918340edb819e38a1b0d429f746733c8da64eb2f92941ece",
+    "X-Razorpay-Event-Id": "evt_rsparity_17"
+   },
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-keys-create-api-key-header-only",
+   "method": "POST",
+   "path": "/api/v1/keys",
+   "body": {
+    "name": "x"
+   },
+   "headers": {
+    "X-API-Key": "dk_a00000000004_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+   },
+   "note": "review: X-API-Key authenticates nothing on the account routes (auth.API_KEY_HEADER): 401"
+  },
+  {
+   "name": "rv-keys-revoke-empty-reason",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000004/revoke",
+   "user": "plain",
+   "body": {
+    "reason": ""
+   },
+   "mask": [
+    "revoked_at"
+   ],
+   "note": "review: an empty reason is allowed (max_length only) and stored as ''"
+  },
+  {
+   "name": "rv-keys-delete-after-empty-reason",
+   "method": "DELETE",
+   "path": "/api/v1/keys/rspk00000004",
+   "user": "plain"
+  },
+  {
+   "name": "rv-keys-revoke-subscriber-on-plain",
+   "method": "POST",
+   "path": "/api/v1/keys/rspk00000002/revoke",
+   "user": "subscriber",
+   "body": {},
+   "note": "review: tenant isolation, another account's key is a 404 and nothing changes"
+  },
+  {
+   "name": "rv-alerts-patch-subscriber-on-plain",
+   "method": "PATCH",
+   "path": "/api/v1/alerts/rspa00000002",
+   "user": "subscriber",
+   "body": {
+    "is_active": false
+   },
+   "note": "review: tenant isolation on the other seeded alert"
+  },
+  {
+   "name": "rv-hooks-patch-subscriber-on-plain",
+   "method": "PATCH",
+   "path": "/api/v1/webhook-endpoints/rspw00000002",
+   "user": "subscriber",
+   "body": {
+    "is_active": true
+   },
+   "note": "review: tenant isolation on the other seeded endpoint"
+  },
+  {
+   "name": "rv-webhook-signature-uppercase",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"payment.failed\"}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "57CA6567A21E1B73918340EDB819E38A1B0D429F746733C8DA64EB2F92941ECE",
+    "X-Razorpay-Event-Id": "evt_rv_1"
+   },
+   "note": "review: the signature is compared as lower-case hex; upper case does not verify"
+  },
+  {
+   "name": "rv-webhook-empty-sub-id-falls-to-payment",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"\"}},\"payment\":{\"entity\":{\"id\":\"pay_rv_c5\",\"amount\":50000,\"subscription_id\":\"sub_rsparity1\",\"notes\":{\"baskfy_user_public_id\":\"a0a1fd14fa3e\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "1c50673fba2283881a2c5a40f4259f9fa68215876e6de7344ed02ffae59cc9d2",
+    "X-Razorpay-Event-Id": "evt_rv_2"
+   },
+   "note": "review: Python's `or` treats an empty subscription id as falsy, so _grant_for uses the payment's subscription_id: recorded against sub_rsparity1"
+  },
+  {
+   "name": "rv-webhook-midway-numeric-overflow",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":1900000000}},\"payment\":{\"entity\":{\"id\":\"pay_rv_c6\",\"amount\":10000000000000,\"notes\":{\"baskfy_user_public_id\":\"7fc7e9b08307\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "2c74dd7aebda513021479d1f251a99c3a90a6f9d9b7d07733b7f3a0ac1cbcba5",
+    "X-Razorpay-Event-Id": "evt_rv_3"
+   },
+   "note": "review: the lifecycle flushes, then the payment row overflows numeric(12,2): 500, and the claimed event and the lifecycle change roll back"
+  },
+  {
+   "name": "rv-webhook-midway-bigint-amount",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":1900000000}},\"payment\":{\"entity\":{\"id\":\"pay_rv_c7\",\"amount\":1000000000000000000000000000000,\"notes\":{\"baskfy_user_public_id\":\"7fc7e9b08307\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "6856b7a0125967b00f91f4c9cd9d7ee0b244ccf6c271afc8244454f679f41067",
+    "X-Razorpay-Event-Id": "evt_rv_4"
+   },
+   "note": "review: an amount beyond int64: 500, everything rolled back"
+  },
+  {
+   "name": "rv-webhook-period-overflow",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.activated\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":1000000000000}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "559a3db7151fd18398cbe0c5ffcd730109cb157acc92bab1bd1120b8868654fe",
+    "X-Razorpay-Event-Id": "evt_rv_5"
+   },
+   "note": "review: datetime.fromtimestamp(10**12) is past year 9999 and raises: 500, the claim rolls back"
+  },
+  {
+   "name": "rv-webhook-midway-retry-processes",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.charged\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":1900000000}},\"payment\":{\"entity\":{\"id\":\"pay_rv_c6\",\"amount\":10000,\"notes\":{\"baskfy_user_public_id\":\"7fc7e9b08307\"}}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "5fc1492ff5a72f4a1e6483c2489818f2697758783e54e1189654bfb5e0c44b9d",
+    "X-Razorpay-Event-Id": "evt_rv_3"
+   },
+   "note": "review: the same event id after the 500 is a clean retry, not a duplicate"
+  },
+  {
+   "name": "rv-invoices-plain-after",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "plain"
+  },
+  {
+   "name": "rv-admin-put-not-staff-other",
+   "method": "PUT",
+   "path": "/api/v1/admin/users/0159baaac142/entitlements",
+   "user": "plain",
+   "body": {
+    "feature": "api_access",
+    "effect": "grant",
+    "reason": "self-grant"
+   },
+   "note": "review: a non-staff caller cannot grant anyone anything: 404"
+  },
+  {
+   "name": "rv-webhook-period-in-range",
+   "method": "POST",
+   "path": "/api/v1/webhooks/razorpay",
+   "raw_body": "{\"event\":\"subscription.activated\",\"payload\":{\"subscription\":{\"entity\":{\"id\":\"sub_rsparity2\",\"current_end\":100000000000}}}}",
+   "headers": {
+    "Content-Type": "application/json",
+    "X-Razorpay-Signature": "a9d5b3426b23adde4ce1987b907dd4c95669a35ac9d69ea555340ef673cfbd0a",
+    "X-Razorpay-Event-Id": "evt_rv_6"
+   },
+   "note": "review: 10**11 seconds is year 5138, still a datetime: processed"
+  }
+ ]
+}

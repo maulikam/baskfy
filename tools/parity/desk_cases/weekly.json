@@ -1,0 +1,13 @@
+{
+  "note": "The weekly book's confirm path in DRY_RUN (seeded by the wave-D foundation; owned by lane weekly). Never a live order: both desks run DRY_RUN=true with the replay Kite.",
+  "db_mask": {"public.risk_ledger": ["updated_at"]},
+  "cases": [
+    {"name": "analyze the sample scan on Friday 09:16", "method": "POST", "path": "/analyze", "clock": "open",
+     "files": {"scan": {"path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv", "filename": "sample_scan.csv"}}, "plan": true, "capture": {"plan_id": "json:/plan_id"}},
+    {"name": "execute without confirm=true is 400", "method": "POST", "path": "/execute", "form": {"plan_id": "${plan_id}", "confirm": "yes"}},
+    {"name": "execute an unknown plan is 404", "method": "POST", "path": "/execute", "form": {"plan_id": "nope", "confirm": "true"}},
+    {"name": "execute the plan in DRY_RUN", "method": "POST", "path": "/execute", "form": {"plan_id": "${plan_id}", "confirm": "true"}},
+    {"name": "re-posting the plan cannot double-send", "method": "POST", "path": "/execute", "form": {"plan_id": "${plan_id}", "confirm": "true"}},
+    {"name": "a plan 30 min + 1 s old is 410", "method": "POST", "path": "/execute", "advance": 1801, "form": {"plan_id": "${plan_id}", "confirm": "true"}}
+  ]
+}

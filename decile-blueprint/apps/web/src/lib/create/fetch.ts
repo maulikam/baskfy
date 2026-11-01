@@ -1,6 +1,6 @@
 "use client";
 
-import { isProblem } from "@baskfy/api-client";
+import { isProblem, type Schemas } from "@baskfy/api-client";
 
 import { accessToken } from "@/lib/api/browser";
 import { apiOrigin } from "@/lib/api/config";
@@ -161,5 +161,23 @@ export async function createBasketFromScreen(
     "/api/v1/cb/baskets/from-screen",
     body,
     "Sign in to save this screen as a basket.",
+  );
+}
+
+export type RecutResponse = Schemas["RecutOut"];
+
+/**
+ * Re-run a screen basket's screen (Maulik, 14 Oct 2026). `confirm: false` previews the added and
+ * removed names and writes nothing; `confirm: true` saves the next version. An unchanged cut is
+ * never saved — the response says `written: false`.
+ */
+export async function recutBasketFromScreen(
+  slug: string,
+  confirm: boolean,
+): Promise<RecutResponse> {
+  return post<RecutResponse>(
+    `/api/v1/cb/baskets/${encodeURIComponent(slug)}/recut`,
+    { confirm },
+    "Sign in to re-cut this basket.",
   );
 }

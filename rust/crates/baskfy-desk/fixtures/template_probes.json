@@ -1,0 +1,117 @@
+{
+ "context": {
+  "i": 42,
+  "f": 2.5,
+  "g": -1234.567,
+  "t": true,
+  "n": null,
+  "s": "hello world",
+  "l": [
+   1,
+   "a",
+   null
+  ],
+  "d": {
+   "b": 2,
+   "a": "x<y"
+  },
+  "u": 1e-05,
+  "big": 1234567.891,
+  "html": "<a href=\"x\">O'Neil & co</a>",
+  "q": "it's \"quoted\"",
+  "rows": [
+   {
+    "name": "A",
+    "on": true
+   },
+   {
+    "name": "B",
+    "on": false
+   },
+   {
+    "name": "C",
+    "on": 1
+   }
+  ],
+  "nums": [
+   3,
+   1.5,
+   2
+  ],
+  "j": "{\"k\": \"v\", \"v\": [1, 2]}"
+ },
+ "asset_v_len": 8,
+ "options_enabled": false,
+ "probes": [
+  {
+   "name": "print_types",
+   "source": "{{ i }}|{{ f }}|{{ g }}|{{ t }}|{{ n }}|{{ s }}|{{ l }}|{{ d }}|{{ u }}|",
+   "ok": "42|2.5|-1234.567|True|None|hello world|[1, &#39;a&#39;, None]|{&#39;b&#39;: 2, &#39;a&#39;: &#39;x&lt;y&#39;}|1e-05|"
+  },
+  {
+   "name": "format_filter",
+   "source": "{{ '%.1f'|format(f) }} {{ '%+.2f'|format(g) }} {{ '%.0f'|format(i) }} {{ '%+d'|format(i) }} {{ 'rgba(0,135,79,%.2f)'|format(0.456) }}",
+   "ok": "2.5 -1234.57 42 +42 rgba(0,135,79,0.46)"
+  },
+  {
+   "name": "str_format",
+   "source": "{{ '{:,.0f}'.format(big) }} {{ '{:,}'.format(i) }} {{ '{:,.2f}'.format(g) }} {{ '₹{:,.0f}'.format(big) }}",
+   "ok": "1,234,568 42 -1,234.57 ₹1,234,568"
+  },
+  {
+   "name": "escape",
+   "source": "{{ html }}|{{ html|e }}|{{ html|safe }}|{{ q }}",
+   "ok": "&lt;a href=&#34;x&#34;&gt;O&#39;Neil &amp; co&lt;/a&gt;|&lt;a href=&#34;x&#34;&gt;O&#39;Neil &amp; co&lt;/a&gt;|<a href=\"x\">O'Neil & co</a>|it&#39;s &#34;quoted&#34;"
+  },
+  {
+   "name": "tojson",
+   "source": "<script>var x = {{ d|tojson }}; var y = {{ html|tojson }};</script>",
+   "ok": "<script>var x = {\"a\": \"x\\u003cy\", \"b\": 2}; var y = \"\\u003ca href=\\\"x\\\"\\u003eO\\u0027Neil \\u0026 co\\u003c/a\\u003e\";</script>"
+  },
+  {
+   "name": "loop",
+   "source": "{% for k, v in d.items() %}{{ loop.index }}:{{ k }}={{ v }}{% if not loop.last %},{% endif %}{% endfor %}",
+   "ok": "1:b=2,2:a=x&lt;y"
+  },
+  {
+   "name": "filters",
+   "source": "{{ rows|selectattr('on')|map(attribute='name')|join(', ') }}|{{ l|length }}|{{ nums|sum }}|{{ nums|max }}|{{ nums|min }}|{{ s|upper }}|{{ s|title }}|{{ f|round(1) }}|{{ -3|abs }}|{{ '7'|int }}|{{ nums|sort|first }}|{{ s|replace('l', 'L') }}|{{ '  x  '|trim }}",
+   "ok": "A, C|3|6.5|3|1.5|HELLO WORLD|Hello World|2.5|3|7|1.5|heLLo worLd|x"
+  },
+  {
+   "name": "macro",
+   "source": "{% macro pill(x, cls='a') %}<b class=\"{{ cls }}\">{{ x }}</b>{% endmacro %}{{ pill(1) }}{{ pill('<', cls='z') }}",
+   "ok": "<b class=\"a\">1</b><b class=\"z\">&lt;</b>"
+  },
+  {
+   "name": "set_and_math",
+   "source": "{% set total = i * 2 + f %}{{ total }} {{ i / 4 }} {{ i // 4 }} {{ i % 4 }} {{ f > 1 and 'yes' or 'no' }}",
+   "ok": "86.5 10.5 10 2 yes"
+  },
+  {
+   "name": "default_and_none",
+   "source": "{{ missing|default('dflt') }}|{{ n is none }}|{{ n or 'empty' }}|{% if missing is defined %}D{% else %}U{% endif %}",
+   "ok": "dflt|True|empty|U"
+  },
+  {
+   "name": "globals",
+   "source": "{{ asset_v|length }} {{ options_enabled }}",
+   "ok": "8 False"
+  },
+  {
+   "name": "fromjson",
+   "source": "{% set a = j|fromjson %}{{ a.k }} {{ a.v[1] }}",
+   "ok": "v 2"
+  },
+  {
+   "name": "whitespace",
+   "source": "a\n  {% if t %}\n  b\n  {% endif %}\nc\n",
+   "ok": "a\n  \n  b\n  \nc"
+  },
+  {
+   "name": "dict_get",
+   "source": "{{ d.get('b') }} {{ d.get('zz', 'none-here') }} {{ d['a'] }} {{ s.startswith('he') }}",
+   "ok": "2 none-here x&lt;y True"
+  }
+ ]
+}

@@ -22,10 +22,10 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from baskfy_core.fno.retest import TIER_2E_CAVEAT
+from baskfy_core.fno.retest import DIRECTIONAL_EXPIRY_DAYS, TIER_2E_CAVEAT, TIER_2E_CAVEAT_F3
 from baskfy_core.models import AppUser, FoBacktestRun, FoContractDaily
 from baskfy_worker.fno.partitions import ensure_contract_partition
-from baskfy_worker.fno.retest import run_retest
+from baskfy_worker.fno.retest import load_futures, load_index_rows, load_options, run_retest
 from baskfy_worker.fno.scan import scan_users
 from baskfy_worker.seeds.fno_config import seed_fno
 
@@ -170,3 +170,67 @@ async def test_an_unknown_family_is_refused_by_name(fo_url: str) -> None:
     async with _rolled_back(fo_url) as session:
         out = await run_retest(session, today=TODAY, families=["B9"], force=True)
         assert "B9" in str(out["refused"])
+
+
+async def _index_option(
+    session: AsyncSession, day: dt.date, expiry: dt.date, strike: int, kind: str
+) -> None:
+    await ensure_contract_partition(session, day)
+    session.add(
+        FoContractDaily(
+            trade_date=day,
+            instrument="OPTIDX",
+            symbol="NIFTY",
+            expiry=expiry,
+            strike=Decimal(strike),
+            option_type=kind,
+            open=Decimal("20.00"),
+            high=Decimal("20.00"),
+            low=Decimal("20.00"),
+            close=Decimal("20.00"),
+            settle=Decimal("20.00"),
+            open_interest=500,
+            oi_change=1,
+            volume=50,
+            turnover=Decimal("100000.00"),
+            lot_size=65,
+            source_key="k",
+        )
+    )
+
+
+async def test_f3_reads_the_weeklies_the_option_panel_drops(fo_url: str) -> None:
+    """F3-7: NIFTY's weekly has no future, so the research panel drops it; F3's loader keeps it
+    (and trims an expiry beyond ``DIRECTIONAL_EXPIRY_DAYS``)."""
+    async with _rolled_back(fo_url) as session:
+        days = _sessions(10)
+        await _futures(session, days)
+        weekly = days[-1] + dt.timedelta(days=4)  # no FUTIDX at this expiry
+        far = days[-1] + dt.timedelta(days=DIRECTIONAL_EXPIRY_DAYS + 30)
+        for expiry in (weekly, far):
+            await _index_option(session, days[-1], expiry, 23000, "PE")
+        await session.flush()
+        futures = await load_futures(session, START, TODAY)
+        panel = await load_options(session, futures, frozenset({"NIFTY"}), START, TODAY)
+        assert weekly not in set(panel["expiry"].to_list()), "the research panel drops weeklies"
+        raw = await load_index_rows(session, futures, "NIFTY", START, TODAY)
+        opts = raw.filter(raw["instrument"] == "OPTIDX")
+        assert set(opts["expiry"].to_list()) == {weekly}
+        assert raw.filter(raw["instrument"] == "FUTIDX").height == len(days)
+
+
+async def test_f3_families_write_rows_with_their_own_caveat(fo_url: str) -> None:
+    async with _rolled_back(fo_url) as session:
+        await session.execute(sa.delete(FoBacktestRun))
+        user = await _user(session, "f3")
+        await _futures(session, _sessions(80))
+        out = await run_retest(session, today=TODAY, families=["F3N", "F3B"], end=TODAY)
+        assert out["rows"] == 2 * len(await scan_users(session)), out
+        rows = {r.family: r for r in await _rows(session, user)}
+        assert set(rows) == {"F3N", "F3B"}
+        for row in rows.values():
+            assert row.caveat == TIER_2E_CAVEAT_F3
+            assert row.slippage_source == "ASSUMED"
+            assert row.n == 0 and row.net_r is None, "no index options: an honest zero"
+        assert rows["F3N"].params["expiry_kind"] == "weekly"
+        assert rows["F3B"].params["expiry_kind"] == "monthly"

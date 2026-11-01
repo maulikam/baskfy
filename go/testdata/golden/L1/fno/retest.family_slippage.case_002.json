@@ -1,0 +1,81 @@
+{
+ "fn": "baskfy_core.fno.retest.family_slippage",
+ "inputs": {
+  "families": [
+   "B4",
+   "B4_LOSS_CLOSE",
+   "B1",
+   "B2",
+   "C1",
+   "F2",
+   "A0",
+   "E",
+   "F3N"
+  ],
+  "measured": {
+   "BANKNIFTY": [
+    0.006,
+    20
+   ],
+   "NIFTY": [
+    0.004,
+    25
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "both indices at 20+ sessions: the worse. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "A0": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "B1": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "B2": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "B4": {
+   "names": 2,
+   "pct": 0.006,
+   "source": "MEASURED"
+  },
+  "B4_LOSS_CLOSE": {
+   "names": 2,
+   "pct": 0.006,
+   "source": "MEASURED"
+  },
+  "C1": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "E": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "F2": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "F3N": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  }
+ }
+}

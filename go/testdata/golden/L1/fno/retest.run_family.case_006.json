@@ -1,0 +1,93 @@
+{
+ "fn": "baskfy_core.fno.retest.run_family",
+ "inputs": {
+  "futures": {
+   "columns": [
+    "date",
+    "instrument",
+    "symbol",
+    "expiry",
+    "open",
+    "high",
+    "low",
+    "close",
+    "settle",
+    "underlying",
+    "open_interest",
+    "oi_change",
+    "volume",
+    "turnover",
+    "lot_size"
+   ],
+   "dtypes": {
+    "close": "Float64",
+    "date": "Date",
+    "expiry": "Date",
+    "high": "Float64",
+    "instrument": "String",
+    "lot_size": "Int64",
+    "low": "Float64",
+    "oi_change": "Int64",
+    "open": "Float64",
+    "open_interest": "Int64",
+    "settle": "Float64",
+    "symbol": "String",
+    "turnover": "Float64",
+    "underlying": "Float64",
+    "volume": "Int64"
+   },
+   "rows": []
+  },
+  "index_contracts": null,
+  "options": {
+   "columns": [
+    "date",
+    "instrument",
+    "symbol",
+    "expiry",
+    "strike",
+    "option_type",
+    "close",
+    "settle",
+    "open_interest",
+    "volume"
+   ],
+   "dtypes": {
+    "close": "Float64",
+    "date": "Date",
+    "expiry": "Date",
+    "instrument": "String",
+    "open_interest": "Int64",
+    "option_type": "String",
+    "settle": "Float64",
+    "strike": "Float64",
+    "symbol": "String",
+    "volume": "Int64"
+   },
+   "rows": []
+  },
+  "runs": [
+   {
+    "batch": 20,
+    "family": "F2",
+    "measured": {}
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an empty futures panel: refused. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "raises": {
+    "message": "the re-test needs futures rows; the panel is empty",
+    "type": "ValueError"
+   }
+  }
+ ]
+}

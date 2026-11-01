@@ -1,0 +1,227 @@
+{
+  "note": "Wave D lane options (lanes/options.rs + lanes/options/*): the /nifty-options page and its JSON on the bed's real op_ rows (five LAPSED O2 ENTRY plans, 42 sessions, no open position) at clocks on and off those plans' days, then every refusal of the two order-shaped POSTs: confirm missing (422), confirm not 'true' (400, before any read), an unknown plan (404), a LAPSED plan (refused, never sent), an unknown session to Close now (404), a non-integer session_id (422). OPTIONS_ENABLED is off and DRY_RUN=true throughout; the replay Kite must record no order or GTT call.",
+  "db_mask": {
+    "public.risk_ledger": [
+      "updated_at"
+    ]
+  },
+  "cases": [
+    {
+      "name": "nifty-options data before the open (Fri)",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "pre_open"
+    },
+    {
+      "name": "nifty-options data mid-session (Fri)",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "mid"
+    },
+    {
+      "name": "nifty-options data on a LAPSED plan's day (28 Oct 10:30)",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "2026-10-28T10:30:00+05:30"
+    },
+    {
+      "name": "nifty-options data inside a LAPSED plan's window (28 Oct 10:21)",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "2026-10-28T10:21:00+05:30"
+    },
+    {
+      "name": "nifty-options data on 28 Sep 10:00",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "2026-09-28T10:00:00+05:30"
+    },
+    {
+      "name": "nifty-options data on a SKIPPED day (29 Oct)",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "2026-10-29T11:00:00+05:30"
+    },
+    {
+      "name": "nifty-options data Saturday",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "2026-10-31T11:00:00+05:30"
+    },
+    {
+      "name": "nifty-options page mid-session (Fri)",
+      "method": "GET",
+      "path": "/nifty-options",
+      "clock": "mid"
+    },
+    {
+      "name": "nifty-options page on a LAPSED plan's day (28 Oct 10:21)",
+      "method": "GET",
+      "path": "/nifty-options",
+      "clock": "2026-10-28T10:21:00+05:30"
+    },
+    {
+      "name": "nifty-options page on 16 Oct 10:20",
+      "method": "GET",
+      "path": "/nifty-options",
+      "clock": "2026-10-16T10:20:00+05:30"
+    },
+    {
+      "name": "execute without confirm (422)",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "plan_id": "O2-20261028-29f6290fd0b5"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "execute without plan_id (422)",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "execute with no form at all (422)",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "clock": "mid"
+    },
+    {
+      "name": "execute confirm=false (400 before any read)",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "plan_id": "O2-20261028-29f6290fd0b5",
+        "confirm": "false"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "execute confirm=True (400: only the literal 'true')",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "plan_id": "O2-20261028-29f6290fd0b5",
+        "confirm": "True"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "execute an unknown plan",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "plan_id": "O2-20261030-000000000000",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "execute a LAPSED plan inside its old window",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "plan_id": "O2-20261028-29f6290fd0b5",
+        "confirm": "true"
+      },
+      "clock": "2026-10-28T10:21:00+05:30"
+    },
+    {
+      "name": "execute a LAPSED plan after its window",
+      "method": "POST",
+      "path": "/nifty-options/execute",
+      "form": {
+        "plan_id": "O2-20261016-62c4708be007",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "close without confirm (422)",
+      "method": "POST",
+      "path": "/nifty-options/close",
+      "form": {
+        "session_id": "41"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "close with a non-integer session (422)",
+      "method": "POST",
+      "path": "/nifty-options/close",
+      "form": {
+        "session_id": "forty-one",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "close confirm=no (400)",
+      "method": "POST",
+      "path": "/nifty-options/close",
+      "form": {
+        "session_id": "41",
+        "confirm": "no"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "close an unknown session (404)",
+      "method": "POST",
+      "path": "/nifty-options/close",
+      "form": {
+        "session_id": "99999",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "close a session with no entry plan (404)",
+      "method": "POST",
+      "path": "/nifty-options/close",
+      "form": {
+        "session_id": "42",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "close a LAPSED session that never opened (409)",
+      "method": "POST",
+      "path": "/nifty-options/close",
+      "form": {
+        "session_id": "41",
+        "confirm": "true"
+      },
+      "clock": "2026-10-28T10:30:00+05:30"
+    },
+    {
+      "name": "GET on the execute route is not an execute (405)",
+      "method": "GET",
+      "path": "/nifty-options/execute",
+      "clock": "mid"
+    },
+    {
+      "name": "GET on the close route (405)",
+      "method": "GET",
+      "path": "/nifty-options/close",
+      "clock": "mid"
+    },
+    {
+      "name": "the frozen lab is not mounted (404)",
+      "method": "GET",
+      "path": "/options",
+      "clock": "mid"
+    },
+    {
+      "name": "nifty-options data after everything (unchanged)",
+      "method": "GET",
+      "path": "/nifty-options/data",
+      "clock": "2026-10-28T10:21:00+05:30"
+    }
+  ]
+}

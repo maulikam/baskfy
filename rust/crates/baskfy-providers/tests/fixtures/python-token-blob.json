@@ -1,0 +1,8 @@
+{
+  "_note": "A throwaway Fernet key and a blob written by Python's AccessTokenStore.save, for the Rust interop test. Not a credential.",
+  "key": "a5pdyeKXw97dO6kSW-9EmztAvJww-_9ilL679WP2MEI=",
+  "blob": "gAAAAABq43q0CSyjjgX_qV0U1MieSCsrbqNM4JreCZ8R5LkNZxOtyEd9tY6sGyA-XmA_KQUBUZJtZuFT6YMxPVIwnUD2iza9rMgDO0bmLnZNECjvpUOJD-YCfMNrcwmeX4PlYwJUBRuGOl6zPT7HCCEFHZwaHJKCSoq_WaR1YHbbbtKbjlUtm_ROpmdaoFMIvTTW5igGduS5XmabQHvCp2fk6jcSJLTYYA==",
+  "token": "python-written-token",
+  "issued_at": "2026-08-20T09:15:30.123456+05:30",
+  "plaintext": "{\"version\": 1, \"access_token\": \"python-written-token\", \"issued_at\": \"2026-08-20T09:15:30.123456+05:30\"}"
+}

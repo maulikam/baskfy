@@ -1,0 +1,996 @@
+{
+  "lane": "swing_live",
+  "note": "Lane swing_live (wave 6): every task it owns at each relevant clock (before/inside/after the session, a weekend, an NSE holiday) and its failure paths. Probe directories are the lane's scratch; the session bundle serves the quotes.",
+  "cases": [
+    {
+      "name": "monitor-started-flag-off",
+      "task": "baskfy.swing.check_monitor_started",
+      "args": {},
+      "now": "2026-10-30T09:20:00"
+    },
+    {
+      "name": "monitor-started-missing",
+      "task": "baskfy.swing.check_monitor_started",
+      "args": [],
+      "now": "2026-10-30T09:20:00",
+      "env": {
+        "BASKFY_SWING_MONITOR_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "flag on, no sw_session for today: SWING_MONITOR_DID_NOT_START logged and mailed"
+    },
+    {
+      "name": "monitor-started-ran",
+      "task": "baskfy.swing.check_monitor_started",
+      "args": {},
+      "now": "2026-10-30T09:20:00",
+      "env": {
+        "BASKFY_SWING_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "INSERT INTO sw_session (user_id, session_date, mode, monitor_ran) VALUES (1,'2026-10-30','LIVE',true);",
+      "mask": {
+        "sw_session": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "monitor-started-saturday",
+      "task": "baskfy.swing.check_monitor_started",
+      "args": {},
+      "now": "2026-10-31T09:20:00",
+      "env": {
+        "BASKFY_SWING_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "monitor-started-holiday",
+      "task": "baskfy.swing.check_monitor_started",
+      "args": {},
+      "now": "2026-11-10T09:20:00",
+      "env": {
+        "BASKFY_SWING_MONITOR_ENABLED": "true"
+      },
+      "note": "Diwali Balipratipada, a weekday the calendar names a holiday"
+    },
+    {
+      "name": "orders-after-cutoff-none",
+      "task": "baskfy.swing.check_orders_after_cutoff",
+      "args": {},
+      "now": "2026-10-30T10:50:00"
+    },
+    {
+      "name": "orders-after-cutoff-open",
+      "task": "baskfy.swing.check_orders_after_cutoff",
+      "args": {},
+      "now": "2026-10-30T10:50:00",
+      "seed_sql": "INSERT INTO sw_plan (plan_id,user_id,as_of,source,built_at,expires_at,plan_hash,gate,exposure_level) VALUES ('00000000-0000-4000-8000-0000000000a1',1,'2026-10-30','MORNING','2026-10-30 03:46:00+00','2026-10-30 04:16:00+00','seed','GREEN',1); INSERT INTO sw_plan_line (plan_id,user_id,kind,instrument_id,state,client_id) SELECT p.id,1,'BUY_ON_TRIGGER',(SELECT i.id FROM instrument i WHERE i.symbol='TCS'),'SENT','seed:TCS' FROM sw_plan p WHERE p.plan_id='00000000-0000-4000-8000-0000000000a1'; INSERT INTO sw_plan_line (plan_id,user_id,kind,instrument_id,state,client_id) SELECT p.id,1,'BUY_ON_TRIGGER',(SELECT i.id FROM instrument i WHERE i.symbol='INFY'),'FILLED','seed:INFY' FROM sw_plan p WHERE p.plan_id='00000000-0000-4000-8000-0000000000a1';",
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "one BUY line still SENT on today's plan (and one FILLED, not counted)",
+      "mask": {
+        "sw_plan": {
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "orders-after-cutoff-sunday",
+      "task": "baskfy.swing.check_orders_after_cutoff",
+      "args": {},
+      "now": "2026-11-01T10:50:00",
+      "seed_sql": "INSERT INTO sw_plan (plan_id,user_id,as_of,source,built_at,expires_at,plan_hash,gate,exposure_level) VALUES ('00000000-0000-4000-8000-0000000000a1',1,'2026-10-30','MORNING','2026-10-30 03:46:00+00','2026-10-30 04:16:00+00','seed','GREEN',1); INSERT INTO sw_plan_line (plan_id,user_id,kind,instrument_id,state,client_id) SELECT p.id,1,'BUY_ON_TRIGGER',(SELECT i.id FROM instrument i WHERE i.symbol='TCS'),'SENT','seed:TCS' FROM sw_plan p WHERE p.plan_id='00000000-0000-4000-8000-0000000000a1'; INSERT INTO sw_plan_line (plan_id,user_id,kind,instrument_id,state,client_id) SELECT p.id,1,'BUY_ON_TRIGGER',(SELECT i.id FROM instrument i WHERE i.symbol='INFY'),'FILLED','seed:INFY' FROM sw_plan p WHERE p.plan_id='00000000-0000-4000-8000-0000000000a1';",
+      "mask": {
+        "sw_plan": {
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "gtt-at-1515-none",
+      "task": "baskfy.swing.check_gtt_at_1515",
+      "args": {},
+      "now": "2026-10-30T15:20:00"
+    },
+    {
+      "name": "gtt-at-1515-naked",
+      "task": "baskfy.swing.check_gtt_at_1515",
+      "args": {},
+      "now": "2026-10-30T15:20:00",
+      "seed_sql": "INSERT INTO sw_position (user_id,instrument_id,setup,entry_date,entry_avg,quantity_entered,initial_stop,stop,trail,quantity_open,state,simulated) VALUES (1,(SELECT i.id FROM instrument i WHERE i.symbol='TCS'),'FLAG','2026-10-29',3000,10,2800,2800,'MA10',10,'OPEN',false), (1,(SELECT i.id FROM instrument i WHERE i.symbol='INFY'),'FLAG','2026-10-29',1500,10,1400,1400,'MA10',4,'PARTIAL',false);",
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "an OPEN and a PARTIAL position with shares and no GTT",
+      "mask": {
+        "sw_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "gtt-at-1515-holiday",
+      "task": "baskfy.swing.check_gtt_at_1515",
+      "args": {},
+      "now": "2026-11-24T15:20:00",
+      "seed_sql": "INSERT INTO sw_position (user_id,instrument_id,setup,entry_date,entry_avg,quantity_entered,initial_stop,stop,trail,quantity_open,state,simulated) VALUES (1,(SELECT i.id FROM instrument i WHERE i.symbol='TCS'),'FLAG','2026-10-29',3000,10,2800,2800,'MA10',10,'OPEN',false), (1,(SELECT i.id FROM instrument i WHERE i.symbol='INFY'),'FLAG','2026-10-29',1500,10,1400,1400,'MA10',4,'PARTIAL',false);",
+      "mask": {
+        "sw_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "scan-sweep-idle",
+      "task": "baskfy.swing.scan_sweep",
+      "args": {},
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "scan-sweep-publishes",
+      "task": "baskfy.swing.scan_sweep",
+      "args": {},
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO sw_scan_run (user_id, requested_at, status, detail) VALUES (1,'2026-10-30 07:40:00+00','QUEUED','{\"source\": \"desk\"}'),(1,'2026-10-30 07:41:00+00','QUEUED',NULL); INSERT INTO sw_scan_run (user_id, requested_at, status, task_id) VALUES (1,'2026-10-30 07:42:00+00','QUEUED','already-published'); INSERT INTO sw_scan_run (user_id, requested_at, status) VALUES (1,'2026-10-30 07:43:00+00','DONE');",
+      "note": "two QUEUED rows with no task_id are published as baskfy.swing.scan_now on compute; the published one and the DONE one are left",
+      "mask": {
+        "sw_scan_run": {
+          "task_id": "elapsed"
+        }
+      }
+    },
+    {
+      "name": "timing-probe-off",
+      "task": "baskfy.swing.timing_probe",
+      "args": {},
+      "now": "2026-10-30T09:04:00"
+    },
+    {
+      "name": "timing-probe-done-marker",
+      "task": "baskfy.swing.timing_probe",
+      "args": {},
+      "now": "2026-10-30T09:04:00",
+      "env": {
+        "BASKFY_SWING_TIMING_PROBE": "true",
+        "BASKFY_SWING_TIMING_PROBE_DIR": "/private/tmp/claude-501/-Volumes-T7-Work-Dev-projects-baskfy/2f085943-fff7-4d41-9769-539cb2dfecb4/scratchpad/probe-done"
+      }
+    },
+    {
+      "name": "timing-probe-late-start",
+      "task": "baskfy.swing.timing_probe",
+      "args": {},
+      "now": "2026-10-30T09:21:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_SWING_TIMING_PROBE": "true",
+        "BASKFY_SWING_TIMING_PROBE_DIR": "/private/tmp/claude-501/-Volumes-T7-Work-Dev-projects-baskfy/2f085943-fff7-4d41-9769-539cb2dfecb4/scratchpad/probe-run"
+      },
+      "note": "started at 09:21: every sample but the 09:21:10 quote is skipped and said so; not a good run, so no marker"
+    },
+    {
+      "name": "timing-probe-candles",
+      "task": "baskfy.swing.timing_probe",
+      "args": {},
+      "now": "2026-10-30T09:20:30",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_SWING_TIMING_PROBE": "true",
+        "BASKFY_SWING_TIMING_PROBE_DIR": "/private/tmp/claude-501/-Volumes-T7-Work-Dev-projects-baskfy/2f085943-fff7-4d41-9769-539cb2dfecb4/scratchpad/probe-run"
+      },
+      "note": "two minute-candle asks (not recorded for equities: the upstream's 404, an error on both sides) and the last quote; ~40 s"
+    },
+    {
+      "name": "scan-now-missing-row",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        999999
+      ],
+      "now": "2026-10-30T13:15:00",
+      "note": "a row the publisher has not committed: ScanNotRunnable (run directly, self.retry raises it)"
+    },
+    {
+      "name": "scan-now-bad-arg",
+      "task": "baskfy.swing.scan_now",
+      "args": {},
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "scan-after-login-other-user",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        2
+      ],
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "scan-after-login-before-open",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        1
+      ],
+      "now": "2026-10-30T08:30:00"
+    },
+    {
+      "name": "scan-after-login-published",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        1
+      ],
+      "now": "2026-10-29T19:00:00"
+    },
+    {
+      "name": "scan-after-login-saturday",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        1
+      ],
+      "now": "2026-10-31T11:00:00"
+    },
+    {
+      "name": "scan-after-login-in-flight",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        1
+      ],
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO sw_scan_run (user_id, requested_at, status) VALUES (1,'2026-10-30 07:40:00+00','RUNNING');",
+      "bundle": "session",
+      "mask": {
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "note": "Python's request_login_scan returns the refusal's extras, which carry the existing row's run_id, and the task then runs that row: a login inside an in-flight or one-a-minute window re-scans the row it was refused for (reproduced on purpose; DECISIONS-RS). No Kite token here: FAILED with the reason."
+    },
+    {
+      "name": "scan-after-login-rate-limited",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        1
+      ],
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO sw_scan_run (user_id, requested_at, status) VALUES (1,'2026-10-30 07:44:30.250000+00','DONE');",
+      "bundle": "session",
+      "mask": {
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "note": "Python's request_login_scan returns the refusal's extras, which carry the existing row's run_id, and the task then runs that row: a login inside an in-flight or one-a-minute window re-scans the row it was refused for (reproduced on purpose; DECISIONS-RS). No Kite token here: FAILED with the reason."
+    },
+    {
+      "name": "scan-now-before-open",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        9001
+      ],
+      "now": "2026-10-30T08:30:00",
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task');",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "note": "before 09:15 the session is the last published one (29 Oct): the nightly's body, plain, no Kite session; the plan is skipped"
+    },
+    {
+      "name": "scan-now-today-published",
+      "task": "baskfy.swing.scan_now",
+      "args": {
+        "run_id": 9001
+      },
+      "now": "2026-10-29T20:00:00",
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task');",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "scan-now-saturday",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        9001
+      ],
+      "now": "2026-10-31T11:00:00",
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task');",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "scan-now-nothing-published",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        9001
+      ],
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task'); UPDATE pipeline_run SET data_version = NULL;",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "note": "no published run: the decision raises inside the savepoint and the row is FAILED with the reason"
+    },
+    {
+      "name": "scan-now-live-no-kite-session",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        9001
+      ],
+      "now": "2026-10-30T13:15:00",
+      "bundle": "session",
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task');",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "note": "inside the session with no Kite token: FAILED with the provider's reason; the intraday plan finds no market row for today"
+    },
+    {
+      "name": "scan-now-live-1315",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        9001
+      ],
+      "now": "2026-10-30T13:15:00",
+      "bundle": "session",
+      "kite": true,
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task');",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp",
+          "built_at": "stamp",
+          "expires_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/intraday_plan/plan_id"
+      ],
+      "note": "today so far from the 13:15 quotes: provisional bars, the live index level, provisional rows, then the INTRADAY plan. The plan's built_at/expires_at are the task clock when the rebuild starts, after the scan: the scan's real duration differs between the sides, so they compare as stamps"
+    },
+    {
+      "name": "scan-now-after-close",
+      "task": "baskfy.swing.scan_now",
+      "args": [
+        9001
+      ],
+      "now": "2026-10-30T16:30:00",
+      "bundle": "session",
+      "kite": true,
+      "seed_sql": "INSERT INTO sw_scan_run (id, user_id, requested_at, status, detail, task_id) OVERRIDING SYSTEM VALUE VALUES (9001, 1, '2026-10-30 07:44:00+00', 'QUEUED', '{\"source\": \"button\"}', 'seed-task');",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp",
+          "built_at": "stamp",
+          "expires_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/intraday_plan/plan_id"
+      ],
+      "note": "after 15:30 and before the publish: today from the day's final quotes (the 15:29 recording). The plan's built_at/expires_at are the task clock when the rebuild starts, after the scan: the scan's real duration differs between the sides, so they compare as stamps"
+    },
+    {
+      "name": "scan-after-login-live",
+      "task": "baskfy.swing.scan_after_login",
+      "args": [
+        1
+      ],
+      "now": "2026-10-30T13:15:00",
+      "bundle": "session",
+      "kite": true,
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp",
+          "built_at": "stamp",
+          "expires_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        },
+        "sw_scan_run": {
+          "started_at": "stamp",
+          "finished_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/intraday_plan/plan_id"
+      ],
+      "note": "a login inside the session: a broker-login row with this task's id, the scan, the plan. The plan's built_at/expires_at are the task clock when the rebuild starts, after the scan: the scan's real duration differs between the sides, so they compare as stamps"
+    },
+    {
+      "name": "premarket-levels",
+      "task": "baskfy.swing.premarket",
+      "args": {
+        "stage": "LEVELS"
+      },
+      "now": "2026-10-30T08:50:00",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "premarket-levels-rescaled",
+      "task": "baskfy.swing.premarket",
+      "args": [
+        null,
+        "LEVELS"
+      ],
+      "now": "2026-10-30T08:50:00",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      },
+      "seed_sql": "UPDATE sw_setup_daily SET adj_factor = adj_factor * 2 WHERE user_id = 1 AND (instrument_id, setup, date) IN (SELECT w.instrument_id, w.setup, w.setup_daily_date FROM sw_watch w WHERE w.user_id = 1 AND w.state = 'WATCHING' AND w.source != 'MANUAL');",
+      "note": "a corporate action since detection: every detector watch row's levels re-expressed under today's factor"
+    },
+    {
+      "name": "premarket-gaps-flag-off",
+      "task": "baskfy.swing.premarket",
+      "args": {},
+      "now": "2026-10-30T09:16:00",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan/plan_id"
+      ],
+      "note": "no Kite call: focus, the ladder catch-up check and the MORNING plan"
+    },
+    {
+      "name": "premarket-gaps-on",
+      "task": "baskfy.swing.premarket",
+      "args": {
+        "stage": "GAPS"
+      },
+      "now": "2026-10-30T09:16:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_SWING_EP_PREMARKET_ENABLED": "true"
+      },
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan/plan_id"
+      ],
+      "note": "quotes for the liquid universe (the replay's first recorded minute) and live gaps watched"
+    },
+    {
+      "name": "premarket-gaps-on-no-kite",
+      "task": "baskfy.swing.premarket",
+      "args": {},
+      "now": "2026-10-30T09:16:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_SWING_EP_PREMARKET_ENABLED": "true"
+      },
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "premarket-ladder-catch-up",
+      "task": "baskfy.swing.premarket",
+      "args": {},
+      "now": "2026-10-30T09:16:00",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan/plan_id"
+      ],
+      "seed_sql": "UPDATE sw_market_daily SET detail = detail - 'ladder' WHERE user_id = 1 AND date = '2026-10-29';",
+      "note": "the evening never settled 29 Oct: the morning settles it as a catch-up (A10)"
+    },
+    {
+      "name": "premarket-saturday",
+      "task": "baskfy.swing.premarket",
+      "args": [
+        "2026-10-31"
+      ],
+      "now": "2026-10-31T09:16:00",
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "premarket-before-calendar",
+      "task": "baskfy.swing.premarket",
+      "args": [
+        "2000-01-03"
+      ],
+      "now": "2026-10-30T09:16:00"
+    },
+    {
+      "name": "premarket-other-stage",
+      "task": "baskfy.swing.premarket",
+      "args": {
+        "stage": "OPEN"
+      },
+      "now": "2026-10-30T09:16:00",
+      "env": {
+        "BASKFY_SWING_EP_PREMARKET_ENABLED": "true"
+      },
+      "mask": {
+        "sw_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "sw_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_plan_skip": {
+          "created_at": "stamp"
+        },
+        "sw_watch": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "sw_config": {
+          "updated_at": "stamp"
+        },
+        "sw_market_daily": {
+          "created_at": "stamp"
+        },
+        "sw_setup_daily": {
+          "created_at": "stamp"
+        },
+        "sw_config_audit": {
+          "changed_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan/plan_id"
+      ]
+    },
+    {
+      "name": "premarket-bad-date",
+      "task": "baskfy.swing.premarket",
+      "args": [
+        "30-10-2026"
+      ],
+      "now": "2026-10-30T09:16:00"
+    }
+  ]
+}

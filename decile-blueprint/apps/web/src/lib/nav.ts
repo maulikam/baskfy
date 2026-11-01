@@ -178,6 +178,9 @@ export const SECTION_TABS = {
        so switching Volume → Swing does not require a hop through Screens. Overlap stays:
        it is a Build tool, not a sleeve. */
     { href: "/build/overlap" as Route, label: "Overlap" },
+    /* Research-only scans (no orders), so it sits on the consumer row, not the staff sleeves.
+       `/opportunities` (not `/swing`) so the tab stays lit on both Swing and Options. */
+    { href: "/opportunities" as Route, label: "Opportunities" },
   ],
   /*
     The swing hub (SW4, `docs/swing/05` §2): "Setups | Watchlist | Market | Positions | Journal".
@@ -220,6 +223,10 @@ export const SECTION_TABS = {
     sit under Me with the other sleeves' (`/me/options`), for the same reason — they are about a
     person's money, not today's tape.
   */
+  opportunities: [
+    { href: "/opportunities/swing" as Route, label: "Swing" },
+    { href: "/opportunities/options" as Route, label: "Options" },
+  ],
   options: [
     { href: "/options" as Route, label: "Today" },
     { href: "/options/journal" as Route, label: "Journal" },
@@ -271,6 +278,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   vbt: "Build",
   twt: "Build",
   options: "Build",
+  opportunities: "Build",
   portfolio: "Portfolio",
   me: "Me",
 };
@@ -389,6 +397,7 @@ export function primarySection(pathname: string): SectionKey | null {
   if (pathname === "/twt" || pathname.startsWith("/twt/")) return "twt";
   // `docs/options/05` §1: the options tab, by the same argument — it lights Build.
   if (pathname === "/options" || pathname.startsWith("/options/")) return "options";
+  if (pathname === "/opportunities" || pathname.startsWith("/opportunities/")) return "opportunities";
   /* `/portfolios` (plural, the desk's rebalance sub-pages) must not match here — hence the exact
      compare and the trailing slash, never a bare `startsWith("/portfolio")`. */
   if (pathname === "/portfolio" || pathname.startsWith("/portfolio/")) return "portfolio";
@@ -445,6 +454,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/vbt", "trending-up"),
       page("/twt", "line-chart"),
       page("/options", "activity"),
+      page("/opportunities/swing", "compass"),
     ],
   },
   {

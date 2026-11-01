@@ -1,0 +1,120 @@
+{
+ "fn": "baskfy_core.vbt.plan.exit_lines",
+ "inputs": {
+  "book": {
+   "cash_available_inr": "1000000",
+   "entries_already_this_session": 0,
+   "open_entry_counts": {},
+   "open_exposure_inr": "0",
+   "open_instrument_ids": [],
+   "positions_naked_of_gtt": [
+    [
+     11,
+     "KKK",
+     25,
+     "301.15"
+    ],
+    [
+     12,
+     "LLL",
+     5,
+     "99.95"
+    ]
+   ],
+   "working_instrument_ids": []
+  },
+  "expired": [
+   [
+    {
+     "cancel_reason": null,
+     "filled_quantity": 0,
+     "instrument_id": 9,
+     "limit_price": "100.00",
+     "quantity": 100,
+     "sessions_worked": 0,
+     "signal_date": "2024-01-02",
+     "state": "SENT",
+     "stop_price": "88.00"
+    },
+    "III"
+   ],
+   [
+    {
+     "cancel_reason": null,
+     "filled_quantity": 70,
+     "instrument_id": 10,
+     "limit_price": "55.55",
+     "quantity": 100,
+     "sessions_worked": 0,
+     "signal_date": "2024-01-02",
+     "state": "PARTIAL",
+     "stop_price": "88.00"
+    },
+    "JJJ"
+   ]
+  ],
+  "managed": []
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "expired limits are cancelled for their remainder; naked positions get an ARM_GTT. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "cap": null,
+   "instrument_id": 9,
+   "kind": "CANCEL_LIMIT",
+   "limit_price": "100.00",
+   "note": "the third session has closed; the limit stops being an order",
+   "position_id": null,
+   "quantity": 100,
+   "reason": null,
+   "stop_price": null,
+   "symbol": "III",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 10,
+   "kind": "CANCEL_LIMIT",
+   "limit_price": "55.55",
+   "note": "the third session has closed; the limit stops being an order",
+   "position_id": null,
+   "quantity": 30,
+   "reason": null,
+   "stop_price": null,
+   "symbol": "JJJ",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 11,
+   "kind": "ARM_GTT",
+   "limit_price": null,
+   "note": "a position without a resting stop is the one state the method forbids",
+   "position_id": null,
+   "quantity": 25,
+   "reason": null,
+   "stop_price": "301.15",
+   "symbol": "KKK",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 12,
+   "kind": "ARM_GTT",
+   "limit_price": null,
+   "note": "a position without a resting stop is the one state the method forbids",
+   "position_id": null,
+   "quantity": 5,
+   "reason": null,
+   "stop_price": "99.95",
+   "symbol": "LLL",
+   "value_inr": "0"
+  }
+ ]
+}

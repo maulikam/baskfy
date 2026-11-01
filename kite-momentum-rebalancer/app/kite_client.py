@@ -9,7 +9,7 @@ from kiteconnect import KiteConnect
 from . import config as C
 from .core.guards import assert_not_overnight_option, assert_tradeable
 from .core.kite_limits import DeskLimits
-from .core.net import force_ipv4
+from .core.net import force_ipv4, kite_proxies
 
 #: How long a last price answered by `ltp` is reused. Five seconds is the desk page's own
 #: refresh interval and `OpeningRangeConfig.quote_poll_min_seconds`, so a page poll costs no
@@ -29,7 +29,7 @@ class Kite:
         # broker's allowlist can actually name.
         if C.FORCE_IPV4:
             force_ipv4()
-        self.kc = KiteConnect(api_key=C.KITE_API_KEY)
+        self.kc = KiteConnect(api_key=C.KITE_API_KEY, proxies=kite_proxies(C.KITE_PROXY_URL))
         # SW20: every READ below takes a slot from this before it touches `self.kc`. Orders keep
         # the gateway's own async limiter — see app/core/kite_limits.py for the caps and for why
         # there are two.

@@ -1,0 +1,52 @@
+{
+ "fn": "baskfy_core.fno.exits.stop_from_vol",
+ "inputs": {
+  "cases": [
+   {
+    "ann_vol": 0.1,
+    "price": "1000"
+   },
+   {
+    "ann_vol": 0.4,
+    "price": "1000"
+   },
+   {
+    "ann_vol": 0.8,
+    "price": "1000"
+   },
+   {
+    "ann_vol": 0.2622,
+    "price": "2450.55"
+   },
+   {
+    "ann_vol": 0.0,
+    "price": "1000"
+   },
+   {
+    "ann_vol": 0.3,
+    "price": "99.99"
+   }
+  ],
+  "config": {
+   "stop_max": 0.12,
+   "stop_min": 0.08,
+   "vol_mult": 2.2
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the 8 % floor, the 12 % cap and the vol-scaled middle. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  "920.0",
+  "880.0",
+  "880.0",
+  "2254.5",
+  "920.0",
+  "90.8"
+ ]
+}

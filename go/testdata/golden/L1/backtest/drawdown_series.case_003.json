@@ -1,0 +1,83 @@
+{
+ "fn": "baskfy_core.backtest_metrics.drawdown_series",
+ "inputs": {
+  "dates": [
+   "2024-01-01",
+   "2024-01-02",
+   "2024-01-03",
+   "2024-01-04",
+   "2024-01-05",
+   "2024-01-08",
+   "2024-01-09",
+   "2024-01-10"
+  ],
+  "equity": [
+   "100",
+   "120",
+   "90",
+   "60",
+   "80",
+   "120",
+   "125",
+   "100"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "drawdown, recovery, new peak. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "date": "2024-01-01",
+   "drawdown": 0.0,
+   "equity": "100",
+   "peak": "100"
+  },
+  {
+   "date": "2024-01-02",
+   "drawdown": 0.0,
+   "equity": "120",
+   "peak": "120"
+  },
+  {
+   "date": "2024-01-03",
+   "drawdown": -0.25,
+   "equity": "90",
+   "peak": "120"
+  },
+  {
+   "date": "2024-01-04",
+   "drawdown": -0.5,
+   "equity": "60",
+   "peak": "120"
+  },
+  {
+   "date": "2024-01-05",
+   "drawdown": -0.3333333333333333,
+   "equity": "80",
+   "peak": "120"
+  },
+  {
+   "date": "2024-01-08",
+   "drawdown": 0.0,
+   "equity": "120",
+   "peak": "120"
+  },
+  {
+   "date": "2024-01-09",
+   "drawdown": 0.0,
+   "equity": "125",
+   "peak": "125"
+  },
+  {
+   "date": "2024-01-10",
+   "drawdown": -0.2,
+   "equity": "100",
+   "peak": "125"
+  }
+ ]
+}

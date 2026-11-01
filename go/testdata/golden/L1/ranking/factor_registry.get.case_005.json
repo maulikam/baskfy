@@ -1,0 +1,33 @@
+{
+ "fn": "baskfy_core.factor_registry.get",
+ "inputs": {
+  "key": "regime_priority"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "get('regime_priority'). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "components": [
+   "regime"
+  ],
+  "definition": "The Wasserstein regime as an explicit order: BULL 2, NEUTRAL 1, BEAR 0 — an order, never a distance.",
+  "family": "trend_structure",
+  "higher_is_better": true,
+  "is_computed": false,
+  "is_stored": false,
+  "key": "regime_priority",
+  "label": "REGIME PRIORITY",
+  "null_policy": "insufficient_history",
+  "preference": "higher",
+  "rankable": true,
+  "sql_expr": "(CASE regime WHEN 'BULL' THEN 2 WHEN 'NEUTRAL' THEN 1 WHEN 'BEAR' THEN 0 END)",
+  "unit": "index",
+  "validation_status": "rejected",
+  "weight_family": "trend_structure"
+ }
+}

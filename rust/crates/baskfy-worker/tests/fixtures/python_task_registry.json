@@ -1,0 +1,7280 @@
+{
+ "generated_by": "tools/parity/task_registry.py",
+ "task_count": 76,
+ "tasks": {
+  "baskfy.accounts.purge": {
+   "python": "baskfy_worker.tasks.celery_tasks.purge_accounts_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.alerts.dispatch": {
+   "python": "baskfy_worker.tasks.celery_tasks.dispatch_screen_alerts_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.alerts.sweep_webhooks": {
+   "python": "baskfy_worker.tasks.celery_tasks.sweep_webhooks_task",
+   "params": [
+    {
+     "name": "limit",
+     "annotation": "int",
+     "required": false,
+     "default": 100
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.backtest.run": {
+   "python": "baskfy_worker.tasks.celery_tasks.run_backtest_task",
+   "params": [
+    {
+     "name": "public_id",
+     "annotation": "str",
+     "required": true
+    },
+    {
+     "name": "fragility",
+     "annotation": "bool",
+     "required": false,
+     "default": true
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "backtest",
+   "queue_via_task": "backtest"
+  },
+  "baskfy.cb.compute_metrics": {
+   "python": "baskfy_worker.tasks.celery_tasks.compute_curated_metrics_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.cb.derive_dividends": {
+   "python": "baskfy_worker.tasks.celery_tasks.curated_dividends_task",
+   "params": [
+    {
+     "name": "as_of",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.cb.rebalance_notify": {
+   "python": "baskfy_worker.tasks.celery_tasks.curated_rebalance_notify_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.cb.sip_reminders": {
+   "python": "baskfy_worker.tasks.celery_tasks.curated_sip_reminders_task",
+   "params": [
+    {
+     "name": "as_of",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.cb.sync_batches": {
+   "python": "baskfy_worker.tasks.celery_tasks.curated_batch_sync_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.compute.reprocess_instrument": {
+   "python": "baskfy_worker.tasks.celery_tasks.reprocess_instrument_task",
+   "params": [
+    {
+     "name": "instrument_id",
+     "annotation": "int",
+     "required": true
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [
+    "TransientProviderError"
+   ],
+   "retry_backoff": true,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.compute.warm_screen_cache": {
+   "python": "baskfy_worker.tasks.celery_tasks.warm_screen_cache_task",
+   "params": [
+    {
+     "name": "limit",
+     "annotation": "int",
+     "required": false,
+     "default": 200
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.desk.autorun": {
+   "python": "baskfy_worker.tasks.desk.run_desk_autorun",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.desk.daily": {
+   "python": "baskfy_worker.tasks.desk.run_desk_daily",
+   "params": [
+    {
+     "name": "source",
+     "annotation": "str",
+     "required": false,
+     "default": "schedule"
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.desk.daily_check": {
+   "python": "baskfy_worker.tasks.desk.check_desk_daily",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.eq_bars.session": {
+   "python": "baskfy_worker.tasks.celery_tasks.eq_bars_session_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "ingest",
+   "queue_via_task": "ingest"
+  },
+  "baskfy.fno.alerts": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_alerts_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.fno.index_daily": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_index_daily_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "start",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.fno.ingest_bhavcopy": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_ingest_bhavcopy_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.fno.retest": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_retest_task",
+   "params": [
+    {
+     "name": "families",
+     "annotation": "list[str] | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "force",
+     "annotation": "bool",
+     "required": false,
+     "default": false
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.fno.scan": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_scan_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.fno.spread_sample": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_spread_sample_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.fno.weekly": {
+   "python": "baskfy_worker.tasks.celery_tasks.fno_weekly_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.kite.login_nudge": {
+   "python": "baskfy_worker.tasks.celery_tasks.kite_login_nudge_task",
+   "params": [
+    {
+     "name": "window",
+     "annotation": "str",
+     "required": false,
+     "default": "first"
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.ops.check_kite_token": {
+   "python": "baskfy_worker.tasks.celery_tasks.check_kite_token_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.ops.check_publish_deadline": {
+   "python": "baskfy_worker.tasks.celery_tasks.check_publish_deadline_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.ops.check_queue_backlog": {
+   "python": "baskfy_worker.tasks.celery_tasks.check_queue_backlog_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.ops.reap_abandoned_runs": {
+   "python": "baskfy_worker.tasks.celery_tasks.reap_abandoned_runs_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.ops.resync": {
+   "python": "baskfy_worker.tasks.celery_tasks.resync_task",
+   "params": [
+    {
+     "name": "actor_user_id",
+     "annotation": "int",
+     "required": true
+    },
+    {
+     "name": "days",
+     "annotation": "int",
+     "required": true
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.backfill_index_bars": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_backfill_index_bars_task",
+   "params": [
+    {
+     "name": "date_from",
+     "annotation": "str",
+     "required": true
+    },
+    {
+     "name": "date_to",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.backtest": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_backtest_task",
+   "params": [
+    {
+     "name": "sleeve",
+     "annotation": "str",
+     "required": true
+    },
+    {
+     "name": "tier",
+     "annotation": "str",
+     "required": true
+    },
+    {
+     "name": "date_from",
+     "annotation": "str",
+     "required": true
+    },
+    {
+     "name": "date_to",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": "compute",
+   "queue_by_name": "default",
+   "queue_via_task": "compute"
+  },
+  "baskfy.options.checks": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_checks_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.collect_chain": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_collect_chain_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.index_bars": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_index_bars_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.index_bars_eod": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_index_bars_eod_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.plan_o1": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_plan_o1_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.plan_o2": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_plan_o2_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.plan_o3": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_plan_o3_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.refresh_master": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_refresh_master_task",
+   "params": [
+    {
+     "name": "as_of",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.scan": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_scan_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.options.weekly": {
+   "python": "baskfy_worker.tasks.celery_tasks.options_weekly_task",
+   "params": [
+    {
+     "name": "at",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.overlap.catalyst_scan": {
+   "python": "baskfy_worker.tasks.celery_tasks.overlap_catalyst_scan_task",
+   "params": [
+    {
+     "name": "user_id",
+     "annotation": "int",
+     "required": true
+    },
+    {
+     "name": "scope",
+     "annotation": "str",
+     "required": false,
+     "default": "actionable"
+    }
+   ],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.pipeline.bhavcopy_ingest": {
+   "python": "baskfy_worker.tasks.celery_tasks.bhavcopy_ingest",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.pipeline.capture_kite_trades": {
+   "python": "baskfy_worker.tasks.celery_tasks.capture_kite_trades_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.pipeline.integrity_audit": {
+   "python": "baskfy_worker.tasks.celery_tasks.integrity_audit",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.pipeline.nightly": {
+   "python": "baskfy_worker.tasks.celery_tasks.nightly_pipeline",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.pipeline.session_catch_up": {
+   "python": "baskfy_worker.tasks.celery_tasks.session_catch_up",
+   "params": [
+    {
+     "name": "lookback_days",
+     "annotation": "int",
+     "required": false,
+     "default": 7
+    },
+    {
+     "name": "max_sessions",
+     "annotation": "int",
+     "required": false,
+     "default": 2
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.portfolio.eod_nav": {
+   "python": "baskfy_worker.tasks.celery_tasks.portfolio_eod_nav_task",
+   "params": [
+    {
+     "name": "as_of",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.swing.backtest": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_backtest_task",
+   "params": [
+    {
+     "name": "start",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "end",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "sleeve_inr",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "cost_pct_per_side",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": "compute",
+   "queue_by_name": "default",
+   "queue_via_task": "compute"
+  },
+  "baskfy.swing.catalyst": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_catalyst_task",
+   "params": [
+    {
+     "name": "session_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.check_detect_fresh": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_check_detect_fresh_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.check_gtt_at_1515": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_check_gtt_at_1515_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.check_monitor_started": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_check_monitor_started_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.check_orders_after_cutoff": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_check_orders_after_cutoff_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.detect": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_detect_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.eod": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_eod_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.premarket": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_premarket_task",
+   "params": [
+    {
+     "name": "session_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "stage",
+     "annotation": "str",
+     "required": false,
+     "default": "GAPS"
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.scan_after_login": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_scan_after_login_task",
+   "params": [
+    {
+     "name": "user_id",
+     "annotation": "int",
+     "required": true
+    }
+   ],
+   "bound": true,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": "compute",
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.swing.scan_now": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_scan_now_task",
+   "params": [
+    {
+     "name": "run_id",
+     "annotation": "int",
+     "required": true
+    }
+   ],
+   "bound": true,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": "compute",
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.swing.scan_sweep": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_scan_sweep_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.timing_probe": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_timing_probe_task",
+   "params": [],
+   "bound": false,
+   "acks_late": false,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": 1500,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.swing.weekend": {
+   "python": "baskfy_worker.tasks.celery_tasks.swing_weekend_task",
+   "params": [
+    {
+     "name": "as_of",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.twt.detect": {
+   "python": "baskfy_worker.tasks.celery_tasks.twt_detect_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.twt.evening": {
+   "python": "baskfy_worker.tasks.celery_tasks.twt_evening_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.twt.morning": {
+   "python": "baskfy_worker.tasks.celery_tasks.twt_morning_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.twt.scan": {
+   "python": "baskfy_worker.tasks.celery_tasks.twt_scan_task",
+   "params": [
+    {
+     "name": "run_id",
+     "annotation": "int",
+     "required": true
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.twt.scan_publish": {
+   "python": "baskfy_worker.tasks.celery_tasks.twt_scan_publish_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.backtest": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_backtest_task",
+   "params": [
+    {
+     "name": "start",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    },
+    {
+     "name": "end",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.vbt.check_detect_fresh": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_check_detect_fresh_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.check_naked_positions": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_check_naked_positions_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.check_orders_past_expiry": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_check_orders_past_expiry_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.check_positions_without_bars": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_check_positions_without_bars_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.detect": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_detect_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.evening": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_evening_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.morning": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_morning_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  },
+  "baskfy.vbt.rescan": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_rescan_task",
+   "params": [
+    {
+     "name": "run_id",
+     "annotation": "int",
+     "required": true
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.vbt.rescan_sweep": {
+   "python": "baskfy_worker.tasks.celery_tasks.vbt_rescan_sweep_task",
+   "params": [],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "default",
+   "queue_via_task": "default"
+  }
+ },
+ "beat": [
+  {
+   "name": "capture-kite-trades",
+   "task": "baskfy.pipeline.capture_kite_trades",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "50",
+     "hour": "15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      50
+     ],
+     "hour": [
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "options-contract-master",
+   "task": "baskfy.options.refresh_master",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "19",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      19
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "options-collect-chain",
+   "task": "baskfy.options.collect_chain",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*",
+     "hour": "9-15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55
+   }
+  },
+  {
+   "name": "options-index-bars",
+   "task": "baskfy.options.index_bars",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*",
+     "hour": "9-15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55
+   }
+  },
+  {
+   "name": "options-scan",
+   "task": "baskfy.options.scan",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*",
+     "hour": "9-15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55,
+    "countdown": 20
+   }
+  },
+  {
+   "name": "options-plan-o1",
+   "task": "baskfy.options.plan_o1",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0-16",
+     "hour": "10",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "hour": [
+      10
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55,
+    "countdown": 40
+   }
+  },
+  {
+   "name": "options-plan-o2",
+   "task": "baskfy.options.plan_o2",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*",
+     "hour": "9-13",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55,
+    "countdown": 45
+   }
+  },
+  {
+   "name": "options-plan-o3",
+   "task": "baskfy.options.plan_o3",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*",
+     "hour": "9-13",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55,
+    "countdown": 45
+   }
+  },
+  {
+   "name": "options-checks",
+   "task": "baskfy.options.checks",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "3,20,33,35,48",
+     "hour": "9-15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      3,
+      20,
+      33,
+      35,
+      48
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 55
+   }
+  },
+  {
+   "name": "options-weekly",
+   "task": "baskfy.options.weekly",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "16",
+     "day_of_week": "fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      16
+     ],
+     "day_of_week": [
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "eq-bars-session",
+   "task": "baskfy.eq_bars.session",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "45",
+     "hour": "15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      45
+     ],
+     "hour": [
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "ingest"
+   }
+  },
+  {
+   "name": "options-index-bars-eod",
+   "task": "baskfy.options.index_bars_eod",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "45",
+     "hour": "15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      45
+     ],
+     "hour": [
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "fno-bhavcopy",
+   "task": "baskfy.fno.ingest_bhavcopy",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "18-23",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "fno-index-daily",
+   "task": "baskfy.fno.index_daily",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "15",
+     "hour": "18",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      15
+     ],
+     "hour": [
+      18
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "fno-retest",
+   "task": "baskfy.fno.retest",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "6",
+     "day_of_week": "sat",
+     "day_of_month": "1-7",
+     "month_of_year": "1,4,7,10"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      6
+     ],
+     "day_of_week": [
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+     ],
+     "month_of_year": [
+      1,
+      4,
+      7,
+      10
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "fno-weekly",
+   "task": "baskfy.fno.weekly",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "35",
+     "hour": "16",
+     "day_of_week": "fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      35
+     ],
+     "hour": [
+      16
+     ],
+     "day_of_week": [
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "fno-alerts",
+   "task": "baskfy.fno.alerts",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*/5",
+     "hour": "9-23",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      35,
+      40,
+      45,
+      50,
+      55
+     ],
+     "hour": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 240
+   }
+  },
+  {
+   "name": "fno-spread-sample",
+   "task": "baskfy.fno.spread_sample",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default",
+    "expires": 600
+   }
+  },
+  {
+   "name": "bhavcopy-eod",
+   "task": "baskfy.pipeline.bhavcopy_ingest",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "15",
+     "hour": "18",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      15
+     ],
+     "hour": [
+      18
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "refresh-reference-data",
+   "task": "baskfy.pipeline.nightly",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "45",
+     "hour": "18",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      45
+     ],
+     "hour": [
+      18
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "session-catch-up",
+   "task": "baskfy.pipeline.session_catch_up",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "45",
+     "hour": "6",
+     "day_of_week": "mon-sat",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      45
+     ],
+     "hour": [
+      6
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "purge-deleted-accounts",
+   "task": "baskfy.accounts.purge",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "3",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      3
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "weekly-integrity-audit",
+   "task": "baskfy.pipeline.integrity_audit",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "2",
+     "day_of_week": "sat",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      2
+     ],
+     "day_of_week": [
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "reap-abandoned-pipeline-runs",
+   "task": "baskfy.ops.reap_abandoned_runs",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*/15",
+     "hour": "*",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      15,
+      30,
+      45
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "publish-deadline-slo",
+   "task": "baskfy.ops.check_publish_deadline",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "15",
+     "hour": "20",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      15
+     ],
+     "hour": [
+      20
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "kite-token-expiry",
+   "task": "baskfy.ops.check_kite_token",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "5",
+     "hour": "*",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      5
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "queue-backlog",
+   "task": "baskfy.ops.check_queue_backlog",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*/10",
+     "hour": "*",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      10,
+      20,
+      30,
+      40,
+      50
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "dispatch-screen-alerts",
+   "task": "baskfy.alerts.dispatch",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "20",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      20
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "sweep-webhook-deliveries",
+   "task": "baskfy.alerts.sweep_webhooks",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*/2",
+     "hour": "*",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30,
+      32,
+      34,
+      36,
+      38,
+      40,
+      42,
+      44,
+      46,
+      48,
+      50,
+      52,
+      54,
+      56,
+      58
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "cb-eod-metrics",
+   "task": "baskfy.cb.compute_metrics",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "20",
+     "hour": "20",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      20
+     ],
+     "hour": [
+      20
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "cb-sip-reminders",
+   "task": "baskfy.cb.sip_reminders",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "cb-dividends",
+   "task": "baskfy.cb.derive_dividends",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "25",
+     "hour": "20",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      25
+     ],
+     "hour": [
+      20
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "cb-sync-batches",
+   "task": "baskfy.cb.sync_batches",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*/15",
+     "hour": "*",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      15,
+      30,
+      45
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "portfolio-eod-nav",
+   "task": "baskfy.portfolio.eod_nav",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "35",
+     "hour": "20",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      35
+     ],
+     "hour": [
+      20
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-eod",
+   "task": "baskfy.swing.detect",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-eod-plan",
+   "task": "baskfy.swing.eod",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "5",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      5
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "vbt-detect",
+   "task": "baskfy.vbt.detect",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "10",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      10
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "twt-detect",
+   "task": "baskfy.twt.detect",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "twt-evening",
+   "task": "baskfy.twt.evening",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "20",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      20
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "twt-morning",
+   "task": "baskfy.twt.morning",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "5",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      5
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "vbt-evening",
+   "task": "baskfy.vbt.evening",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "15",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      15
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "vbt-morning",
+   "task": "baskfy.vbt.morning",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-weekend",
+   "task": "baskfy.swing.weekend",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "7",
+     "day_of_week": "sat",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      7
+     ],
+     "day_of_week": [
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-premarket-levels",
+   "task": "baskfy.swing.premarket",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "50",
+     "hour": "8",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      50
+     ],
+     "hour": [
+      8
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {
+    "stage": "LEVELS"
+   },
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-premarket-gaps",
+   "task": "baskfy.swing.premarket",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "16",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      16
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {
+    "stage": "GAPS"
+   },
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-timing-probe",
+   "task": "baskfy.swing.timing_probe",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "4",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      4
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-check-monitor-started",
+   "task": "baskfy.swing.check_monitor_started",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "20",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      20
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "swing-check-orders-after-cutoff",
+   "task": "baskfy.swing.check_orders_after_cutoff",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "50",
+     "hour": "10",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      50
+     ],
+     "hour": [
+      10
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "swing-check-gtt-at-1515",
+   "task": "baskfy.swing.check_gtt_at_1515",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "20",
+     "hour": "15",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      20
+     ],
+     "hour": [
+      15
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "swing-check-detect-fresh",
+   "task": "baskfy.swing.check_detect_fresh",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "vbt-rescan-sweep",
+   "task": "baskfy.vbt.rescan_sweep",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "*",
+     "hour": "*",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "twt-scan-publish",
+   "task": "baskfy.twt.scan_publish",
+   "schedule": {
+    "kind": "every",
+    "seconds": 60.0
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "vbt-check-detect-fresh",
+   "task": "baskfy.vbt.check_detect_fresh",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "vbt-check-orders-past-expiry",
+   "task": "baskfy.vbt.check_orders_past_expiry",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "40",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      40
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "vbt-check-naked-positions",
+   "task": "baskfy.vbt.check_naked_positions",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "40",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      40
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "vbt-check-positions-without-bars",
+   "task": "baskfy.vbt.check_positions_without_bars",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "40",
+     "hour": "21",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      40
+     ],
+     "hour": [
+      21
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "swing-catalyst",
+   "task": "baskfy.swing.catalyst",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "17",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      17
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "swing-scan-sweep",
+   "task": "baskfy.swing.scan_sweep",
+   "schedule": {
+    "kind": "every",
+    "seconds": 60.0
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "kite-login-nudge",
+   "task": "baskfy.kite.login_nudge",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "45",
+     "hour": "8",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      45
+     ],
+     "hour": [
+      8
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {
+    "window": "first"
+   },
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "kite-login-nudge-second",
+   "task": "baskfy.kite.login_nudge",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "5",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      5
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {
+    "window": "second"
+   },
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "cb-rebalance-notify",
+   "task": "baskfy.cb.rebalance_notify",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "30",
+     "hour": "9",
+     "day_of_week": "mon-fri",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      30
+     ],
+     "hour": [
+      9
+     ],
+     "day_of_week": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  }
+ ],
+ "task_routes": [
+  [
+   "baskfy.ingest.*",
+   "ingest"
+  ],
+  [
+   "baskfy.eq_bars.*",
+   "ingest"
+  ],
+  [
+   "baskfy.compute.*",
+   "compute"
+  ],
+  [
+   "baskfy.backtest.*",
+   "backtest"
+  ],
+  [
+   "baskfy.pipeline.*",
+   "default"
+  ],
+  [
+   "baskfy.ops.*",
+   "default"
+  ],
+  [
+   "baskfy.alerts.*",
+   "default"
+  ],
+  [
+   "baskfy.desk.*",
+   "default"
+  ],
+  [
+   "baskfy.swing.check_*",
+   "default"
+  ],
+  [
+   "baskfy.vbt.check_*",
+   "default"
+  ],
+  [
+   "baskfy.vbt.backtest",
+   "compute"
+  ],
+  [
+   "baskfy.overlap.catalyst_scan",
+   "compute"
+  ],
+  [
+   "baskfy.fno.retest",
+   "compute"
+  ],
+  [
+   "baskfy.vbt.rescan",
+   "compute"
+  ],
+  [
+   "baskfy.vbt.rescan_sweep",
+   "default"
+  ],
+  [
+   "baskfy.twt.scan",
+   "compute"
+  ],
+  [
+   "baskfy.twt.scan_publish",
+   "default"
+  ],
+  [
+   "baskfy.swing.scan_now",
+   "compute"
+  ],
+  [
+   "baskfy.swing.scan_after_login",
+   "compute"
+  ],
+  [
+   "baskfy.swing.scan_sweep",
+   "default"
+  ],
+  [
+   "baskfy.kite.*",
+   "compute"
+  ],
+  [
+   "baskfy.cb.*",
+   "compute"
+  ],
+  [
+   "baskfy.portfolio.*",
+   "compute"
+  ],
+  [
+   "baskfy.options.*",
+   "default"
+  ]
+ ],
+ "queues": [
+  "ingest",
+  "compute",
+  "backtest",
+  "default"
+ ],
+ "conf": {
+  "timezone": "Asia/Kolkata",
+  "enable_utc": false,
+  "task_default_queue": "default",
+  "task_acks_late": true,
+  "task_reject_on_worker_lost": true,
+  "worker_prefetch_multiplier": 1,
+  "visibility_timeout": 21600,
+  "task_serializer": "json",
+  "result_expires_seconds": 604800.0,
+  "task_track_started": true,
+  "task_default_retry_delay": 60,
+  "task_annotations": {
+   "*": {
+    "max_retries": 3,
+    "max_redeliveries": 3
+   }
+  }
+ }
+}

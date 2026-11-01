@@ -1,0 +1,69 @@
+{
+ "fn": "baskfy_core.fno.directional.f3_exit",
+ "inputs": {
+  "common": {
+   "hard_exit_before_expiry": 1,
+   "hard_exit_time": "15:00:00",
+   "latest_window_end": "15:00:00",
+   "market_open": "09:15:00",
+   "max_lots": 2,
+   "max_lots_ceiling": 10,
+   "plan_ttl_minutes": 30
+  },
+  "f3": {
+   "add_working_pct": "20",
+   "confirm_bars": 10,
+   "decay_target_pct": "80",
+   "distance_pct": "1.0",
+   "entry_share_pct": "25",
+   "entry_window_end": "10:30:00",
+   "full_share_pct": "50",
+   "level_buffer_pct": "0.10",
+   "loss_cut_mult": "2.0",
+   "max_open_per_underlying": 1,
+   "min_sessions_monthly": 5,
+   "min_sessions_weekly": 2,
+   "pivot_lookback": 60,
+   "pivot_width": 3,
+   "plan_time": "09:20:00",
+   "risk_per_trade_pct": "1.0",
+   "short_premium_min_inr": "10",
+   "slippage_min_inr": "0.05",
+   "slippage_pct": "0.5",
+   "trend_sessions": 20,
+   "underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "weekly_sessions": 5,
+   "wing_pct": "2.0"
+  },
+  "last_price": "24800",
+  "mark": "20",
+  "now": "2026-10-20T11:00:00",
+  "position": {
+   "direction": "UP",
+   "entry_credit": "28.3",
+   "entry_session": "2026-10-16",
+   "expiry": "2026-10-27",
+   "level": "24400",
+   "lot_size": 65,
+   "lots": 1,
+   "max_loss_per_lot_inr": "30660.5",
+   "strikes": {
+    "option_type": "PE",
+    "short": "24300",
+    "wing": "23800"
+   }
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "nothing due. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": null
+}

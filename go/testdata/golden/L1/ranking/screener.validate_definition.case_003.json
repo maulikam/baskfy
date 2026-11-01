@@ -1,0 +1,40 @@
+{
+ "fn": "baskfy_core.screener.validate_definition",
+ "inputs": {
+  "definition": {
+   "custom_filters": [
+    {
+     "enabled": true,
+     "left": "ma_50",
+     "op": ">=",
+     "right": "ma_200"
+    },
+    {
+     "enabled": false,
+     "left": "close",
+     "op": "<=",
+     "right": "ma_20"
+    },
+    {
+     "enabled": true,
+     "left": "vol_avg_1w",
+     "op": "=",
+     "right": "vol_avg_12m"
+    }
+   ],
+   "index": "nifty-total-market",
+   "sort_by": "ret_3m"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "custom filters, one slot disabled. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "valid": true
+ }
+}

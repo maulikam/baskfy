@@ -14,6 +14,7 @@ import { ExploreNotFound, fetchExploreBasket } from "@/lib/explore/fetch";
 import { resolveBasketPerformanceSeries } from "@/lib/explore/performance";
 import { EMPTY_CELL, formatNumber, formatTradeDate } from "@/lib/format";
 import { BasketDescription } from "@/components/basket/basket-description";
+import { RecutFromScreen } from "@/components/basket/recut-from-screen";
 
 /**
  * `/basket/[slug]` — SC5 detail. Overview + disclosures + Invest hand-off.
@@ -100,6 +101,8 @@ export default async function BasketDetailPage({
       {basket.description_md ? (
         <BasketDescription markdown={basket.description_md} />
       ) : null}
+
+      {basket.source === "SCREEN" ? <RecutFromScreen slug={slug} /> : null}
 
       {/* One strip only — headline return, min amount, volatility. No second 1Y / MED pair. */}
       <section

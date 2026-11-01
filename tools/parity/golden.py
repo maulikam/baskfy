@@ -240,14 +240,24 @@ def swing_config_from(doc: dict[str, Any]) -> Any:
     fields: dict[str, Any] = {}
     for key, value in doc.items():
         if key in parts:
-            fields[key] = parts[key](**{k: _tupled(v) for k, v in value.items()})
+            fields[key] = _sub_config(parts[key], value)
         else:
             fields[key] = _tupled(value)
     return cfg.SwingConfig(**fields)
 
 
 def _sub_config(cls: Any, doc: dict[str, Any]) -> Any:
-    return cls(**{k: _tupled(v) for k, v in doc.items()})
+    """A config dataclass from its encoded dict. A ``Decimal`` field is encoded as a string
+    (module docstring), so it is decoded by the field's declared type, not by the JSON's."""
+    decimal_fields = {
+        f.name for f in dataclasses.fields(cls) if f.type in ("Decimal", Decimal)
+    }
+    return cls(
+        **{
+            k: (_decimal(v) if k in decimal_fields and v is not None else _tupled(v))
+            for k, v in doc.items()
+        }
+    )
 
 
 def polars_frame_from(doc: dict[str, Any]) -> Any:

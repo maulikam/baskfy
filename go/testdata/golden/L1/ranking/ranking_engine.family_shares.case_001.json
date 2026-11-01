@@ -1,0 +1,34 @@
+{
+ "fn": "baskfy_core.ranking_engine.family_shares",
+ "inputs": {
+  "spec": {
+   "family_weights": null,
+   "missing_data": "penalize",
+   "mode": "composite",
+   "scope": "filtered_results",
+   "terms": [
+    {
+     "key": "ret_12m",
+     "label": "ABSOLUTE RETURN 1 YEAR",
+     "null_policy": "insufficient_history",
+     "preference": "higher",
+     "target_max": null,
+     "target_min": null,
+     "weight": 1.0,
+     "weight_family": "momentum"
+    }
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "one family. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "momentum": 1.0
+ }
+}

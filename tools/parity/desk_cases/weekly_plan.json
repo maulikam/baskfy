@@ -1,0 +1,387 @@
+{
+ "note": "Lane weekly_plan: POST /analyze (both scans of the regression corpus, read only; the tradebooks and the refusals) and POST /execute's confirm gate and DRY_RUN send. Never a live order: both desks run DRY_RUN=true with the replay Kite. The weekly book has no auto-execute flag.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "analyze with neither a file nor a date is 400",
+   "method": "POST",
+   "path": "/analyze",
+   "clock": "open",
+   "form": {}
+  },
+  {
+   "name": "analyze with a malformed generate_for is 400",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "18-08-2026"
+   }
+  },
+  {
+   "name": "analyze a tradebook (not a scan) is 500",
+   "method": "POST",
+   "path": "/analyze",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/tradebook_1786879202.csv",
+     "filename": "tradebook_1786879202.csv"
+    }
+   }
+  },
+  {
+   "name": "generate_for a valid date with no retained scan is 503 (upload one first)",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2026-08-18"
+   }
+  },
+  {
+   "name": "generate_for as an ISO week date (2026-W34-2) parses as Python 3.12 does",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2026-W34-2"
+   }
+  },
+  {
+   "name": "generate_for of year zero is 400",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "0000-01-01"
+   }
+  },
+  {
+   "name": "generate_for with a sign (+2026-08-1) is 400",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "+2026-08-1"
+   }
+  },
+  {
+   "name": "analyze by GET is 405",
+   "method": "GET",
+   "path": "/analyze"
+  },
+  {
+   "name": "analyze the Investing export",
+   "method": "POST",
+   "path": "/analyze",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/scan_1787143663_Investing_001__1_.csv",
+     "filename": "Investing (001) [1].csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan_a": "json:/plan_id"
+   }
+  },
+  {
+   "name": "generate_for 2018-03-01 builds a plan from the screener's bars, carried columns from the retained Investing export",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2018-03-01"
+   },
+   "plan": true,
+   "capture": {
+    "plan_g": "json:/plan_id"
+   }
+  },
+  {
+   "name": "generate_for 2020-04-01: three unadjusted symbols warn on the plan",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2020-04-01"
+   },
+   "plan": true
+  },
+  {
+   "name": "generate_for posted as multipart, as a form would send it",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2018-03-01"
+   },
+   "files": {
+    "attachment": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy-wt-desk/tools/parity/desk_cases/weekly_plan.json",
+     "filename": "x.json"
+    }
+   },
+   "plan": true
+  },
+  {
+   "name": "generate_for a Sunday is 503 (not a trading day in the calendar)",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2018-03-04"
+   }
+  },
+  {
+   "name": "generate_for before the first bar is 503 (no bars on or before)",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2016-06-01"
+   }
+  },
+  {
+   "name": "generate_for 2017-03-01 (no 200-day average yet) is Python's 500",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2017-03-01"
+   }
+  },
+  {
+   "name": "generate_for 2017-11-15 (no one-year window yet)",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2017-11-15"
+   }
+  },
+  {
+   "name": "generate_for wins over an attached scan file",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2018-03-04"
+   },
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   }
+  },
+  {
+   "name": "execute the generated plan in DRY_RUN",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_g}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "the same bytes uploaded under another name resolve to the same screen_run_id",
+   "method": "POST",
+   "path": "/analyze",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/scan_1787143663_Investing_001__1_.csv",
+     "filename": "b.csv"
+    }
+   },
+   "plan": true
+  },
+  {
+   "name": "analyze the sample scan",
+   "method": "POST",
+   "path": "/analyze",
+   "advance": 60,
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan_id": "json:/plan_id"
+   }
+  },
+  {
+   "name": "generate_for that is not a date (trailing text) is 400",
+   "method": "POST",
+   "path": "/analyze",
+   "form": {
+    "generate_for": "2026-08-18x"
+   }
+  },
+  {
+   "name": "execute without confirm=true is 400",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "True"
+   }
+  },
+  {
+   "name": "execute an unknown plan is 404",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "nope",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "execute by GET is 405",
+   "method": "GET",
+   "path": "/execute"
+  },
+  {
+   "name": "execute the sample plan in DRY_RUN",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "re-posting the plan cannot double-send",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "execute the Investing plan in DRY_RUN",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_a}",
+    "confirm": "true",
+    "place_stops": "false"
+   }
+  },
+  {
+   "name": "execute with no fields is 422 naming both",
+   "method": "POST",
+   "path": "/execute",
+   "form": {}
+  },
+  {
+   "name": "execute without confirm is 422",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}"
+   }
+  },
+  {
+   "name": "execute with a JSON body is 422 (Form fields only)",
+   "method": "POST",
+   "path": "/execute",
+   "json": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "execute posted as multipart with confirm=false is 400",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "false"
+   },
+   "files": {
+    "attachment": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy-wt-desk/tools/parity/desk_cases/weekly_plan.json",
+     "filename": "x.json"
+    }
+   }
+  },
+  {
+   "name": "analyze the sample scan again for a multipart execute",
+   "method": "POST",
+   "path": "/analyze",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan_c": "json:/plan_id"
+   }
+  },
+  {
+   "name": "execute posted as multipart FormData, as the desk's page sends it",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_c}",
+    "confirm": "true",
+    "place_stops": "true"
+   },
+   "files": {
+    "attachment": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy-wt-desk/tools/parity/desk_cases/weekly_plan.json",
+     "filename": "x.json"
+    }
+   }
+  },
+  {
+   "name": "the sample plan at exactly 30 min is still executable (DUPLICATE, nothing re-sent)",
+   "method": "POST",
+   "path": "/execute",
+   "advance": 1799,
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "the sample plan 30 min + 1 s after it was built is 410",
+   "method": "POST",
+   "path": "/execute",
+   "advance": 2,
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "save stop band and Python-editable plan constants from the settings page",
+   "method": "POST",
+   "path": "/settings",
+   "form": {
+    "STOP_MAX": "0.10",
+    "STOP_MIN": "0.07",
+    "STOP_VOL_MULT": "3.5",
+    "TARGET_POSITIONS": "10, 13",
+    "FULLY_INVESTED": "on",
+    "_form_bools": "FULLY_INVESTED",
+    "note": "weekly_plan review"
+   }
+  },
+  {
+   "name": "a plan built under the stored overrides (STOP_MAX reaches the stops)",
+   "method": "POST",
+   "path": "/analyze",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   },
+   "plan": true
+  },
+  {
+   "name": "reset the overrides",
+   "method": "POST",
+   "path": "/settings/reset",
+   "form": {}
+  }
+ ]
+}

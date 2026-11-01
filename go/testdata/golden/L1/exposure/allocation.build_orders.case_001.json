@@ -1,0 +1,460 @@
+{
+ "fn": "baskfy_core.exposure.allocation.build_orders",
+ "inputs": {
+  "allocation": {
+   "cluster_weights": {
+    "c0": 25.0,
+    "c1": 21.25,
+    "c2": 25.0,
+    "c3": 24.999999
+   },
+   "half_sized": [
+    "S01"
+   ],
+   "notes": [
+    "cluster cap applied: c0, c2",
+    "cluster cap applied: c3",
+    "sleeve utilisation 96.2%"
+   ],
+   "sleeve_pct": 70.0,
+   "weights_nav": {
+    "S00": 6.140351,
+    "S01": 2.625,
+    "S02": 6.148649,
+    "S03": 6.152968,
+    "S04": 5.833333,
+    "S05": 6.292808,
+    "S06": 5.833333,
+    "S07": 5.833333,
+    "S08": 5.526316,
+    "S09": 5.957192,
+    "S10": 5.518018,
+    "S11": 5.513699
+   },
+   "weights_sleeve": {
+    "S00": 8.77193,
+    "S01": 3.75,
+    "S02": 8.783784,
+    "S03": 8.789954,
+    "S04": 8.333333,
+    "S05": 8.989726,
+    "S06": 8.333333,
+    "S07": 8.333333,
+    "S08": 7.894737,
+    "S09": 8.510274,
+    "S10": 7.882883,
+    "S11": 7.876712
+   }
+  },
+  "candidates": [
+   {
+    "cluster": "c0",
+    "liquidity": 100000000.0,
+    "price": 2188.73,
+    "rank": 1,
+    "score": 80.0,
+    "symbol": "S00"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999999.0,
+    "price": 1410.19,
+    "rank": 2,
+    "score": 79.0,
+    "symbol": "S01"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999998.0,
+    "price": 1471.11,
+    "rank": 3,
+    "score": 78.0,
+    "symbol": "S02"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999997.0,
+    "price": 2212.21,
+    "rank": 4,
+    "score": 77.0,
+    "symbol": "S03"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 99999996.0,
+    "price": 306.29,
+    "rank": 5,
+    "score": 76.0,
+    "symbol": "S04"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999995.0,
+    "price": 2482.74,
+    "rank": 6,
+    "score": 75.0,
+    "symbol": "S05"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999994.0,
+    "price": 1592.95,
+    "rank": 7,
+    "score": 74.0,
+    "symbol": "S06"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999993.0,
+    "price": 1015.93,
+    "rank": 8,
+    "score": 73.0,
+    "symbol": "S07"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 99999992.0,
+    "price": 2004.29,
+    "rank": 9,
+    "score": 72.0,
+    "symbol": "S08"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999991.0,
+    "price": 698.65,
+    "rank": 10,
+    "score": 71.0,
+    "symbol": "S09"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999990.0,
+    "price": 2476.72,
+    "rank": 11,
+    "score": 70.0,
+    "symbol": "S10"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999989.0,
+    "price": 1464.53,
+    "rank": 12,
+    "score": 69.0,
+    "symbol": "S11"
+   }
+  ],
+  "capital": 10000000.0,
+  "guard_exits": [
+   "S04"
+  ],
+  "positions": [
+   {
+    "average_price": 1411.29,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 1471.11,
+    "quantity": 595,
+    "rank": 3,
+    "symbol": "S02"
+   },
+   {
+    "average_price": 222.78,
+    "cluster": "other",
+    "guard_exit": true,
+    "liquidity": 0.0,
+    "price": 306.29,
+    "quantity": 465,
+    "rank": 5,
+    "symbol": "S04"
+   },
+   {
+    "average_price": 2269.95,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 2482.74,
+    "quantity": 622,
+    "rank": 6,
+    "symbol": "S05"
+   },
+   {
+    "average_price": 1465.1,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 1592.95,
+    "quantity": 1206,
+    "rank": 7,
+    "symbol": "S06"
+   },
+   {
+    "average_price": 859.63,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 0.0,
+    "quantity": 28,
+    "rank": 8,
+    "symbol": "S07"
+   },
+   {
+    "average_price": 2203.28,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 2004.29,
+    "quantity": 1307,
+    "rank": 9,
+    "symbol": "S08"
+   },
+   {
+    "average_price": 1333.01,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 1464.53,
+    "quantity": 1681,
+    "rank": 12,
+    "symbol": "S11"
+   },
+   {
+    "average_price": 300.0,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 321.5,
+    "quantity": 50,
+    "rank": null,
+    "symbol": "ORPHAN"
+   },
+   {
+    "average_price": 300.0,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 0.0,
+    "quantity": 50,
+    "rank": null,
+    "symbol": "ZEROPX"
+   }
+  ],
+  "tax_flagged": [
+   "S06",
+   "S07",
+   "S08",
+   "S11",
+   "ORPHAN",
+   "ZEROPX"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "{lines, projected_equity_pct}. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "lines": [
+   {
+    "action": "EXIT",
+    "delta": -50,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 0,
+    "qty_now": 50,
+    "rank": null,
+    "ref_price": 321.5,
+    "symbol": "ORPHAN",
+    "tax_review": true,
+    "value": 0.0,
+    "weight_nav": 0.0,
+    "weight_sleeve": 0.0
+   },
+   {
+    "action": "BUY",
+    "delta": 281,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 281,
+    "qty_now": 0,
+    "rank": 1,
+    "ref_price": 2188.73,
+    "symbol": "S00",
+    "tax_review": false,
+    "value": 615033.13,
+    "weight_nav": 6.1404,
+    "weight_sleeve": 8.7719
+   },
+   {
+    "action": "BUY",
+    "delta": 186,
+    "half_sized": true,
+    "note": "",
+    "qty_final": 186,
+    "qty_now": 0,
+    "rank": 2,
+    "ref_price": 1410.19,
+    "symbol": "S01",
+    "tax_review": false,
+    "value": 262295.34,
+    "weight_nav": 2.625,
+    "weight_sleeve": 3.75
+   },
+   {
+    "action": "TRIM",
+    "delta": -177,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 418,
+    "qty_now": 595,
+    "rank": 3,
+    "ref_price": 1471.11,
+    "symbol": "S02",
+    "tax_review": false,
+    "value": 614923.98,
+    "weight_nav": 6.1486,
+    "weight_sleeve": 8.7838
+   },
+   {
+    "action": "BUY",
+    "delta": 278,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 278,
+    "qty_now": 0,
+    "rank": 4,
+    "ref_price": 2212.21,
+    "symbol": "S03",
+    "tax_review": false,
+    "value": 614994.38,
+    "weight_nav": 6.153,
+    "weight_sleeve": 8.79
+   },
+   {
+    "action": "EXIT",
+    "delta": -465,
+    "half_sized": false,
+    "note": "guard exit",
+    "qty_final": 0,
+    "qty_now": 465,
+    "rank": 5,
+    "ref_price": 306.29,
+    "symbol": "S04",
+    "tax_review": false,
+    "value": 0.0,
+    "weight_nav": 0.0,
+    "weight_sleeve": 8.3333
+   },
+   {
+    "action": "TRIM",
+    "delta": -369,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 253,
+    "qty_now": 622,
+    "rank": 6,
+    "ref_price": 2482.74,
+    "symbol": "S05",
+    "tax_review": false,
+    "value": 628133.22,
+    "weight_nav": 6.2928,
+    "weight_sleeve": 8.9897
+   },
+   {
+    "action": "TRIM",
+    "delta": -840,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 366,
+    "qty_now": 1206,
+    "rank": 7,
+    "ref_price": 1592.95,
+    "symbol": "S06",
+    "tax_review": true,
+    "value": 583019.7,
+    "weight_nav": 5.8333,
+    "weight_sleeve": 8.3333
+   },
+   {
+    "action": "ADD",
+    "delta": 546,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 574,
+    "qty_now": 28,
+    "rank": 8,
+    "ref_price": 1015.93,
+    "symbol": "S07",
+    "tax_review": false,
+    "value": 583143.82,
+    "weight_nav": 5.8333,
+    "weight_sleeve": 8.3333
+   },
+   {
+    "action": "TRIM",
+    "delta": -1031,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 276,
+    "qty_now": 1307,
+    "rank": 9,
+    "ref_price": 2004.29,
+    "symbol": "S08",
+    "tax_review": true,
+    "value": 553184.04,
+    "weight_nav": 5.5263,
+    "weight_sleeve": 7.8947
+   },
+   {
+    "action": "BUY",
+    "delta": 853,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 853,
+    "qty_now": 0,
+    "rank": 10,
+    "ref_price": 698.65,
+    "symbol": "S09",
+    "tax_review": false,
+    "value": 595948.45,
+    "weight_nav": 5.9572,
+    "weight_sleeve": 8.5103
+   },
+   {
+    "action": "BUY",
+    "delta": 223,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 223,
+    "qty_now": 0,
+    "rank": 11,
+    "ref_price": 2476.72,
+    "symbol": "S10",
+    "tax_review": false,
+    "value": 552308.56,
+    "weight_nav": 5.518,
+    "weight_sleeve": 7.8829
+   },
+   {
+    "action": "TRIM",
+    "delta": -1305,
+    "half_sized": false,
+    "note": "",
+    "qty_final": 376,
+    "qty_now": 1681,
+    "rank": 12,
+    "ref_price": 1464.53,
+    "symbol": "S11",
+    "tax_review": true,
+    "value": 550663.28,
+    "weight_nav": 5.5137,
+    "weight_sleeve": 7.8767
+   }
+  ],
+  "projected_equity_pct": 61.536479
+ }
+}

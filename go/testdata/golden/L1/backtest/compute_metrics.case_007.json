@@ -1,0 +1,156 @@
+{
+ "fn": "baskfy_core.backtest_metrics.compute_metrics",
+ "inputs": {
+  "result": {
+   "adjustment_coverage": null,
+   "benchmark": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "blind_rebalances": [],
+   "cash": [
+    "1000000.00",
+    "800000.00",
+    "300000.00",
+    "50000.00",
+    "0.00",
+    "0.00"
+   ],
+   "config": {
+    "benchmark": "nifty-500",
+    "cash_policy": "hold_cash",
+    "costs": {
+     "brokerage_bps": "3",
+     "impact_model": "fixed",
+     "slippage_bps": "15",
+     "stt_bps": "10"
+    },
+    "dividends": "ignore",
+    "end": "2024-01-08",
+    "initial_capital": "1000000",
+    "position_limits": {
+     "max_weight": "0.10",
+     "min_weight": "0.01"
+    },
+    "rebalance": {
+     "day": "last_trading_day",
+     "frequency": "monthly"
+    },
+    "risk_free_curve": [],
+    "risk_free_rate": "0",
+    "risk_overlay": {
+     "enabled": false,
+     "rule": "index_above_200dma"
+    },
+    "screen_definition": null,
+    "screen_public_id": null,
+    "selection": {
+     "hold_buffer": 10,
+     "top_n": 20
+    },
+    "start": "2024-01-01",
+    "weighting": "equal"
+   },
+   "data_version": null,
+   "dates": [
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-03",
+    "2024-01-04",
+    "2024-01-05",
+    "2024-01-08"
+   ],
+   "delistings": [],
+   "dividends_credited": "0",
+   "equity": [
+    "1000000.00",
+    "800000.00",
+    "300000.00",
+    "50000.00",
+    "0.00",
+    "0.00"
+   ],
+   "holdings": [],
+   "invested": [
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0"
+   ],
+   "notes": [],
+   "rebalance_dates": [
+    "2024-01-01"
+   ],
+   "total_costs": "0",
+   "trades": [],
+   "unexecuted_fills": []
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a book that goes to zero: CAGR -1.0, max drawdown -1.0, exposure 0. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "alpha": null,
+  "annual_turnover": 0.0,
+  "annualised_volatility": 6.813281956,
+  "average_loss": null,
+  "average_win": null,
+  "benchmark_cagr": null,
+  "benchmark_total_return": null,
+  "best_month": {
+   "month": "2024-01",
+   "return": -1.0
+  },
+  "beta": null,
+  "cagr": -1.0,
+  "calmar": -1.0,
+  "delistings": 0,
+  "dividends_credited": "0",
+  "end": "2024-01-08",
+  "exposure": 0.0,
+  "final_equity": "0.00",
+  "hit_rate": null,
+  "information_ratio": null,
+  "initial_capital": "1000000",
+  "max_drawdown": -1.0,
+  "max_drawdown_peak": "2024-01-01",
+  "max_drawdown_recovered": null,
+  "max_drawdown_trough": "2024-01-05",
+  "periods_per_year": 260.8928571429,
+  "rolling_12m": {
+   "count": 0,
+   "max": null,
+   "median": null,
+   "min": null,
+   "negative_share": null,
+   "p05": null,
+   "p25": null,
+   "p75": null,
+   "p95": null
+  },
+  "round_trips": 0,
+  "sharpe": -20.3584757845,
+  "sortino": -13.172523011,
+  "start": "2024-01-01",
+  "total_costs": "0",
+  "total_return": -1.0,
+  "tracking_error": null,
+  "trades": 0,
+  "trading_days": 6,
+  "worst_month": {
+   "month": "2024-01",
+   "return": -1.0
+  }
+ }
+}

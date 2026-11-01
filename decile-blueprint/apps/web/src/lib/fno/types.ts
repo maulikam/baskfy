@@ -127,6 +127,19 @@ export interface FnoF2 {
   closed: FnoJournalRow[];
 }
 
+/** F3, the directional index credit spread (M.5): read-only, like the rest of the page. */
+export interface FnoF3 {
+  research_line: string;
+  /** The rules a closing file cannot test, named on the card. */
+  not_tested: string[];
+  scan_date: string | null;
+  underlyings: FnoUnderlying[];
+  open: FnoPosition[];
+  closed: FnoJournalRow[];
+  /** The latest `F3N`/`F3B` quarterly re-test rows, once one has run. */
+  backtests: FnoBacktest[];
+}
+
 export type FnoEmptyReason = "scan_off" | "never_scanned";
 
 export interface FnoOvernight {
@@ -143,6 +156,7 @@ export interface FnoOvernight {
   journal: FnoJournalRow[];
   evidence: FnoEvidence;
   f2: FnoF2;
+  f3: FnoF3;
 }
 
 export interface FnoInfoRow {

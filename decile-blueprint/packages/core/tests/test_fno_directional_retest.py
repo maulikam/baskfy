@@ -7,9 +7,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import polars as pl
+import pytest
 
 from baskfy_core.fno import directional as d
 from baskfy_core.fno import directional_retest as x
+from baskfy_core.fno import retest as rt
 from baskfy_core.fno.config import DEFAULT_FNO_CONFIG, F3Config
 from baskfy_core.options.config import OptionType
 
@@ -250,3 +252,106 @@ class TestTheEvidenceIsHonest:
             assert "cannot test" in text
             for item in x.NOT_TESTED:
                 assert item in text
+
+
+class TestTheQuarterlyFamilies:
+    """F3 in ``04`` §6's quarterly re-test (``retest.FAMILIES``), on the raw rows with weeklies."""
+
+    @staticmethod
+    def _both() -> pl.DataFrame:
+        days = _sessions(70)
+        decay_from = days[-3]
+        # a weekly, a monthly and a far month, plus strikes well outside the trim's band
+        exp = [
+            days[-1] + dt.timedelta(days=4),
+            days[-1] + dt.timedelta(days=25),
+            days[-1] + dt.timedelta(days=120),
+        ]
+        return pl.concat(
+            [
+                _contracts(
+                    "NIFTY",
+                    _uptrend(70),
+                    expiries=exp,
+                    strikes=range(14000, 34000, 50),
+                    decay_from=decay_from,
+                ),
+                _contracts(
+                    "BANKNIFTY",
+                    _uptrend(70, level=50000),
+                    expiries=exp,
+                    strikes=range(30000, 70000, 100),
+                    decay_from=decay_from,
+                ),
+            ]
+        )
+
+    def test_the_trim_changes_no_trade(self) -> None:
+        frame = self._both()
+        for symbol in ("NIFTY", "BANKNIFTY"):
+            whole = x.run_symbol(x.index_panel(frame, symbol), F3)
+            trimmed_rows = rt.trim_index_contracts(frame, symbol)
+            assert trimmed_rows.height < frame.filter(pl.col("symbol") == symbol).height
+            trimmed = x.run_symbol(x.index_panel(trimmed_rows, symbol), F3)
+            assert not whole.trades.is_empty(), symbol
+            assert trimmed.trades.equals(whole.trades), symbol
+
+    def test_the_trim_drops_far_expiries_and_far_strikes_only(self) -> None:
+        frame = self._both()
+        got = rt.trim_index_contracts(frame, "NIFTY")
+        opts = got.filter(pl.col("instrument") == "OPTIDX")
+        assert (opts["symbol"] == "NIFTY").all()
+        gap = (opts["expiry"] - opts["date"]).dt.total_days()
+        assert (gap <= rt.DIRECTIONAL_EXPIRY_DAYS).all()
+        days = _sessions(70)
+        kept = set(opts["expiry"].to_list())
+        assert days[-1] + dt.timedelta(days=4) in kept, "the weekly stays"
+        assert days[-1] + dt.timedelta(days=25) in kept, "the monthly stays"
+        assert days[-1] + dt.timedelta(days=120) not in kept, "the far month goes"
+        front = got.filter(pl.col("instrument") == "FUTIDX").select(
+            "date", pl.col("close").alias("index")
+        )
+        joined = opts.join(front, on="date")
+        band = rt.DIRECTIONAL_STRIKE_BAND
+        assert (joined["strike"] >= joined["index"] * (1 - band)).all()
+        assert (joined["strike"] <= joined["index"] * (1 + band)).all()
+        assert got.filter(pl.col("instrument") == "FUTIDX").height == 70
+
+    def test_f3n_and_f3b_are_registered_and_run_from_the_raw_rows(self) -> None:
+        frame = self._both()
+        futures = frame.filter(pl.col("instrument") == "FUTIDX")
+        by_key = {f.key: f for f in rt.FAMILIES}
+        for key, symbol in (("F3N", "NIFTY"), ("F3B", "BANKNIFTY")):
+            family = by_key[key]
+            assert family.scope is rt.Scope.DIRECTIONAL and family.directional == symbol
+            got = rt.run_family(
+                family,
+                futures,
+                rt.slice_loader(rt.empty_options()),
+                load_index=lambda s: frame.filter(pl.col("symbol") == s),
+            )
+            want = x.run_symbol(x.index_panel(frame, symbol), F3Config())
+            assert got.n == want.summary.n > 0
+            assert got.net_r == round(want.summary.exp_r, 4)
+            assert got.slippage_source is rt.SlippageSource.ASSUMED
+            assert got.caveat == rt.TIER_2E_CAVEAT_F3
+            for item in x.NOT_TESTED:
+                assert item in got.caveat
+            assert got.params["underlying"] == symbol
+            assert got.params["expiry_kind"] == ("weekly" if symbol == "NIFTY" else "monthly")
+
+    def test_an_f3_family_without_the_raw_rows_is_refused_not_run_on_the_panel(self) -> None:
+        frame = self._both()
+        futures = frame.filter(pl.col("instrument") == "FUTIDX")
+        f3n = next(f for f in rt.FAMILIES if f.key == "F3N")
+        with pytest.raises(ValueError, match="weeklies"):
+            rt.run_family(f3n, futures, rt.slice_loader(rt.empty_options()))
+
+    def test_no_option_rows_is_an_honest_zero(self) -> None:
+        frame = self._both()
+        futures = frame.filter(pl.col("instrument") == "FUTIDX")
+        f3b = next(f for f in rt.FAMILIES if f.key == "F3B")
+        got = rt.run_family(
+            f3b, futures, rt.slice_loader(rt.empty_options()), load_index=lambda s: futures
+        )
+        assert got.n == 0 and got.net_r is None

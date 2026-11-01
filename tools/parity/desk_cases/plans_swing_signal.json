@@ -1,0 +1,164 @@
+{
+  "note": "Lane swing_monitor (wave D2): the SIGNAL plan kind. Each case raises one signal through the monitor's real PgSignalStore on its side's clone (POST /__harness/swing-signal, harness-only on both desks: desk_harness.py over app.swing_monitor, swing_monitor/harness.rs in Rust), so the sw_signal row, the sw_plan(SIGNAL), its line or skip, the A7 slot release, the notice and the email to the harness's mail sink are all graded, plus SW25's drain (DRY_RUN under the harness: nothing confirmed, no order or GTT call). The bed's book: the close's gate is RED at rung 0 (29 Oct), four WATCHING focus names; `live_level` stands in for Kite's index level to open SW30's live gate. Loaded by --plans only (plans_*.json). The second case lifts the 29 Oct breadth above the floor (its `sql`, run on both clones) so the live cross can line a name.",
+  "db_mask": {
+    "public.sw_signal": [
+      "created_at"
+    ],
+    "public.sw_plan": [
+      "created_at"
+    ],
+    "public.sw_plan_line": [
+      "created_at",
+      "updated_at"
+    ],
+    "public.sw_plan_skip": [
+      "created_at"
+    ],
+    "public.sw_session": [
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "cases": [
+    {
+      "name": "a focus FLAG trigger under the close's RED gate is a skip, told by email",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "GKSL",
+        "state": "TRIGGERED",
+        "at": "2026-10-30T09:31:00",
+        "entry": "210.10",
+        "stop": "205.00",
+        "range_high": "209.90",
+        "range_low": "205.50",
+        "last_price": "210.10",
+        "low_of_day": "205.00",
+        "window_minutes": 5,
+        "drain": true
+      },
+      "clock": "open",
+      "plan": true
+    },
+    {
+      "name": "with breadth back above the floor the live index crossing up opens the gate: PRIMO is lined, queued, emailed, and not confirmed in DRY_RUN",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "PRIMO",
+        "state": "TRIGGERED",
+        "at": "2026-10-30T09:36:00",
+        "entry": "29.95",
+        "stop": "29.20",
+        "range_high": "29.90",
+        "range_low": "29.30",
+        "last_price": "29.95",
+        "low_of_day": "29.20",
+        "window_minutes": 5,
+        "live_level": 18500.0,
+        "drain": true
+      },
+      "clock": "2026-10-30T09:36:05+05:30",
+      "plan": true,
+      "sql": [
+        "UPDATE public.sw_market_daily SET pct_up_strong_1m = 12.50 WHERE user_id = 1 AND date = '2026-10-29'"
+      ]
+    },
+    {
+      "name": "a locked upper circuit is a signal row and nothing else",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "SSDL",
+        "state": "LOCKED_UPPER_CIRCUIT",
+        "at": "2026-10-30T09:20:00",
+        "entry": null,
+        "stop": null,
+        "range_high": "88.00",
+        "range_low": "84.00",
+        "last_price": "92.05",
+        "low_of_day": "84.00",
+        "window_minutes": 5
+      },
+      "clock": "2026-10-30T09:20:01+05:30",
+      "plan": true
+    },
+    {
+      "name": "a trigger outside the daily focus writes its plan and tells nobody",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "BAJEL",
+        "state": "TRIGGERED",
+        "at": "2026-10-30T10:05:00",
+        "entry": "175.00",
+        "stop": "170.00",
+        "range_high": "174.80",
+        "range_low": "171.00",
+        "last_price": "175.00",
+        "low_of_day": "170.00",
+        "window_minutes": 5,
+        "focus": false,
+        "live_level": 18500.0,
+        "drain": true
+      },
+      "clock": "2026-10-30T10:05:02+05:30",
+      "plan": true
+    },
+    {
+      "name": "a break under the pivot is recorded and nothing else",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "GKSL",
+        "state": "BELOW_PIVOT",
+        "at": "2026-10-30T10:15:00",
+        "entry": null,
+        "stop": null,
+        "range_high": "209.90",
+        "range_low": "205.50",
+        "last_price": "209.95",
+        "low_of_day": "205.00",
+        "window_minutes": 5
+      },
+      "clock": "2026-10-30T10:15:00+05:30",
+      "plan": true
+    },
+    {
+      "name": "the afternoon's trigger is sized against the morning's lines; the live tape back under the averages closes the gate",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "SSDL",
+        "state": "TRIGGERED",
+        "at": "2026-10-30T13:40:00",
+        "entry": "86.40",
+        "stop": "84.10",
+        "range_high": "86.20",
+        "range_low": "84.30",
+        "last_price": "86.40",
+        "low_of_day": "84.10",
+        "window_minutes": 5,
+        "live_level": 15000.0,
+        "drain": true
+      },
+      "clock": "2026-10-30T13:40:03+05:30",
+      "plan": true
+    },
+    {
+      "name": "a name nobody watches is refused",
+      "method": "POST",
+      "path": "/__harness/swing-signal",
+      "json": {
+        "symbol": "NOTWATCHED",
+        "state": "TRIGGERED",
+        "at": "2026-10-30T10:00:00",
+        "entry": "10.00",
+        "stop": "9.50",
+        "last_price": "10.00",
+        "low_of_day": "9.50"
+      },
+      "clock": "mid"
+    }
+  ]
+}

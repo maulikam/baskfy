@@ -1,0 +1,73 @@
+{
+  "note": "Lane swing_monitor ports app/swing_monitor.py, swing_clock.py and swing_notify.py: a background service (baskfy-desk service swing-monitor) and its chores, with no HTTP route of its own. Its behaviour is graded by the Rust tests in src/lanes/swing/swing_monitor/tests.rs; these cases pin only that neither desk exposes the monitor, its clock or its notifier over HTTP, and that no order or GTT call reaches the replay Kite. Adversarial review (30 Oct 2026): three edge-clock cases added (pre_open, after_close, a Telegram-style reply); Postgres backend 8 of 8 EQUAL, order/GTT calls EQUAL, 0 differences, ports 18620-18622, Redis 14/15.",
+  "cases": [
+    {
+      "name": "the monitor has no page",
+      "method": "GET",
+      "path": "/swing/monitor",
+      "clock": "open"
+    },
+    {
+      "name": "the monitor cannot be started over HTTP",
+      "method": "POST",
+      "path": "/swing/monitor",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "no auto-execute route exists",
+      "method": "POST",
+      "path": "/swing/auto-execute",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "the notifier has no reply path",
+      "method": "POST",
+      "path": "/swing/notify",
+      "form": {
+        "text": "confirm"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "the clock's chores are not routes of their own",
+      "method": "POST",
+      "path": "/swing/gtt-sweep",
+      "clock": "close"
+    },
+    {
+      "name": "before the open the monitor still has no page",
+      "method": "GET",
+      "path": "/swing/monitor",
+      "query": {
+        "day": "2026-10-30"
+      },
+      "clock": "pre_open"
+    },
+    {
+      "name": "after the close no chore runs over HTTP",
+      "method": "POST",
+      "path": "/swing/gtt-sweep",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "after_close"
+    },
+    {
+      "name": "a telegram-style reply cannot reach a confirm",
+      "method": "POST",
+      "path": "/swing/telegram",
+      "json": {
+        "message": {
+          "text": "/confirm"
+        }
+      },
+      "clock": "mid"
+    }
+  ]
+}

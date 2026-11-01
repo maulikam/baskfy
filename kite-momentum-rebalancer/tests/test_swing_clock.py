@@ -289,3 +289,25 @@ class TestTheChoresKeepTheirOwnHours:
         assert callable(swing_clock.run_chore)
         assert callable(swing_clock.run_cutoff)
         assert callable(swing_clock.run_gtt_sweep)
+
+    def test_run_chore_with_no_seams_reaches_the_desks_own(self, monkeypatch) -> None:
+        """DECISIONS-RS R8.SM2: the watch calls `run_chore(name, day=day)` with no seams, so the
+        defaults must resolve. They did not — `swing_desk` was never imported in `run_chore`,
+        every call raised `NameError` before its `try`, and the 10:45 cutoff and the 15:15 sweep
+        only ever ran from the 15:30 backstop. Here the desk's store cannot be opened: the chore
+        must reach it (and count `unavailable`), not die on a name."""
+        from app import swing_desk
+
+        reached: list[str] = []
+
+        def no_store():
+            reached.append("open_store")
+            raise RuntimeError("no database")
+
+        counted: list[tuple[str, str]] = []
+        monkeypatch.setattr(swing_desk, "open_store", no_store)
+        monkeypatch.setattr(swing_clock, "_count", lambda sweep, outcome: counted.append((sweep, outcome)))
+        swing_clock.run_chore("cutoff", day=DAY, now=lambda: AT_1045)
+        swing_clock.run_chore("gtt_sweep", day=DAY, now=lambda: AT_1515)
+        assert reached == ["open_store", "open_store"]
+        assert counted == [("cutoff", "unavailable"), ("gtt_sweep", "unavailable")]

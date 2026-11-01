@@ -1,0 +1,253 @@
+{
+ "fn": "baskfy_core.vbt.backtest.summarise",
+ "inputs": {
+  "result": {
+   "equity": [
+    "1000000",
+    "1000000",
+    "999501.4500",
+    "999501.4500",
+    "974078.062500",
+    "974078.062500",
+    "974078.062500",
+    "961892.278500",
+    "961892.278500",
+    "961892.278500",
+    "961892.278500",
+    "961892.278500"
+   ],
+   "open_positions": [
+    0,
+    0,
+    2,
+    2,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "orders_offered": 3,
+   "params": {
+    "config": {
+     "breadth": {
+      "dma_bars": 200,
+      "min_pct_above_dma": 40.0
+     },
+     "costs": {
+      "cost_pct_per_side": 0.25
+     },
+     "data": {
+      "etf_name_pattern": "\\bETF\\b",
+      "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+      "etf_universe_slug": "etf",
+      "instrument_type": "EQ",
+      "keep_null_series": true,
+      "rolling_min_share": 0.9,
+      "series_allowed": [
+       "EQ",
+       "BE",
+       "BZ"
+      ],
+      "thin_session_min_periods": 5,
+      "thin_session_min_share": 0.25,
+      "thin_session_window_bars": 41
+     },
+     "entry": {
+      "fill_through_pct": 0.0,
+      "limit_at": "SIGNAL_CLOSE",
+      "valid_sessions": 3
+     },
+     "exits": {
+      "gtt_band_max_pct": 0.15,
+      "gtt_band_min_pct": 0.005,
+      "gtt_limit_fraction": 0.97,
+      "no_bar_tolerance_sessions": 5,
+      "qulla": {
+       "breakeven_after_r": 1.0,
+       "fast_trail_min_adr_pct": 6.0,
+       "max_stop_adr_multiple": 1.0,
+       "max_stop_distance_pct": 10.0,
+       "partial_denominator": 3,
+       "partial_earliest_bar": 3,
+       "partial_latest_bar": 5,
+       "partial_numerator": 1
+      },
+      "qulla_exits": true,
+      "stop_pct": 12.0,
+      "trail_ema_bars": 21
+     },
+     "scan": {
+      "min_change_pct": 6.5,
+      "min_close_raw_inr": 30.0,
+      "min_vol_sma": 25000.0,
+      "min_volume": 50000.0,
+      "vol_mult": 3.0,
+      "vol_sma_bars": 50
+     },
+     "sizing": {
+      "first_live_sessions": 5,
+      "max_entries_per_name": 2,
+      "max_new_entries_per_session": 3,
+      "max_position_pct": 12.5,
+      "max_position_vs_turnover": 0.01,
+      "max_slots": 10,
+      "min_trade_value_inr": "10000",
+      "pyramiding": true,
+      "risk_multiplier_first_live": 0.5
+     },
+     "trend": {
+      "breakout_high_bars": 20,
+      "dma_bars": 200,
+      "max_change_pct": 15.0,
+      "max_ret_20_pct": 25.0,
+      "min_close_position": 0.6,
+      "min_turnover_avg_inr": 20000000.0,
+      "ret_bars": 20,
+      "turnover_bars": 20
+     }
+    },
+    "cost_pct_per_side": "0.25",
+    "end": null,
+    "label": "full",
+    "sleeve_inr": "1000000",
+    "start": null,
+    "tick": "0.01"
+   },
+   "sessions": [
+    "2024-06-03",
+    "2024-06-04",
+    "2024-06-05",
+    "2024-06-06",
+    "2024-06-07",
+    "2024-06-10",
+    "2024-06-11",
+    "2024-06-12",
+    "2024-06-13",
+    "2024-06-14",
+    "2024-06-17",
+    "2024-06-18"
+   ],
+   "skipped": {
+    "cash": 0,
+    "expired": 0,
+    "gate_shut": 0,
+    "locked": 0,
+    "no_bar": 0,
+    "session_cap": 0,
+    "slots_full": 0,
+    "turnover": 0
+   },
+   "trades": [
+    {
+     "cap": "SLOT",
+     "entry_date": "2024-06-05",
+     "entry_price": "100.2500",
+     "exit_date": "2024-06-07",
+     "exit_price": "87",
+     "hold_sessions": 2,
+     "instrument_id": 1,
+     "pnl_inr": "-13427.0975",
+     "quantity": 997,
+     "r_multiple": "-1.099387755102040816326530613",
+     "reason": "STOP_GAP",
+     "return_pct": "-13.43391521197007481296758105",
+     "symbol": "GAP"
+    },
+    {
+     "cap": "SLOT",
+     "entry_date": "2024-06-07",
+     "entry_price": "200.5000",
+     "exit_date": "2024-06-07",
+     "exit_price": "176.00",
+     "hold_sessions": 0,
+     "instrument_id": 2,
+     "pnl_inr": "-12245.540000",
+     "quantity": 491,
+     "r_multiple": "-1.017959183673469387755102041",
+     "reason": "STOP_HIT",
+     "return_pct": "-12.43890274314214463840399002",
+     "symbol": "SAME"
+    },
+    {
+     "cap": "SLOT",
+     "entry_date": "2024-06-05",
+     "entry_price": "40.1000",
+     "exit_date": "2024-06-12",
+     "exit_price": "35.20",
+     "hold_sessions": 5,
+     "instrument_id": 3,
+     "pnl_inr": "-12435.084000",
+     "quantity": 2493,
+     "r_multiple": "-1.017959183673469387755102041",
+     "reason": "STOP_HIT",
+     "return_pct": "-12.43890274314214463840399002",
+     "symbol": "HIT"
+    }
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a stop gap and a same-session stop. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "json": {
+   "avg_hold_sessions": 2.3333333333333335,
+   "avg_loss_pct": -12.770573566084789,
+   "avg_open_positions": 0.5833333333333334,
+   "avg_trade_pct": -12.770573566084789,
+   "avg_win_pct": 0.0,
+   "by_reason": {
+    "STOP_GAP": 1,
+    "STOP_HIT": 2
+   },
+   "cagr_pct": -61.17345223793267,
+   "calmar": -16.052770889997365,
+   "drawdown_peak_on": "2024-06-03",
+   "drawdown_trough_on": "2024-06-12",
+   "end": "2024-06-18",
+   "exposure_pct": 5.833333333333333,
+   "final_equity_inr": "961892.28",
+   "max_drawdown_pct": -3.81077215,
+   "profit_factor": 0.0,
+   "sharpe": -6.781211240823411,
+   "start": "2024-06-03",
+   "trades": 3,
+   "win_rate_pct": 0.0,
+   "years": 0.04106776180698152
+  },
+  "stats": {
+   "avg_hold_sessions": 2.3333333333333335,
+   "avg_loss_pct": -12.770573566084789,
+   "avg_open_positions": 0.5833333333333334,
+   "avg_trade_pct": -12.770573566084789,
+   "avg_win_pct": 0.0,
+   "by_reason": {
+    "STOP_GAP": 1,
+    "STOP_HIT": 2
+   },
+   "cagr_pct": -61.17345223793267,
+   "calmar": -16.052770889997365,
+   "drawdown_peak_on": "2024-06-03",
+   "drawdown_trough_on": "2024-06-12",
+   "end": "2024-06-18",
+   "exposure_pct": 5.833333333333333,
+   "final_equity_inr": "961892.28",
+   "max_drawdown_pct": -3.81077215,
+   "profit_factor": 0.0,
+   "sharpe": -6.781211240823411,
+   "start": "2024-06-03",
+   "trades": 3,
+   "win_rate_pct": 0.0,
+   "years": 0.04106776180698152
+  }
+ }
+}

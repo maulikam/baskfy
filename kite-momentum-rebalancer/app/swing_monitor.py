@@ -83,7 +83,12 @@ from baskfy_core.swing.config import (
     SizingConfig,
     SwingConfig,
 )
-from baskfy_core.swing.market import ExposureTier, MarketGate
+from baskfy_core.swing.market import (
+    INDEX_HISTORY_SESSIONS,
+    BreadthSnapshot,
+    ExposureTier,
+    MarketGate,
+)
 from baskfy_core.swing.opening_range import Candle, TriggerState
 from baskfy_core.swing.plan import (
     PlanLine,
@@ -99,6 +104,14 @@ from baskfy_core.swing.plan import (
 from . import config as C
 from . import telemetry as _tel
 from .strategies.swing_breakout import Signal, SwingBreakout, WatchedName
+from .swing_live_gate import (
+    LiveGate,
+    LiveLevel,
+    in_session,
+    kite_level,
+    live_gate,
+    published_levels,
+)
 from .swing_notify import Notifier, SignalNotice, notice_json
 
 log = logging.getLogger("swing_monitor")
@@ -252,11 +265,27 @@ class SignalContext:
     #: A9: `sw_config.first_live_sessions_left`, so the SIGNAL plan and the confirm size at
     #: the same half risk while the countdown runs.
     first_live_sessions_left: int = 0
+    #: SW30: set when `gate` and `tier` are the live index's re-read rather than the last
+    #: close's; ``None`` means they are the close's.
+    live: LiveGate | None = None
 
 
-def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA) -> SignalContext:
-    """The last close's gate and rung, the sleeve's money as of *now*, each watched name's
-    stats, and what the session has already entered.
+def load_context(  # noqa: PLR0913 - one keyword per input the reading depends on
+    conn: Any,
+    *,
+    user_id: int,
+    day: dt.date,
+    schema: str = SCHEMA,
+    live_level: LiveLevel | None = None,
+    now: dt.datetime | None = None,
+) -> SignalContext:
+    """The gate and rung, the sleeve's money as of *now*, each watched name's stats, and what
+    the session has already entered.
+
+    SW30 (Maulik, 29 Sep 2026): with ``live_level`` given and the session open, the gate is
+    re-read with today's index level (`app.swing_live_gate`) — it opens when the 10-day
+    average crosses above the 20-day and closes when it crosses back. Otherwise, and whenever
+    the live read has nothing to say, it is the last close's.
 
     The market row is the latest strictly before `day` — the close the plan was built on; a
     row for `day` itself is written after the close and never exists during the session.
@@ -267,7 +296,8 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
     """
     market = conn.execute(
         f"SELECT gate, exposure_level, max_open_positions, max_exposure_pct, "
-        f"new_entries_allowed, drawdown_locked FROM {_t(schema, 'sw_market_daily')} "
+        f"new_entries_allowed, drawdown_locked, constituent_count, pct_up_strong_1m, "
+        f"pct_new_52w_high, pct_above_ma_slow FROM {_t(schema, 'sw_market_daily')} "
         "WHERE user_id = ? AND date < ? ORDER BY date DESC LIMIT 1",
         (user_id, day.isoformat()),
     ).fetchone()
@@ -285,6 +315,14 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
             new_entries_allowed=bool(market["new_entries_allowed"]),
             drawdown_locked=bool(market["drawdown_locked"]),
         )
+    live = None
+    if market is not None and live_level is not None:
+        live = read_live_gate(
+            conn, market=market, close_tier=tier, day=day, schema=schema,
+            live_level=live_level, now=now,
+        )
+        if live is not None:
+            gate, tier = live.gate, live.tier
     capital_row = conn.execute(
         f"SELECT sleeve_capital_inr, first_live_sessions_left FROM {_t(schema, 'sw_config')} "
         "WHERE user_id = ?",
@@ -403,6 +441,69 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
         pending=tuple(pending),
         reserved=reserved,
         first_live_sessions_left=first_live_left,
+        live=live,
+    )
+
+
+def read_live_gate(  # noqa: PLR0913 - one keyword per input the reading depends on
+    conn: Any,
+    *,
+    market: Any,
+    close_tier: ExposureTier,
+    day: dt.date,
+    schema: str,
+    live_level: LiveLevel,
+    now: dt.datetime | None = None,
+) -> LiveGate | None:
+    """SW30: the gate from the last close's breadth and the index's live level, or ``None``
+    (keep the close's) outside the session, without breadth, without a level, or with too
+    few published closes. The quote is only asked for while the session is open."""
+    moment = now if now is not None else dt.datetime.now(tz=IST)
+    if moment.date() != day or not in_session(moment):
+        return None
+    if market["pct_up_strong_1m"] is None:
+        return None
+    level = live_level()
+    if level is None:
+        return None
+    config = DEFAULT_SWING_CONFIG.market
+    closes = published_levels(
+        conn, slug=C.SWING_INDEX_SLUG, before=day, count=INDEX_HISTORY_SESSIONS - 1, schema=schema
+    )
+    breadth = BreadthSnapshot(
+        constituent_count=int(market["constituent_count"]),
+        pct_up_strong_1m=float(market["pct_up_strong_1m"]),
+        pct_new_52w_high=float(market["pct_new_52w_high"] or 0),
+        pct_above_ma_slow=float(market["pct_above_ma_slow"] or 0),
+    )
+    return live_gate(
+        breadth=breadth, close_tier=close_tier, closes=closes, level=level,
+        slug=C.SWING_INDEX_SLUG, config=config,
+    )
+
+
+def log_gate_change(before: MarketGate, context: SignalContext) -> None:
+    """SW30: one line when the session's gate moves, naming the averages that moved it."""
+    live = context.live
+    if live is None:
+        log.info("gate %s -> %s (the last close's)", before.value, context.gate.value)
+        return
+    log.info(
+        "gate %s -> %s on the live %s: %.2f, 10-day %.2f %s 20-day %.2f; rung %d, entries %s",
+        before.value, context.gate.value, live.index_slug, live.reading.close,
+        live.reading.ma_fast, ">" if live.reading.long_bias else "<=", live.reading.ma_slow,
+        context.tier.level, "allowed" if context.tier.new_entries_allowed else "refused",
+    )
+
+
+def gate_line(context: SignalContext) -> str:
+    """The heartbeat's gate clause: what the rules allow right now, and from which data."""
+    live = context.live
+    if live is None:
+        return f"gate {context.gate.value} (last close)"
+    return (
+        f"gate {context.gate.value} (live {live.index_slug} {live.reading.close:.2f}: "
+        f"10d {live.reading.ma_fast:.2f} / 20d {live.reading.ma_slow:.2f})"
     )
 
 
@@ -508,11 +609,14 @@ class PgSignalStore:
         config: SwingConfig,
         context: SignalContext | None = None,
         notifier: Notifier | None = None,
+        live_level: LiveLevel | None = None,
     ) -> None:
         self.conn = conn
         self.user_id = user_id
         self.day = day
         self.config = config
+        #: SW30: today's index level for the gate's live re-read; ``None`` keeps the close's.
+        self.live_level = live_level
         #: The reading the morning started with (or the last one taken). Kept for the log and
         #: the drill's report; never what a plan is sized against — `_plan_for` re-reads.
         self.context = context if context is not None else self.read_context()
@@ -531,7 +635,12 @@ class PgSignalStore:
     def read_context(self) -> SignalContext:
         """The book as it is *now* — A5: read per trigger, so the second SIGNAL plan of a
         morning sees the first's confirm. Three queries; a few triggers a morning."""
-        self.context = load_context(self.conn, user_id=self.user_id, day=self.day)
+        before = getattr(self, "context", None)
+        self.context = load_context(
+            self.conn, user_id=self.user_id, day=self.day, live_level=self.live_level
+        )
+        if before is not None and before.gate is not self.context.gate:
+            log_gate_change(before.gate, self.context)
         return self.context
 
     def raise_signal(self, signal: Signal) -> None:
@@ -1195,14 +1304,17 @@ def main() -> int:
                 )
 
             watchlist = reload_watchlist()
-            context = load_context(conn, user_id=user_id, day=day)
+            # SW30: the gate is re-read on the live index while the session is open.
+            live_level = kite_level(kite)
+            context = load_context(conn, user_id=user_id, day=day, live_level=live_level)
             notifier = Notifier(
                 observe=lambda channel, outcome: _tel.count(
                     "swing_notifications", channel=channel, outcome=outcome
                 )
             )
             store = PgSignalStore(
-                conn, user_id=user_id, day=day, config=config, context=context, notifier=notifier
+                conn, user_id=user_id, day=day, config=config, context=context,
+                notifier=notifier, live_level=live_level,
             )
             # No gateway at all. `BaseStrategy` takes one because every other engine trades through
             # it; this one raises signals, and a process that holds no gateway cannot be talked into
@@ -1230,7 +1342,7 @@ def main() -> int:
                     lambda seconds: _tel.observe("swing_verdict_seconds", seconds)
                 )
                 fallback = QuoteFallback(kite, {w.token: w.symbol for w in watchlist})
-                beats = heartbeat_writer(conn, user_id=user_id)
+                beats = gated_heartbeat(heartbeat_writer(conn, user_id=user_id), store)
 
                 async def _serve() -> int:
                     bus = TickBus()
@@ -1295,6 +1407,28 @@ def wait_for_session(
             return False
         log.info("no Kite session yet; the monitor waits (until %s IST)", until)
         pause(poll_seconds)
+
+
+def gated_heartbeat(
+    beat: Callable[[str], None],
+    store: PgSignalStore,
+    *,
+    every_seconds: float = 60.0,
+    clock: Callable[[], float] = time.monotonic,
+) -> Callable[[str], None]:
+    """SW30: once a minute, re-read the gate (a trigger re-reads it anyway) so a cross is
+    logged when it happens rather than at the next trigger, and every heartbeat says which gate
+    is in force and from which data."""
+    last: float | None = None
+
+    def wrapped(detail: str) -> None:
+        nonlocal last
+        if last is None or clock() - last >= every_seconds:
+            last = clock()
+            store.read_context()
+        beat(f"{detail} · {gate_line(store.context)}")
+
+    return wrapped
 
 
 def heartbeat_writer(conn: Any, *, user_id: int) -> Callable[[str], None]:

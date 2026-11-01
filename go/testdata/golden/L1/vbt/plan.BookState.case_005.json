@@ -1,0 +1,35 @@
+{
+ "fn": "baskfy_core.vbt.plan.BookState",
+ "inputs": {
+  "book": {
+   "cash_available_inr": "1000000",
+   "entries_already_this_session": 0,
+   "open_entry_counts": {},
+   "open_exposure_inr": "0",
+   "open_instrument_ids": [],
+   "positions_naked_of_gtt": [],
+   "working_instrument_ids": [
+    1,
+    2,
+    3
+   ]
+  },
+  "instrument_ids": [
+   1
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "only working orders. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "entries_in": {
+   "1": 0
+  },
+  "slots_taken": 3
+ }
+}

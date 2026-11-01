@@ -1,0 +1,55 @@
+{
+ "note": "Wave D analytics_views lane: /regime/backtest (backtest_view). The harness starts both desks from empty run directories, so data/outputs/regime_backtest.json is absent and the page renders its no-results state; the chart geometry with results is graded byte-for-byte against Python's own output by the Rust unit tests (analytics_views/backtest_view/goldens.json). protection, corporate_actions and autorun have no route of their own in this lane. Review (adversarial, wave D): added POST/HEAD (FastAPI's GET-only 405 with Allow: GET — now EQUAL via the lane's get_only), the pre-open clock, a trailing slash, and GET /performance and /performance/data. Two known DIFFs remain and are recorded, not masked: the trailing slash is Starlette's app-wide redirect_slashes 307, which the Rust desk's router does not have yet (foundation, as in analytics_regime.json); /performance and /performance/data are 404 in Rust because metrics.py, benchmark.py and performance_view.py are not ported. The page WITH stored results is graded outside the harness (which cannot seed data/outputs): the ignored tests backtest_view::tests::fuzz_cases_match_python_exactly (BV_FUZZ, 2,000 random results, geometry) and the_page_with_results_renders_byte_equal_to_python (BV_RENDER, 800 pages through regime_backtest.html) were EQUAL against Python on 30 Oct 2026.",
+ "cases": [
+  {
+   "name": "regime backtest page without stored results",
+   "method": "GET",
+   "path": "/regime/backtest"
+  },
+  {
+   "name": "regime backtest page with a query string",
+   "method": "GET",
+   "path": "/regime/backtest",
+   "query": {
+    "x": "1"
+   }
+  },
+  {
+   "name": "regime backtest page after the close",
+   "method": "GET",
+   "path": "/regime/backtest",
+   "clock": "after_close"
+  },
+  {
+   "name": "regime backtest refuses POST (405 and Allow)",
+   "method": "POST",
+   "path": "/regime/backtest"
+  },
+  {
+   "name": "regime backtest with a trailing slash is not the page",
+   "method": "GET",
+   "path": "/regime/backtest/"
+  },
+  {
+   "name": "regime backtest HEAD",
+   "method": "HEAD",
+   "path": "/regime/backtest"
+  },
+  {
+   "name": "regime backtest before the open",
+   "method": "GET",
+   "path": "/regime/backtest",
+   "clock": "pre_open"
+  },
+  {
+   "name": "performance page (Python serves it; Rust has not ported it)",
+   "method": "GET",
+   "path": "/performance"
+  },
+  {
+   "name": "performance data (Python serves it; Rust has not ported it)",
+   "method": "GET",
+   "path": "/performance/data"
+  }
+ ]
+}

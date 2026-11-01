@@ -7,6 +7,10 @@ never holds the whole option panel (B1 over the whole panel peaks at 2.8 GB; DEC
 The pure run is synchronous, so it runs in a thread and its loader calls back into this event
 loop for each batch.
 
+F3's two families (``F3N``/``F3B``) read one index at a time through :func:`load_index_rows`: its
+FUTIDX rows from the futures already loaded and its OPTIDX rows **with the weeklies** — the
+option panel above keeps only the expiries that have a future, which drops every NIFTY weekly.
+
 Every row is appended (``fo_backtest_run`` is append-only; the page reads the latest per family)
 for every FO tenant (the users with ``fo_sleeve_config`` rows, FO4.2), with its tier, its caveat
 verbatim and its slippage source. Nothing it writes moves a flag or a plan.
@@ -128,6 +132,30 @@ async def load_options(
     return rt.panels_from_contracts(pl.concat([mine, options], how="diagonal_relaxed")).options
 
 
+async def load_index_rows(
+    session: AsyncSession, futures: pl.DataFrame, symbol: str, start: dt.date, end: dt.date
+) -> pl.DataFrame:
+    """``symbol``'s raw rows for F3's proxy: its futures, and its index options of every listed
+    expiry within :data:`~baskfy_core.fno.retest.DIRECTIONAL_EXPIRY_DAYS` of the session (the
+    pure trim then narrows the strikes)."""
+    rows = (
+        await session.execute(
+            select(*_OPTION_SELECT).where(
+                FoContractDaily.instrument == "OPTIDX",
+                FoContractDaily.symbol == symbol,
+                FoContractDaily.trade_date >= start,
+                FoContractDaily.trade_date <= end,
+                FoContractDaily.expiry <= FoContractDaily.trade_date + rt.DIRECTIONAL_EXPIRY_DAYS,
+            )
+        )
+    ).all()
+    mine = futures.filter((pl.col("symbol") == symbol) & (pl.col("instrument") == "FUTIDX"))
+    if not rows:
+        return mine
+    options = _frame(rows, [c.key for c in _OPTION_SELECT])
+    return pl.concat([mine, options], how="diagonal_relaxed")
+
+
 async def measured_spreads(session: AsyncSession) -> dict[str, tuple[float, int]]:
     """FO3's statistic per underlying: (median half-spread ÷ mid, sessions)."""
     rows = (await session.execute(select(FoSpreadSample))).scalars().all()
@@ -199,9 +227,18 @@ async def run_retest(  # noqa: PLR0913 - the session, the day and four keyword k
         call = load_options(session, futures, symbols, SAMPLE_FROM, stop)
         return asyncio.run_coroutine_threadsafe(call, loop).result()
 
+    def index_loader(symbol: str) -> pl.DataFrame:
+        call = load_index_rows(session, futures, symbol, SAMPLE_FROM, stop)
+        return asyncio.run_coroutine_threadsafe(call, loop).result()
+
     def compute() -> list[rt.FamilyResult]:
         cont = research.continuous(futures)
-        return [rt.run_family(f, futures, loader, measured, cont=cont, batch=batch) for f in chosen]
+        return [
+            rt.run_family(
+                f, futures, loader, measured, cont=cont, batch=batch, load_index=index_loader
+            )
+            for f in chosen
+        ]
 
     results = await asyncio.to_thread(compute)
     for user_id in users:

@@ -1,0 +1,9 @@
+{
+ "note": "Run with --env KITE_API_KEY= : the three routes that build Kite() answer its RuntimeError -- /status as authed false with the error, /login and /callback as 500. /callback with no token is still the 400 first.",
+ "cases": [
+  {"name": "status without an api key", "method": "GET", "path": "/status"},
+  {"name": "login without an api key", "method": "GET", "path": "/login"},
+  {"name": "callback without an api key", "method": "GET", "path": "/callback", "query": {"request_token": "x"}},
+  {"name": "callback without a token is still the 400", "method": "GET", "path": "/callback"}
+ ]
+}

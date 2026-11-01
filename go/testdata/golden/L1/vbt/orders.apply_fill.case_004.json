@@ -1,0 +1,44 @@
+{
+ "fn": "baskfy_core.vbt.orders.apply_fill",
+ "inputs": {
+  "fill": {
+   "price": "99.50",
+   "quantity": 80,
+   "session": "2024-01-03"
+  },
+  "order": {
+   "cancel_reason": null,
+   "filled_quantity": 40,
+   "instrument_id": 1,
+   "limit_price": "100.00",
+   "quantity": 100,
+   "sessions_worked": 0,
+   "signal_date": "2024-01-02",
+   "state": "PARTIAL",
+   "stop_price": "88.00"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "more than the rest: FILLED, over-filled. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "is_live": false,
+  "order": {
+   "cancel_reason": null,
+   "filled_quantity": 120,
+   "instrument_id": 1,
+   "limit_price": "100.00",
+   "quantity": 100,
+   "sessions_worked": 0,
+   "signal_date": "2024-01-02",
+   "state": "FILLED",
+   "stop_price": "88.00"
+  },
+  "remaining": 0
+ }
+}

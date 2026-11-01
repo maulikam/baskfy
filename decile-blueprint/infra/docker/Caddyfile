@@ -186,8 +186,33 @@ Disallow: /
 		# broker credential keeps its bearer-only auth model unchanged, which is the point.
 		#
 		# Ordered BEFORE `handle /api/v1/*` because Caddy takes the first matching handle.
+		#
+		# The desk at /desk on the app's own address (Maulik, 29 Oct 2026: "i want both the app and
+		# desk in same, no two different port"). `handle_path` strips the prefix on the way in; the
+		# desk puts it back on every URL it hands out (app/core/path_prefix.py, DESK_PATH_PREFIX).
+		# First in the route, so no web or API path can shadow it.
+		redir /desk /desk/
+		handle_path /desk/* {
+			reverse_proxy desk:8420 {
+				header_up X-Forwarded-Proto {scheme}
+				transport http {
+					response_header_timeout 300s
+				}
+			}
+		}
+
 		handle /api/v1/brokers/callback {
 			reverse_proxy web:3000
+		}
+
+		# Opportunities can live on its own upstream (local strangler: api-py). Default: api.
+		handle /api/v1/opportunities/* {
+			reverse_proxy {$BASKFY_OPPS_UPSTREAM:api:8000} {
+				flush_interval -1
+				transport http {
+					response_header_timeout 300s
+				}
+			}
 		}
 
 		handle /api/v1/* {

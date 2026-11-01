@@ -1,0 +1,10 @@
+{
+  "note": "The skeleton every lane sits on (DeskSecurity, the 404 shape). Lanes add desk_cases/<lane>.json.",
+  "cases": [
+    {"name": "unknown path is Starlette's 404", "method": "GET", "path": "/no-such-page"},
+    {"name": "a stranger Host is refused 421", "method": "GET", "path": "/no-such-page", "headers": {"Host": "evil.example"}},
+    {"name": "a cross-site POST is refused 403", "method": "POST", "path": "/execute", "form": {"plan_id": "x", "confirm": "true"}, "headers": {"Origin": "http://evil.example"}},
+    {"name": "a POST with a foreign Referer and no Origin is refused 403", "method": "POST", "path": "/ops/run", "form": {"name": "x"}, "headers": {"Origin": "", "Referer": "http://evil.example/page"}},
+    {"name": "unknown path with a query", "method": "GET", "path": "/nope", "query": {"a": "1"}, "clock": "after_close"}
+  ]
+}

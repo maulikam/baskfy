@@ -2,7 +2,8 @@
 
     GET    /fno/overnight    F1 per underlying (next entry, the night's scan, the proposed condor),
                              open structures with their settle marks, the journal, the evidence
-                             card, and F2's candidates, open positions and closed trades
+                             card, F2's candidates, open positions and closed trades, and F3's
+                             night per underlying, open and closed spreads and evidence (M.5)
     GET    /fno/info         ``04`` §5's Stock F&O table, the verdict table with the latest
                              re-test beside each row, the spread sample's sessions, the ingest's
                              MISSING days
@@ -67,6 +68,7 @@ router = APIRouter(prefix="/fno", tags=["fno"])
 JSON_MEDIA_TYPE: Final = "application/json"
 F1_SLEEVES: Final[tuple[str, ...]] = (FoSleeve.F1N.value, FoSleeve.F1B.value)
 F2_SLEEVES: Final[tuple[str, ...]] = (FoSleeve.F2.value,)
+F3_SLEEVES: Final[tuple[str, ...]] = (FoSleeve.F3N.value, FoSleeve.F3B.value)
 
 
 def _settings(request: Request) -> Settings:
@@ -91,6 +93,7 @@ def _gates(settings: Settings) -> list[reads.FnoGateOut]:
     flags = {
         FoSleeveGroup.F1: settings.fno_f1_execution_enabled,
         FoSleeveGroup.F2: settings.fno_f2_execution_enabled,
+        FoSleeveGroup.F3: settings.fno_f3_execution_enabled,
     }
     return [
         reads.FnoGateOut(group=group.value, mode=("PAPER", "LIVE")[int(enabled)])
@@ -101,11 +104,54 @@ def _gates(settings: Settings) -> list[reads.FnoGateOut]:
 # --- routes ---------------------------------------------------------------------------------------
 
 
-@router.get("/overnight", response_model=reads.FnoOvernightOut, summary="F1 and F2, read-only")
+async def _f3(
+    session: SessionDep,
+    user_id: int,
+    today: dt.date,
+    backtests: list[reads.FnoBacktestOut],
+) -> reads.FnoF3Out:
+    """F3's block: the night's row per underlying (its ``entry_session`` or ``next_session`` is the
+    session the desk may plan at 09:20), the spreads, the journal and the re-test rows."""
+    f3_date = await reads.latest_scan_date(session, user_id, F3_SLEEVES)
+    rows = (
+        {}
+        if f3_date is None
+        else {r.symbol: r for r in await reads.scan_rows(session, user_id, f3_date, F3_SLEEVES)}
+    )
+    underlyings: list[reads.FnoUnderlyingOut] = []
+    for symbol, sleeve in reads.F3_UNDERLYINGS:
+        row = rows.get(symbol)
+        scan = None if row is None else reads.scan_out(row)
+        entry = None
+        if scan is not None:
+            raw = scan.detail.get("entry_session") or scan.detail.get("next_session")
+            entry = dt.date.fromisoformat(str(raw)) if raw else None
+        underlyings.append(
+            reads.FnoUnderlyingOut(
+                symbol=symbol,
+                sleeve=sleeve,
+                level=await reads.underlying_level(session, symbol, f3_date),
+                scan=scan,
+                next_entry_date=entry,
+            )
+        )
+    return reads.FnoF3Out(
+        research_line=reads.RESEARCH_F3_LINE,
+        not_tested=list(reads.F3_NOT_TESTED),
+        scan_date=f3_date,
+        underlyings=underlyings,
+        open=await reads.open_positions(session, user_id, today=today, sleeves=F3_SLEEVES),
+        closed=await reads.journal(session, user_id, F3_SLEEVES),
+        backtests=[b for b in backtests if b.family in reads.F3_FAMILIES],
+    )
+
+
+@router.get("/overnight", response_model=reads.FnoOvernightOut, summary="F1-F3, read-only")
 async def get_fno_overnight(
     session: SessionDep, principal: AuthenticatedDep, settings: SettingsDep
 ) -> Response:
-    """``05`` §2 in one call: the header, the F1 cards, the evidence card and the F2 section."""
+    """``05`` §2 in one call: the header, the F1 cards, the evidence card, the F2 section and
+    the F3 section (M.5, F3-7)."""
     user_id = await scoped_sole_user_id(session, principal.user_id)
     today = _now().astimezone(IST).date()
     next_session = await reads.next_session_after(session, today)
@@ -144,11 +190,12 @@ async def get_fno_overnight(
         counts[r.state] = counts.get(r.state, 0) + 1
     whole = next((r for r in f2_rows if r.symbol == reads.F2_WHOLE_SLEEVE_SYMBOL), None)
 
-    empty_reason = None
-    if f1_date is None and f2_date is None:
-        empty_reason = reads.EMPTY_NEVER if settings.fno_scan_enabled else reads.EMPTY_SCAN_OFF
-
     backtests = await reads.latest_backtests(session, user_id)
+    f3 = await _f3(session, user_id, today, backtests)
+
+    empty_reason = None
+    if f1_date is None and f2_date is None and f3.scan_date is None:
+        empty_reason = reads.EMPTY_NEVER if settings.fno_scan_enabled else reads.EMPTY_SCAN_OFF
     view = reads.FnoOvernightOut(
         today=today,
         next_session=next_session,
@@ -191,6 +238,7 @@ async def get_fno_overnight(
             open=await reads.open_positions(session, user_id, today=today, sleeves=F2_SLEEVES),
             closed=await reads.journal(session, user_id, F2_SLEEVES),
         ),
+        f3=f3,
     )
     return _json(view)
 

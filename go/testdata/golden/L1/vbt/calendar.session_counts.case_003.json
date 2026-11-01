@@ -1,0 +1,35 @@
+{
+ "fn": "baskfy_core.vbt.calendar.session_counts",
+ "inputs": {
+  "bars": {
+   "columns": [
+    "instrument_id",
+    "date"
+   ],
+   "dtypes": {
+    "date": "Date",
+    "instrument_id": "Int64"
+   },
+   "rows": []
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an empty frame with a date column. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "columns": [
+   "date",
+   "traded"
+  ],
+  "dtypes": {
+   "date": "Date",
+   "traded": "Int64"
+  },
+  "rows": []
+ }
+}

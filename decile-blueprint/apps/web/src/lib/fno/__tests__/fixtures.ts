@@ -33,6 +33,40 @@ const EVIDENCE: FnoOvernight["evidence"] = {
   ],
 };
 
+const F3_OFF: FnoOvernight["f3"] = {
+  research_line:
+    "The daily half of F3's rules, re-tested on the closing files 3 Jan 2022 to 22 Sep 2026, " +
+    "after costs: NIFTY n = 206, -0.021R a trade (t = -2.26, 67 % win); BANKNIFTY n = 166, " +
+    "-0.020R (t = -1.60, 57 % win); near zero before costs. Whatever edge the method has must " +
+    "come from the intraday rules, which only the paper period can test",
+  not_tested: [
+    "the 75-minute confirm",
+    "the intraday alignment with the session's open",
+    "the intraday cut at the moment the level breaks (the proxy exits at that session's settle)",
+    "the loss cut read from a live mark (the proxy reads the settle)",
+  ],
+  scan_date: null,
+  underlyings: [
+    {
+      symbol: "NIFTY",
+      sleeve: "F3N",
+      level: { level: null, close_of: null, live_symbol: "NIFTY 50" },
+      scan: null,
+      next_entry_date: null,
+    },
+    {
+      symbol: "BANKNIFTY",
+      sleeve: "F3B",
+      level: { level: null, close_of: null, live_symbol: "NIFTY BANK" },
+      scan: null,
+      next_entry_date: null,
+    },
+  ],
+  open: [],
+  closed: [],
+  backtests: [],
+};
+
 export const scanOff: FnoOvernight = {
   today: "2026-09-23",
   next_session: "2026-09-24",
@@ -43,6 +77,7 @@ export const scanOff: FnoOvernight = {
   gates: [
     { group: "F1", mode: "PAPER" },
     { group: "F2", mode: "PAPER" },
+    { group: "F3", mode: "PAPER" },
   ],
   underlyings: [
     {
@@ -74,6 +109,7 @@ export const scanOff: FnoOvernight = {
     open: [],
     closed: [],
   },
+  f3: F3_OFF,
 };
 
 const OPEN = {
@@ -218,6 +254,144 @@ export const scanned: FnoOvernight = {
       },
     ],
     state_counts: { CANDIDATE: 1, NO_SIGNAL: 120 },
+  },
+  f3: {
+    ...F3_OFF,
+    scan_date: "2026-09-22",
+    underlyings: [
+      {
+        symbol: "NIFTY",
+        sleeve: "F3N",
+        level: {
+          level: "25100.50",
+          close_of: "2026-09-22",
+          live_symbol: "NIFTY 50",
+        },
+        scan: {
+          sleeve: "F3N",
+          trade_date: "2026-09-22",
+          symbol: "NIFTY",
+          state: "NO_SIGNAL",
+          reasons: [
+            "the daily read is DOWN but the 75-minute bar disagrees: 23,140.50 not below its " +
+              "10-bar average 23,119.69",
+          ],
+          detail: {
+            underlying: "NIFTY",
+            next_session: "2026-09-23",
+            sleeve: "F3N",
+            levels: {
+              close: "25080.00",
+              support: "24810.00",
+              resistance: "25320.00",
+              weekly_high: "25310.00",
+              weekly_low: "24950.00",
+              trend_avg: "25140.00",
+            },
+            direction_daily: "DOWN",
+            confirm: {
+              agrees: false,
+              message: "23,140.50 not below its 10-bar average 23,119.69",
+            },
+            direction: "NONE",
+          },
+          credit: null,
+          max_loss_per_lot: null,
+          cost_share: null,
+          iv: null,
+          rv20: null,
+          iv_rv: null,
+        },
+        next_entry_date: "2026-09-23",
+      },
+      {
+        symbol: "BANKNIFTY",
+        sleeve: "F3B",
+        level: { level: null, close_of: null, live_symbol: "NIFTY BANK" },
+        scan: {
+          sleeve: "F3B",
+          trade_date: "2026-09-22",
+          symbol: "BANKNIFTY",
+          state: "CANDIDATE",
+          reasons: [
+            "UP: sell the PE 53400 2026-09-29, wing 52300; out at once if the index trades " +
+              "beyond 54210.00 (04 §11)",
+          ],
+          detail: {
+            underlying: "BANKNIFTY",
+            next_session: "2026-09-23",
+            entry_session: "2026-09-23",
+            sleeve: "F3B",
+            levels: {
+              close: "55010.00",
+              support: "54210.00",
+              resistance: "56020.00",
+              weekly_high: "55400.00",
+              weekly_low: "53950.00",
+              trend_avg: "54700.00",
+            },
+            direction_daily: "UP",
+            confirm: { agrees: true, message: "55,020.00 above 54,880.40" },
+            direction: "UP",
+            level: "54210.00",
+            expiry: "2026-09-29",
+            expiry_kind: "monthly",
+            legs: [
+              {
+                role: "LONG_PUT",
+                strike: "52300",
+                option_type: "PE",
+                settle: "9.10",
+              },
+              {
+                role: "SHORT_PUT",
+                strike: "53400",
+                option_type: "PE",
+                settle: "40.55",
+              },
+            ],
+            credit_points: "31.45",
+            max_loss_per_lot_inr: "32119.50",
+            decay_target_mark: "6.29",
+            loss_cut_mark: "62.90",
+            sizing: {
+              lots: 1,
+              sizing_mode: "PAPER_ONE_LOT",
+              message: "paper at ₹0 capital: one lot",
+            },
+          },
+          credit: "31.45",
+          max_loss_per_lot: "32119.50",
+          cost_share: null,
+          iv: null,
+          rv20: null,
+          iv_rv: null,
+        },
+        next_entry_date: "2026-09-23",
+      },
+    ],
+    open: [
+      {
+        ...OPEN,
+        id: 11,
+        sleeve: "F3N",
+        structure: "CREDIT_SPREAD",
+        entry_plan_id: "F3N-2026-09-21",
+        lots: 2,
+        entry_credit: "24.10",
+        max_loss_inr: "30400.00",
+        profit_take_points: "4.82",
+        loss_close_points: "48.20",
+        stop_price: "24790.00",
+        hard_exit_date: "2026-09-29",
+        mark: {
+          ...OPEN.mark,
+          mark_points: "12.00",
+          pnl_inr: "1573.00",
+          pnl_r: "0.052",
+        },
+      },
+    ],
   },
 };
 

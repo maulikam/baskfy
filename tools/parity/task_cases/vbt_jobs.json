@@ -1,0 +1,1061 @@
+{
+  "lane": "vbt_jobs",
+  "note": "The volume-breakout sleeve's jobs (lane vbt_jobs, DECISIONS-RS R8.vbt_jobs). The bed holds 2026-10-29 published (run 103, data_version 44): vb_breadth_daily to 10-29 (gate SHUT since 10-20, OPEN on 10-19 and before), 23 vb_signal_daily rows for 10-29 (5 SIGNAL), vb_config user 1 (capital 25,00,000, dry_run_sessions 13, first_live_sessions_left 5), vb_session rows to 10-29 (10-20.. counted), vb_scan_run ids to 114, and no vb_position or vb_order rows — the book cases seed ten open positions, a closed one and six orders. 2026-10-30 is a Friday session not yet published; 2026-10-31 a Saturday. A plan's plan_id is a uuid4 on both sides (masked in the payload, vb_plan.plan_id, vb_plan_line.client_id, vb_session.plan_ids); a scan row's started_at/finished_at are measured stamps and its task_id is Celery's uuid; an alert's raised_at is masked.",
+  "cases": [
+    {
+      "name": "detect-already-detected",
+      "task": "baskfy.vbt.detect",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:10:00",
+      "note": "23 rows for 10-29 already: answered without work (the 21:10 retry asks first)"
+    },
+    {
+      "name": "detect-empty-date-is-today",
+      "task": "baskfy.vbt.detect",
+      "args": {
+        "trade_date": ""
+      },
+      "now": "2026-10-29T21:10:00"
+    },
+    {
+      "name": "detect-redetect-after-lost-rows",
+      "task": "baskfy.vbt.detect",
+      "args": [
+        "2026-10-29"
+      ],
+      "now": "2026-10-29T21:10:00",
+      "seed_sql": "DELETE FROM vb_signal_daily WHERE user_id = 1 AND date = DATE '2026-10-29'",
+      "mask": {
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "the full detector with pipeline_run_id NULL: 23 signal rows and the breadth row rewritten"
+    },
+    {
+      "name": "detect-sweeps-a-provisional-straggler",
+      "task": "baskfy.vbt.detect",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:10:00",
+      "seed_sql": "DELETE FROM vb_signal_daily WHERE user_id = 1 AND date = DATE '2026-10-29'; INSERT INTO vb_signal_daily (user_id, date, instrument_id, state, close, close_raw, limit_price, stop_price, provisional) VALUES (1, DATE '2026-10-29', 2642, 'SIGNAL', 2861.70, 2861.7000, 2861.70, 2518.30, true)",
+      "mask": {
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "a live scan's provisional row the real run does not reproduce is swept (LV8)"
+    },
+    {
+      "name": "detect-friday-unpublished",
+      "task": "baskfy.vbt.detect",
+      "args": {},
+      "now": "2026-10-30T21:10:00",
+      "note": "Beat on a Friday the chain has not published: nothing to read for 10-30 — skipped, nothing written"
+    },
+    {
+      "name": "detect-saturday",
+      "task": "baskfy.vbt.detect",
+      "args": {
+        "trade_date": "2026-10-31"
+      },
+      "now": "2026-10-31T21:10:00"
+    },
+    {
+      "name": "detect-nightly-disabled",
+      "task": "baskfy.vbt.detect",
+      "args": {},
+      "now": "2026-10-29T21:10:00",
+      "env": {
+        "BASKFY_VBT_NIGHTLY_ENABLED": "false"
+      }
+    },
+    {
+      "name": "detect-no-sole-user",
+      "task": "baskfy.vbt.detect",
+      "args": {},
+      "now": "2026-10-29T21:10:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "detect-bad-date",
+      "task": "baskfy.vbt.detect",
+      "args": {
+        "trade_date": "29-10-2026"
+      },
+      "now": "2026-10-29T21:10:00"
+    },
+    {
+      "name": "evening-published-session",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:15:00",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "10-29's plan rebuilt (gate SHUT, 5 signals all GATE_SHUT); the session was counted already, so no counter moves"
+    },
+    {
+      "name": "evening-new-session-counts-dry-run",
+      "task": "baskfy.vbt.evening",
+      "args": {},
+      "now": "2026-10-29T21:15:00",
+      "seed_sql": "DELETE FROM vb_session WHERE user_id = 1 AND session_date = DATE '2026-10-29'",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "a new session row with nothing to confirm is a rehearsed DRY_RUN session: dry_run_sessions 13 -> 14, audited"
+    },
+    {
+      "name": "evening-gate-open-entries",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-19"
+      },
+      "now": "2026-10-29T21:15:00",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "10-19, gate OPEN: three PLACE_LIMIT lines sized against 25 lakh; executable lines and no confirm, so not counted"
+    },
+    {
+      "name": "evening-gate-open-live-first-live",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-19"
+      },
+      "now": "2026-10-29T21:15:00",
+      "env": {
+        "BASKFY_VBT_EXECUTION_ENABLED": "true"
+      },
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "execution on: LIVE mode, half size while first_live_sessions_left > 0, the countdown 5 -> 4 audited"
+    },
+    {
+      "name": "evening-book",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:15:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00')",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        },
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "ten open positions and six orders: the expiry sweep (a SENT limit -> CANCEL_LIMIT, a PROPOSED one EXPIRED, counts refreshed), manage + Qullamaggie (stop hit, write-offs, partial and breakeven, trails persisted), two ARM_GTT, exits queued for 10-30"
+    },
+    {
+      "name": "evening-book-gate-open",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:15:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00'); UPDATE vb_breadth_daily SET gate = 'OPEN' WHERE user_id = 1 AND date = DATE '2026-10-29'",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        },
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "the same book under an OPEN gate: ten positions plus three working limits fill every slot, so each signal is a skip"
+    },
+    {
+      "name": "evening-small-book-gate-open",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:15:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00'); DELETE FROM vb_position WHERE instrument_id NOT IN (37, 936) AND state = 'OPEN'; UPDATE vb_breadth_daily SET gate = 'OPEN' WHERE user_id = 1 AND date = DATE '2026-10-29'",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        },
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "two positions and the six orders under an OPEN gate: a second entry in a held name (pyramiding), working names skipped, the session cap counting the entry already filled for 10-30, sized against the sleeve's cash"
+    },
+    {
+      "name": "evening-thin-session",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:15:00",
+      "seed_sql": "UPDATE vb_breadth_daily SET thin_session = true WHERE user_id = 1 AND date = DATE '2026-10-29'",
+      "note": "a thin session is not one the sleeve traded: skipped, nothing written"
+    },
+    {
+      "name": "evening-friday-before-detect",
+      "task": "baskfy.vbt.evening",
+      "args": {},
+      "now": "2026-10-30T21:15:00",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "10-30 has no breadth row: still a session on the run's calendar (gate SHUT, no candidates), a new session row counted"
+    },
+    {
+      "name": "evening-no-sole-user",
+      "task": "baskfy.vbt.evening",
+      "args": {},
+      "now": "2026-10-29T21:15:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "evening-bad-date",
+      "task": "baskfy.vbt.evening",
+      "args": {
+        "trade_date": "2026/10/29"
+      },
+      "now": "2026-10-29T21:15:00"
+    },
+    {
+      "name": "morning-friday",
+      "task": "baskfy.vbt.morning",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "09:00 Friday: the last detected session is 10-29; a MORNING plan beside the EVENING one"
+    },
+    {
+      "name": "morning-friday-book",
+      "task": "baskfy.vbt.morning",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00'); UPDATE vb_breadth_daily SET gate = 'OPEN' WHERE user_id = 1 AND date = DATE '2026-10-29'",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        },
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ],
+      "note": "the book rebuilt before the open: entries counted against orders created today (IST)"
+    },
+    {
+      "name": "morning-saturday",
+      "task": "baskfy.vbt.morning",
+      "args": {},
+      "now": "2026-10-31T09:00:00",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ]
+    },
+    {
+      "name": "morning-explicit-gate-open",
+      "task": "baskfy.vbt.morning",
+      "args": {
+        "trade_date": "2026-10-19"
+      },
+      "now": "2026-10-30T09:00:00",
+      "mask": {
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/plan_id"
+      ]
+    },
+    {
+      "name": "morning-nothing-detected",
+      "task": "baskfy.vbt.morning",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "DELETE FROM vb_breadth_daily WHERE user_id = 1"
+    },
+    {
+      "name": "morning-no-sole-user",
+      "task": "baskfy.vbt.morning",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "morning-bad-date",
+      "task": "baskfy.vbt.morning",
+      "args": {
+        "trade_date": "x"
+      },
+      "now": "2026-10-30T09:00:00"
+    },
+    {
+      "name": "rescan-before-the-open",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 115
+      },
+      "now": "2026-10-30T08:30:00",
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 02:59:00+00', 'QUEUED', 'desk')",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "before 09:15: the last published session (10-29) re-detected plain, pipeline_run_id NULL"
+    },
+    {
+      "name": "rescan-saturday",
+      "task": "baskfy.vbt.rescan",
+      "args": [
+        115
+      ],
+      "now": "2026-10-31T11:00:00",
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-31 05:29:00+00', 'QUEUED', 'cli')",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "rescan-already-published",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 115
+      },
+      "now": "2026-10-29T21:30:00",
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-29 15:59:00+00', 'QUEUED', 'desk')",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "rescan-not-queued",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 114
+      },
+      "now": "2026-10-30T13:15:00",
+      "note": "a DONE row: the second copy does nothing"
+    },
+    {
+      "name": "rescan-no-such-row",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 999999
+      },
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "rescan-bad-run-id",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": "x"
+      },
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "rescan-nothing-published",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 115
+      },
+      "now": "2026-10-30T08:30:00",
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 02:59:00+00', 'QUEUED', 'desk'); UPDATE pipeline_run SET data_version = NULL",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "the failure path: FAILED with the reason on the row, never raised"
+    },
+    {
+      "name": "rescan-live-no-kite-session",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 115
+      },
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 07:44:00+00', 'QUEUED', 'desk')",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "inside the session with no Kite token: the quote read fails and the row says why"
+    },
+    {
+      "name": "rescan-live-session-quotes",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 115
+      },
+      "now": "2026-10-30T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 07:44:00+00', 'QUEUED', 'desk')",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        },
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/detail/plan_id"
+      ],
+      "note": "13:15:20 with a test token on the session bundle: one provisional bar per quoted name, the detector over today-so-far, provisional rows"
+    },
+    {
+      "name": "rescan-live-session-gate-open",
+      "task": "baskfy.vbt.rescan",
+      "args": {
+        "run_id": 115
+      },
+      "now": "2026-10-30T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 07:44:00+00', 'QUEUED', 'desk'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00')",
+      "mask": {
+        "vb_scan_run": {
+          "started_at": "elapsed",
+          "finished_at": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_signal_daily": {
+          "created_at": "stamp"
+        },
+        "vb_breadth_daily": {
+          "created_at": "stamp"
+        },
+        "vb_plan": {
+          "plan_id": "elapsed",
+          "created_at": "stamp"
+        },
+        "vb_plan_line": {
+          "client_id": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_plan_skip": {
+          "created_at": "stamp"
+        },
+        "vb_session": {
+          "plan_ids": "elapsed",
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_config": {
+          "updated_at": "stamp"
+        },
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/detail/plan_id"
+      ],
+      "note": "the live scan with a book on the desk (the plan reads it if the provisional gate opens)"
+    },
+    {
+      "name": "sweep-idle",
+      "task": "baskfy.vbt.rescan_sweep",
+      "args": {},
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "sweep-two-desk-rows",
+      "task": "baskfy.vbt.rescan_sweep",
+      "args": [],
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 07:40:00+00', 'QUEUED', 'desk'); INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 07:41:00+00', 'QUEUED', 'cli'); INSERT INTO vb_scan_run (user_id, requested_at, status, source, task_id) VALUES (1, TIMESTAMPTZ '2026-10-30 07:42:00+00', 'QUEUED', 'desk', 'already-published'); INSERT INTO vb_scan_run (user_id, requested_at, status, source) VALUES (1, TIMESTAMPTZ '2026-10-30 07:39:00+00', 'RUNNING', 'desk')",
+      "mask": {
+        "vb_scan_run": {
+          "task_id": "elapsed",
+          "created_at": "stamp"
+        }
+      },
+      "note": "two QUEUED desk rows published to compute, oldest first; one already published and one RUNNING left alone"
+    },
+    {
+      "name": "check-detect-fresh",
+      "task": "baskfy.vbt.check_detect_fresh",
+      "args": {},
+      "now": "2026-10-29T21:30:00"
+    },
+    {
+      "name": "check-detect-fresh-friday",
+      "task": "baskfy.vbt.check_detect_fresh",
+      "args": {},
+      "now": "2026-10-30T21:30:00"
+    },
+    {
+      "name": "check-detect-stale",
+      "task": "baskfy.vbt.check_detect_fresh",
+      "args": {},
+      "now": "2026-10-29T21:30:00",
+      "seed_sql": "DELETE FROM vb_breadth_daily WHERE user_id = 1 AND date > DATE '2026-10-23'",
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "the newest breadth row is 10-23, six days old: VBT_DETECT_STALE (warning), mailed"
+    },
+    {
+      "name": "check-detect-never",
+      "task": "baskfy.vbt.check_detect_fresh",
+      "args": {},
+      "now": "2026-10-29T21:30:00",
+      "seed_sql": "DELETE FROM vb_breadth_daily WHERE user_id = 1",
+      "payload_mask": [
+        "/alert/raised_at"
+      ]
+    },
+    {
+      "name": "check-detect-saturday",
+      "task": "baskfy.vbt.check_detect_fresh",
+      "args": {},
+      "now": "2026-10-31T21:30:00"
+    },
+    {
+      "name": "check-detect-no-sole-user",
+      "task": "baskfy.vbt.check_detect_fresh",
+      "args": {},
+      "now": "2026-10-29T21:30:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "check-orders-none",
+      "task": "baskfy.vbt.check_orders_past_expiry",
+      "args": {},
+      "now": "2026-10-29T21:40:00"
+    },
+    {
+      "name": "check-orders-past-expiry",
+      "task": "baskfy.vbt.check_orders_past_expiry",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00'); UPDATE vb_order SET expires_after_session = DATE '2026-10-27' WHERE instrument_id = 2310; UPDATE vb_order SET expires_after_session = DATE '2026-10-28' WHERE instrument_id = 1673; UPDATE vb_order SET expires_after_session = DATE '2026-10-29' WHERE instrument_id = 2270; UPDATE vb_order SET expires_after_session = DATE '2026-10-20' WHERE instrument_id IN (37, 618)",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "a SENT and a PARTIAL limit past their window (CRITICAL, mailed); a window ending today and the terminal states are not late"
+    },
+    {
+      "name": "check-orders-saturday",
+      "task": "baskfy.vbt.check_orders_past_expiry",
+      "args": {},
+      "now": "2026-10-31T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00'); UPDATE vb_order SET expires_after_session = DATE '2026-10-27' WHERE instrument_id = 2310; UPDATE vb_order SET expires_after_session = DATE '2026-10-28' WHERE instrument_id = 1673; UPDATE vb_order SET expires_after_session = DATE '2026-10-29' WHERE instrument_id = 2270; UPDATE vb_order SET expires_after_session = DATE '2026-10-20' WHERE instrument_id IN (37, 618)",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "check-orders-no-sole-user",
+      "task": "baskfy.vbt.check_orders_past_expiry",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "check-naked-none",
+      "task": "baskfy.vbt.check_naked_positions",
+      "args": {},
+      "now": "2026-10-29T21:40:00"
+    },
+    {
+      "name": "check-naked-positions",
+      "task": "baskfy.vbt.check_naked_positions",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00')",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "two open positions with no GTT: VBT_POSITION_NAKED (CRITICAL), mailed"
+    },
+    {
+      "name": "check-naked-saturday",
+      "task": "baskfy.vbt.check_naked_positions",
+      "args": {},
+      "now": "2026-10-31T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00')",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "check-without-bars-empty-book",
+      "task": "baskfy.vbt.check_positions_without_bars",
+      "args": {},
+      "now": "2026-10-29T21:40:00"
+    },
+    {
+      "name": "check-without-bars",
+      "task": "baskfy.vbt.check_positions_without_bars",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00')",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "a held name with no bar at all and one silent since 10-15: VBT_POSITION_NO_BAR (warning), mailed"
+    },
+    {
+      "name": "check-without-bars-printing",
+      "task": "baskfy.vbt.check_positions_without_bars",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1')",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "check-without-bars-saturday",
+      "task": "baskfy.vbt.check_positions_without_bars",
+      "args": {},
+      "now": "2026-10-31T21:40:00",
+      "seed_sql": "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, gtt_id, gtt_trigger, partial_done, trail) VALUES (1, 235, DATE '2026-10-16', 746.90, 30, 30, 657.27, 657.27, 'g1', NULL, false, NULL), (1, 936, DATE '2026-10-26', 1310.90, 18, 18, 1153.59, 1153.59, NULL, NULL, false, NULL), (1, 37, DATE '2026-10-23', 3137.70, 9, 9, 2761.18, 2761.18, 'g3', 2800.00, false, NULL), (1, 1309, DATE '2026-10-23', 381.15, 60, 40, 335.41, 381.15, 'g4', NULL, true, 'MA10'), (1, 2642, DATE '2026-10-07', 2906.00, 8, 8, 2557.28, 2830.00, 'g5', NULL, false, NULL), (1, 3136, DATE '2026-10-20', 100.00, 10, 10, 88.00, 88.00, 'g6', NULL, false, NULL), (1, 2222, DATE '2026-10-01', 50.00, 100, 100, 44.00, 44.00, NULL, NULL, false, NULL), (1, 894, DATE '2026-10-07', 188.80, 100, 100, 166.14, 166.14, 'g8', NULL, false, NULL), (1, 1973, DATE '2026-10-07', 308.70, 60, 60, 271.66, 271.66, 'g9', NULL, false, NULL), (1, 1157, DATE '2026-10-08', 130.05, 150, 150, 114.44, 114.44, 'g10', NULL, false, 'MA20'); INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_entered, quantity_open, initial_stop, stop_price, state, closed_on, exit_avg, close_reason, pnl_inr) VALUES (1, 1696, DATE '2026-10-06', 469.15, 20, 0, 412.85, 412.85, 'CLOSED', DATE '2026-10-20', 544.18, 'EMA_EXIT', 1500.50); INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, filled_quantity, created_at) VALUES (1, 2310, DATE '2026-10-23', 700.00, 616.00, 50, 'SENT', 0, TIMESTAMPTZ '2026-10-23 16:00:00+00'), (1, 1872, DATE '2026-10-22', 2003.90, 1763.43, 5, 'PROPOSED', 0, TIMESTAMPTZ '2026-10-22 16:00:00+00'), (1, 2270, DATE '2026-10-28', 251.15, 221.01, 100, 'CONFIRMED', 0, TIMESTAMPTZ '2026-10-28 16:00:00+00'), (1, 1673, DATE '2026-10-29', 147.80, 130.06, 100, 'PARTIAL', 40, TIMESTAMPTZ '2026-10-29 16:00:00+00'), (1, 37, DATE '2026-10-29', 3976.70, 3499.50, 2, 'FILLED', 2, TIMESTAMPTZ '2026-10-30 04:00:00+00'), (1, 618, DATE '2026-10-20', 2500.00, 2200.00, 4, 'CANCELLED', 0, TIMESTAMPTZ '2026-10-20 16:00:00+00')",
+      "mask": {
+        "vb_position": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "vb_order": {
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "check-without-bars-no-sole-user",
+      "task": "baskfy.vbt.check_positions_without_bars",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "check-naked-no-sole-user",
+      "task": "baskfy.vbt.check_naked_positions",
+      "args": {},
+      "now": "2026-10-29T21:40:00",
+      "env": {
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    }
+  ]
+}

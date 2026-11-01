@@ -207,11 +207,19 @@ class VbtStore(Protocol):
 
     def lock_session_for_update(self, day: dt.date) -> AbstractContextManager[None]:
         """The day's ``vb_session`` row locked for the whole of a confirm — the re-read, the
-        gateway call and the writes — so two browser tabs cannot confirm past a cap together."""
+        gateway call and the writes — so two browser tabs cannot confirm past a cap together.
+
+        On Postgres this is one transaction per confirm, ``NOWAIT``, and a held lock is a 409
+        before anything is read or sent (R8.VB1)."""
         ...
 
     def entries_taken(self, day: dt.date) -> int:
         """`04` §5.3 — orders of this session already CONFIRMED, SENT or FILLED."""
+        ...
+
+    def order_for_signal(self, instrument_id: int, signal_date: dt.date) -> int | None:
+        """The ``vb_order`` id already written for this name on this signal, in any state —
+        ``uq_vb_order_one_per_signal`` allows one (R8.VB2)."""
         ...
 
 
@@ -295,6 +303,22 @@ def _open_entries_in(store: Any, instrument_id: int) -> int:  # noqa: ANN401 - a
     )
 
 
+def _signal_refusal(store: VbtStore, instrument_id: int, signal_date: dt.date) -> str | None:
+    """R8.VB2: ``uq_vb_order_one_per_signal`` allows one ``vb_order`` per (user, signal, name),
+    in any state. Before this check the gateway sent the order and *then* the insert failed, so a
+    second entry on the same signal — an EVENING or MORNING plan sharing its ``signal_date`` with
+    an earlier LIVE plan's entry (LV10 pyramiding lets it past the held check) — reached the
+    broker with no ``vb_order`` row, no GTT, and its line left ``PROPOSED`` behind a 500. The
+    same signal is one entry; a fresh signal is a fresh date. Asked before anything is sent."""
+    existing = store.order_for_signal(int(instrument_id), signal_date)
+    if existing is None:
+        return None
+    return (
+        f"ALREADY_SENT: order {existing} already took this name on the {signal_date} signal; "
+        "one entry per name per signal"
+    )
+
+
 def _held_refusal(store: Any, instrument_id: int, sizing: Any) -> str | None:  # noqa: ANN401
     """LV10 (Maulik, 28 Sep 2026): a fresh signal in a held name is a new entry, up to
     ``max_entries_per_name``; with pyramiding off, one position per name as before."""
@@ -348,6 +372,10 @@ async def _place_limit(  # noqa: PLR0913 - a confirm is its line, its gateway an
         reason = _reconcile.refusal(unresolved)
         store.set_line(line["id"], state="REJECTED", note=reason)
         return _blocked(reason, simulated=gates.dry_run)
+    signal = _signal_refusal(store, int(line["instrument_id"]), plan["session_date"])
+    if signal is not None:
+        store.set_line(line["id"], state="REJECTED", note=signal)
+        return _blocked(signal, simulated=gates.dry_run)
 
     limit = Decimal(str(line["limit_price"]))
     quantity = int(line["quantity"])
@@ -447,6 +475,10 @@ async def _buy_at_market(  # noqa: PLR0913 - a confirm is its line, its gateway 
         reason = _reconcile.refusal(unresolved)
         store.set_line(line["id"], state="REJECTED", note=reason)
         return _blocked(reason, simulated=gates.dry_run)
+    signal = _signal_refusal(store, int(line["instrument_id"]), plan["session_date"])
+    if signal is not None:
+        store.set_line(line["id"], state="REJECTED", note=signal)
+        return _blocked(signal, simulated=gates.dry_run)
 
     preview = Decimal(str(line["limit_price"] or 0))
     reference = last_price if last_price is not None and last_price > _ZERO else preview

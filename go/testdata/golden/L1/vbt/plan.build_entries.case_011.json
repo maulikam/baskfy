@@ -1,0 +1,175 @@
+{
+ "fn": "baskfy_core.vbt.plan.build_entries",
+ "inputs": {
+  "book": {
+   "cash_available_inr": "1000000",
+   "entries_already_this_session": 0,
+   "open_entry_counts": {},
+   "open_exposure_inr": "0",
+   "open_instrument_ids": [
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+   ],
+   "positions_naked_of_gtt": [],
+   "working_instrument_ids": []
+  },
+  "candidates": [
+   {
+    "close_raw": "250.00",
+    "instrument_id": 1,
+    "locked_upper_circuit": false,
+    "rank_key": 9000,
+    "signal_date": "2026-10-27",
+    "symbol": "AAA",
+    "turnover_avg_inr": "500000000"
+   },
+   {
+    "close_raw": "120.40",
+    "instrument_id": 2,
+    "locked_upper_circuit": false,
+    "rank_key": 7000,
+    "signal_date": "2026-10-27",
+    "symbol": "BBB",
+    "turnover_avg_inr": "500000000"
+   },
+   {
+    "close_raw": "64.85",
+    "instrument_id": 3,
+    "locked_upper_circuit": false,
+    "rank_key": 8000,
+    "signal_date": "2026-10-27",
+    "symbol": "CCC",
+    "turnover_avg_inr": "500000000"
+   }
+  ],
+  "config": {
+   "breadth": {
+    "dma_bars": 200,
+    "min_pct_above_dma": 40.0
+   },
+   "costs": {
+    "cost_pct_per_side": 0.25
+   },
+   "data": {
+    "etf_name_pattern": "\\bETF\\b",
+    "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+    "etf_universe_slug": "etf",
+    "instrument_type": "EQ",
+    "keep_null_series": true,
+    "rolling_min_share": 0.9,
+    "series_allowed": [
+     "EQ",
+     "BE",
+     "BZ"
+    ],
+    "thin_session_min_periods": 5,
+    "thin_session_min_share": 0.25,
+    "thin_session_window_bars": 41
+   },
+   "entry": {
+    "fill_through_pct": 0.0,
+    "limit_at": "SIGNAL_CLOSE",
+    "valid_sessions": 3
+   },
+   "exits": {
+    "gtt_band_max_pct": 0.15,
+    "gtt_band_min_pct": 0.005,
+    "gtt_limit_fraction": 0.97,
+    "no_bar_tolerance_sessions": 5,
+    "qulla": {
+     "breakeven_after_r": 1.0,
+     "fast_trail_min_adr_pct": 6.0,
+     "max_stop_adr_multiple": 1.0,
+     "max_stop_distance_pct": 10.0,
+     "partial_denominator": 3,
+     "partial_earliest_bar": 3,
+     "partial_latest_bar": 5,
+     "partial_numerator": 1
+    },
+    "qulla_exits": true,
+    "stop_pct": 12.0,
+    "trail_ema_bars": 21
+   },
+   "scan": {
+    "min_change_pct": 6.5,
+    "min_close_raw_inr": 30.0,
+    "min_vol_sma": 25000.0,
+    "min_volume": 50000.0,
+    "vol_mult": 3.0,
+    "vol_sma_bars": 50
+   },
+   "sizing": {
+    "first_live_sessions": 5,
+    "max_entries_per_name": 2,
+    "max_new_entries_per_session": 3,
+    "max_position_pct": 12.5,
+    "max_position_vs_turnover": 0.01,
+    "max_slots": 10,
+    "min_trade_value_inr": "10000",
+    "pyramiding": true,
+    "risk_multiplier_first_live": 0.5
+   },
+   "trend": {
+    "breakout_high_bars": 20,
+    "dma_bars": 200,
+    "max_change_pct": 15.0,
+    "max_ret_20_pct": 25.0,
+    "min_close_position": 0.6,
+    "min_turnover_avg_inr": 20000000.0,
+    "ret_bars": 20,
+    "turnover_bars": 20
+   }
+  },
+  "equity": "1000000",
+  "gate": "OPEN",
+  "max_open_positions": 50,
+  "slot_multiplier": "1",
+  "tick": null
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a cap above 10 never exceeds the strategy's ten. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "lines": [
+   {
+    "cap": "SLOT",
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 400,
+    "reason": null,
+    "stop_price": "220.00",
+    "symbol": "AAA",
+    "value_inr": "100000.00"
+   }
+  ],
+  "skipped": [
+   {
+    "detail": "10 slots, positions and working orders",
+    "instrument_id": 3,
+    "reason": "SLOTS_FULL",
+    "symbol": "CCC"
+   },
+   {
+    "detail": "10 slots, positions and working orders",
+    "instrument_id": 2,
+    "reason": "SLOTS_FULL",
+    "symbol": "BBB"
+   }
+  ]
+ }
+}

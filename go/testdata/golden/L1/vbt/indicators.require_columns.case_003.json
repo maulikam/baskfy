@@ -1,0 +1,135 @@
+{
+ "fn": "baskfy_core.vbt.indicators.require_columns",
+ "inputs": {
+  "bars": {
+   "columns": [
+    "instrument_id",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close"
+   ],
+   "dtypes": {
+    "close": "Float64",
+    "date": "Date",
+    "high": "Float64",
+    "instrument_id": "Int64",
+    "low": "Float64",
+    "open": "Float64"
+   },
+   "rows": [
+    [
+     1,
+     "2024-01-01",
+     100.01,
+     102.34,
+     99.52,
+     101.84
+    ],
+    [
+     1,
+     "2024-01-02",
+     101.75,
+     101.98,
+     101.08,
+     101.31
+    ],
+    [
+     1,
+     "2024-01-03",
+     101.54,
+     102.18,
+     98.87,
+     99.49
+    ],
+    [
+     1,
+     "2024-01-04",
+     99.69,
+     99.88,
+     99.54,
+     99.73
+    ],
+    [
+     1,
+     "2024-01-05",
+     99.98,
+     100.04,
+     99.88,
+     99.94
+    ],
+    [
+     1,
+     "2024-01-08",
+     99.68,
+     99.84,
+     97.92,
+     98.07
+    ],
+    [
+     1,
+     "2024-01-09",
+     97.51,
+     97.69,
+     96.57,
+     96.75
+    ],
+    [
+     1,
+     "2024-01-10",
+     96.32,
+     96.9,
+     95.97,
+     96.55
+    ],
+    [
+     1,
+     "2024-01-11",
+     96.33,
+     97.25,
+     96.05,
+     96.97
+    ],
+    [
+     1,
+     "2024-01-12",
+     97.13,
+     98.62,
+     97.05,
+     98.54
+    ],
+    [
+     1,
+     "2024-01-15",
+     98.64,
+     99.57,
+     98.21,
+     99.13
+    ],
+    [
+     1,
+     "2024-01-16",
+     98.93,
+     99.62,
+     97.45,
+     98.13
+    ]
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "close_raw and volume missing: ValueError names both. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "bars are missing required columns ['close_raw', 'volume']; got ['instrument_id', 'date', 'open', 'high', 'low', 'close']",
+   "type": "ValueError"
+  }
+ }
+}

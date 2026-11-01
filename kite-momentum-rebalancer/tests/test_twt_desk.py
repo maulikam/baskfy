@@ -776,3 +776,184 @@ class TestTheDeskModuleNamesNoBroker:
         for verb in ("kc.place_order", "kc.place_gtt", "kc.delete_gtt", "kc.cancel_order"):
             assert verb not in text, f"{verb} is named in app/twt_desk.py"
         assert "get_gtts" in text  # the one read, named on purpose
+
+
+# =========================================================================================
+# R8.TD1 — the session lock is one transaction per confirm, and never waits
+# =========================================================================================
+class _LockBusy(Exception):
+    """What psycopg raises for ``FOR UPDATE NOWAIT`` on a held row (``lock_not_available``)."""
+
+    sqlstate = "55P03"
+
+
+class _RecordingConn:
+    """A Postgres-shaped connection that records every statement and can refuse the lock."""
+
+    def __init__(self, *, busy: bool = False) -> None:
+        self.sql: list[str] = []
+        self.busy = busy
+
+    def execute(self, sql: str, params: object = ()) -> _RecordingConn:  # noqa: ARG002
+        self.sql.append(" ".join(sql.split()))
+        if self.busy and "NOWAIT" in sql:
+            raise _LockBusy("could not obtain lock on row in relation \"tw_session\"")
+        return self
+
+
+def _verbs(conn: _RecordingConn) -> list[str]:
+    return [s.split()[0] if not s.startswith("SELECT") else s for s in conn.sql]
+
+
+class TestTheSessionLock:
+    """``lock_session_for_update`` used to hold its ``FOR UPDATE`` for one autocommit statement,
+    which serialised nothing (R8.17). These pin R8.TD1: one ``BEGIN`` … ``COMMIT`` around the
+    whole confirm, ``NOWAIT`` so a held row is a 409 and not a hung event loop, and a ``COMMIT``
+    on an exception too, so a row written after the broker answered is kept as autocommit kept
+    it."""
+
+    def test_postgres_opens_locks_nowait_and_commits(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        with store.lock_session_for_update(SESSION):
+            conn.execute("UPDATE public.tw_plan_line SET state = 'SENT'")
+        assert _verbs(conn) == [
+            "INSERT",
+            "BEGIN",
+            (
+                "SELECT 1 FROM public.tw_session WHERE user_id = ? AND session_date = ? "
+                "FOR UPDATE NOWAIT"
+            ),
+            "UPDATE",
+            "COMMIT",
+        ]
+
+    def test_a_nested_lock_opens_one_transaction(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        with store.lock_session_for_update(SESSION), store.lock_session_for_update(SESSION):
+            pass
+        verbs = _verbs(conn)
+        assert verbs.count("BEGIN") == 1 and verbs.count("COMMIT") == 1
+        assert verbs[-1] == "COMMIT"
+
+    def test_a_held_row_is_a_409_rolled_back_before_anything_runs(self) -> None:
+        conn = _RecordingConn(busy=True)
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        ran = []
+        with pytest.raises(W.HTTPException) as refused, store.lock_session_for_update(SESSION):
+            ran.append(True)
+        assert refused.value.status_code == 409
+        assert str(refused.value.detail).startswith("SESSION_BUSY")
+        assert ran == []
+        assert _verbs(conn)[-1] == "ROLLBACK"
+        assert "COMMIT" not in _verbs(conn)
+        assert store._lock_depth == 0  # noqa: SLF001 - the lock's own bookkeeping
+
+    def test_an_exception_inside_still_commits_what_was_written(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        with pytest.raises(RuntimeError), store.lock_session_for_update(SESSION):
+            conn.execute("INSERT INTO public.tw_order (state) VALUES ('SENT')")
+            raise RuntimeError("after the broker answered")
+        assert _verbs(conn)[-2:] == ["INSERT", "COMMIT"]
+
+    def test_sqlite_commits_on_the_way_out(self, store, tmp_path) -> None:  # noqa: ANN001
+        with store.lock_session_for_update(SESSION):
+            store.bump_session(SESSION, mode="DRY_RUN", confirms=1)
+        other = sqlite3.connect(tmp_path / "twt.db")
+        try:
+            row = other.execute(
+                "SELECT confirms FROM tw_session WHERE user_id = 1 AND session_date = ?",
+                (SESSION.isoformat(),),
+            ).fetchone()
+        finally:
+            other.close()
+        assert row == (1,)
+        assert store.conn.in_transaction is False
+
+
+def _pg_url() -> str | None:
+    import os  # noqa: PLC0415
+
+    url = os.environ.get("BASKFY_TEST_DATABASE_URL")
+    return None if not url else url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+requires_db = pytest.mark.skipif(_pg_url() is None, reason="BASKFY_TEST_DATABASE_URL is not set")
+
+
+class _NeverGateway:
+    async def place(self, **_: object) -> dict:
+        raise AssertionError("a refused confirm reached the gateway")
+
+    async def place_gtt_stop(self, **_: object) -> dict:
+        raise AssertionError("a refused confirm reached the gateway")
+
+
+@requires_db
+class TestTheSessionLockOnPostgres:
+    """R8.TD1 on a bed clone: a held row is a 409 before the broker, nested blocks open one
+    transaction, and what the holder wrote is invisible until its outermost block commits."""
+
+    def test_a_second_confirm_of_a_held_session_is_busy_and_sends_nothing(self) -> None:
+        import asyncio  # noqa: PLC0415
+
+        from app.analytics.pg import Connection  # noqa: PLC0415
+
+        url = _pg_url()
+        assert url is not None
+        now = dt.datetime(2026, 10, 30, 10, 0, tzinfo=IST)
+        day = now.date()
+        setup = Connection(url)
+        tag = uuid.uuid4().hex[:8]
+        uid = int(setup.execute(
+            "INSERT INTO app_user (public_id, email) VALUES (?, ?) RETURNING id",
+            (f"twlock-{tag}", f"twlock-{tag}@x.test"),
+        ).fetchone()["id"])  # fmt: skip
+        conns = [Connection(url), Connection(url)]
+        try:
+            iid = int(setup.execute(
+                "SELECT id FROM instrument WHERE symbol ~ '^[A-Z]+$' ORDER BY id LIMIT 1"
+            ).fetchone()["id"])  # fmt: skip
+            plan_id = str(uuid.uuid4())
+            pk = int(setup.execute(
+                "INSERT INTO tw_plan (plan_id, user_id, session_date, source, built_at, "
+                "expires_at, plan_hash, gate, sleeve_equity_inr, total_new_exposure_inr) "
+                "VALUES (?, ?, ?, 'LIVE', ?, ?, 'h', 'OPEN', 1000000, 0) RETURNING id",
+                (plan_id, uid, day, now - dt.timedelta(minutes=1),
+                 now + dt.timedelta(minutes=29)),
+            ).fetchone()["id"])  # fmt: skip
+            line_id = int(setup.execute(
+                "INSERT INTO tw_plan_line (plan_id, user_id, instrument_id, kind, state, "
+                "quantity, stop_price, value_inr, client_id) "
+                "VALUES (?, ?, ?, 'BUY_AT_OPEN', 'PROPOSED', 10, 80, 1000, ?) RETURNING id",
+                (pk, uid, iid, f"{plan_id}:X"),
+            ).fetchone()["id"])  # fmt: skip
+            a, b = (W.PgTwtStore(c, user_id=uid, schema="public") for c in conns)
+            with a.lock_session_for_update(day):
+                with a.lock_session_for_update(day):
+                    a.bump_session(day, mode="DRY_RUN", confirms=1)
+                assert a.conn.execute("SELECT 1 AS one").fetchone()["one"] == 1
+                with pytest.raises(W.HTTPException) as refused, b.lock_session_for_update(day):
+                    pass
+                assert refused.value.status_code == 409
+                assert str(refused.value.detail).startswith("SESSION_BUSY")
+                with pytest.raises(W.HTTPException) as again:
+                    asyncio.run(
+                        X.execute_line(
+                            b, _NeverGateway(), plan_id=plan_id, line_id=line_id,
+                            confirm="true", now=now,
+                        )
+                    )
+                assert again.value.status_code == 409
+                assert b.line(line_id)["state"] == "PROPOSED"
+                assert (b.session(day) or {}).get("confirms", 0) == 0, "nested exit committed"
+            assert b.session(day)["confirms"] == 1
+            with b.lock_session_for_update(day):
+                pass
+        finally:
+            for c in conns:
+                c.close()
+            setup.execute("DELETE FROM app_user WHERE id = ?", (uid,))
+            setup.close()

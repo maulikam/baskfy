@@ -1,0 +1,273 @@
+{
+ "note": "Lane exec_gateway (wave D2): app/lifecycle.py ported (GET /lifecycle, GET /lifecycle/data, POST /lifecycle/adopt). Every refusal of the adoption form, then adoptions into all three sleeves in DRY_RUN: each arms its stop through the SLEEVE's gateway (twt/vbt/swing journals graded byte for byte), writes tw_/vb_/sw_position + fill + lv_adoption, and redirects 303. The replay Kite's order/GTT call log must stay EMPTY. Never a live order.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ],
+  "public.tw_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.tw_fill": [
+   "created_at"
+  ],
+  "public.vb_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.vb_fill": [
+   "created_at"
+  ],
+  "public.sw_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.sw_fill": [
+   "created_at"
+  ],
+  "public.lv_adoption": [
+   "created_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "lifecycle: the page at 11:00 lists every open sleeve position against the broker",
+   "method": "GET",
+   "path": "/lifecycle",
+   "clock": "mid"
+  },
+  {
+   "name": "lifecycle: the data view, same rows as JSON (r.__dict__, Decimals as strings)",
+   "method": "GET",
+   "path": "/lifecycle/data"
+  },
+  {
+   "name": "adopt: no fields at all is FastAPI's 422, nothing read or written",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {}
+  },
+  {
+   "name": "adopt: a quantity that is not an integer and a cost that is not a decimal are 422",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "INFY",
+    "quantity": "forty",
+    "avg_cost": "abc",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: without confirm nothing is written (400)",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "INFY",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: confirm=no is refused (400): only the word true, in any case",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "INFY",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "no",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: an unknown sleeve is refused (400) before any gateway is built",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "weekly",
+    "symbol": "INFY",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: a symbol the desk does not know is 404",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "NOSUCHCO",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: a name the sleeve already holds is 409",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "CUPID",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: a non-positive quantity is 400",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "INFY",
+    "quantity": "0",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: a non-positive cost is 400",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "INFY",
+    "quantity": "40",
+    "avg_cost": "-1",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: a swing adoption must name FLAG or EP (400)",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "swing",
+    "symbol": "INFY",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand",
+    "setup": "BASE"
+   }
+  },
+  {
+   "name": "adopt: twt INFY at 1500 x 40 arms a DRY_RUN GTT through the twt gateway and redirects 303",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": " TWT ",
+    "symbol": " infy ",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "TRUE",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: vbt TCS links a hand-armed GTT the broker does not list (stop from the sleeve's distance)",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "vbt",
+    "symbol": "TCS",
+    "quantity": "7",
+    "avg_cost": "3333.33",
+    "confirm": "true",
+    "gtt_id": "5150"
+   }
+  },
+  {
+   "name": "adopt: vbt ITC with no GTT arms one through the vbt gateway (no client id: the gateway mints one)",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "vbt",
+    "symbol": "ITC",
+    "quantity": "250",
+    "avg_cost": "401.15",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "adopt: swing HDFCBANK as EP arms the swing book's stop",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "swing",
+    "symbol": "HDFCBANK",
+    "quantity": "12",
+    "avg_cost": "1702.35",
+    "confirm": "true",
+    "note": "bought by hand",
+    "setup": "ep"
+   }
+  },
+  {
+   "name": "adopt: swing RELIANCE as FLAG with a setup in lower case",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "swing",
+    "symbol": "RELIANCE",
+    "quantity": "3",
+    "avg_cost": "1234.5",
+    "confirm": "true",
+    "note": "",
+    "setup": "flag"
+   }
+  },
+  {
+   "name": "adopt: re-adopting INFY into twt is now 409",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "INFY",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand"
+   }
+  },
+  {
+   "name": "lifecycle: the page after the adoptions",
+   "method": "GET",
+   "path": "/lifecycle",
+   "advance": 60
+  },
+  {
+   "name": "lifecycle: the data view after the adoptions",
+   "method": "GET",
+   "path": "/lifecycle/data"
+  },
+  {
+   "name": "adopt: at the close, twt CHENNPETRO is held (409)",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "CHENNPETRO",
+    "quantity": "40",
+    "avg_cost": "1500.00",
+    "confirm": "true",
+    "note": "bought by hand"
+   },
+   "clock": "after_close"
+  }
+ ]
+}

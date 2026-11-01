@@ -176,7 +176,15 @@ def run_chore(  # noqa: PLR0913 - the same seams `run_after_close` takes
     Never raises: a store or gateway that cannot be built is logged and counted, exactly as in
     `run_after_close`. The watch is what places orders for the rest of the session and a failed
     chore must not stop it.
+
+    The desk's seams are imported HERE, at call time, as `run_after_close` does (DECISIONS-RS
+    R8.SM2, 30 Oct 2026). Until then this body named `swing_desk` without importing it, so every
+    call from the watch — which passes no seams — raised `NameError` before its `try`, the
+    watch logged "the cutoff chore failed inside the watch", and the 10:45 cutoff and the
+    15:15 sweep only ever ran from the 15:30 backstop.
     """
+    from . import swing_desk  # noqa: PLC0415 - the page module; at call time, like the store
+
     stores = open_store or swing_desk.open_store
     build_gw = gateway or swing_desk.swing_gateway
     order_source = orders or swing_desk.order_source

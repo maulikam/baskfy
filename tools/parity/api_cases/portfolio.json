@@ -1,0 +1,2136 @@
+{
+ "cases": [
+  {
+   "name": "trackb-flags-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/flags"
+  },
+  {
+   "name": "trackb-flags-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/flags",
+   "user": "owner"
+  },
+  {
+   "name": "trackb-flags-garbage-token",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/flags",
+   "user": "garbage",
+   "note": "the router dependency refuses a bad token first"
+  },
+  {
+   "name": "trackb-free-default",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/free-access"
+  },
+  {
+   "name": "trackb-free-lower",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/free-access",
+   "query": "basket_access=free"
+  },
+  {
+   "name": "trackb-free-last-wins",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/free-access",
+   "user": "plain",
+   "query": "basket_access=FREE&basket_access=premium"
+  },
+  {
+   "name": "trackb-free-empty",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/free-access",
+   "query": "basket_access="
+  },
+  {
+   "name": "trackb-paywall-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/paywall",
+   "note": "404 while subscriptions stay dark"
+  },
+  {
+   "name": "trackb-paywall-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/paywall",
+   "user": "owner"
+  },
+  {
+   "name": "plans-anon",
+   "method": "GET",
+   "path": "/api/v1/plans",
+   "note": "public; free tier hidden while its flag is off"
+  },
+  {
+   "name": "plans-subscriber",
+   "method": "GET",
+   "path": "/api/v1/plans",
+   "user": "subscriber"
+  },
+  {
+   "name": "plans-expired-token",
+   "method": "GET",
+   "path": "/api/v1/plans",
+   "user": "expired"
+  },
+  {
+   "name": "invoices-anon",
+   "method": "GET",
+   "path": "/api/v1/invoices"
+  },
+  {
+   "name": "invoices-owner",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner"
+  },
+  {
+   "name": "invoices-subscriber",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "subscriber"
+  },
+  {
+   "name": "invoices-limit-0",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "limit=0"
+  },
+  {
+   "name": "invoices-limit-501",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "limit=501"
+  },
+  {
+   "name": "invoices-limit-abc",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "limit=abc"
+  },
+  {
+   "name": "invoices-limit-float",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "limit=5.0"
+  },
+  {
+   "name": "invoices-cursor-bad",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=abc"
+  },
+  {
+   "name": "invoices-cursor-ok",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=+12&limit=2"
+  },
+  {
+   "name": "invoices-cursor-huge",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=99999999999999999999",
+   "note": "asyncpg refuses a bigint overflow: 500"
+  },
+  {
+   "name": "invoices-limit-and-cursor-bad",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "limit=0&cursor=x",
+   "note": "FastAPI's 400 comes before the handler's cursor check"
+  },
+  {
+   "name": "invoice-pdf-anon",
+   "method": "GET",
+   "path": "/api/v1/invoices/DCL/2026-27/000001/pdf"
+  },
+  {
+   "name": "invoice-pdf-owner-missing",
+   "method": "GET",
+   "path": "/api/v1/invoices/DCL/2026-27/000001/pdf",
+   "user": "owner"
+  },
+  {
+   "name": "invoice-pdf-one-segment",
+   "method": "GET",
+   "path": "/api/v1/invoices/INV1/pdf",
+   "user": "subscriber"
+  },
+  {
+   "name": "trades-anon",
+   "method": "GET",
+   "path": "/api/v1/trades"
+  },
+  {
+   "name": "trades-owner-default",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "note": "R5.28 (fixed 30 Oct 2026, Python first): total and first/last_trade_on are the caller's own rows only"
+  },
+  {
+   "name": "trades-owner-page",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=5&offset=10"
+  },
+  {
+   "name": "trades-owner-symbol",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "symbol=%20boroltd%20&limit=3"
+  },
+  {
+   "name": "trades-owner-symbol-empty",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "symbol=&limit=2"
+  },
+  {
+   "name": "trades-owner-symbol-unknown",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "symbol=NOPE"
+  },
+  {
+   "name": "trades-owner-symbol-too-long",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "symbol=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+   "name": "trades-owner-bad-params",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=0&offset=-1"
+  },
+  {
+   "name": "trades-owner-limit-501",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=501"
+  },
+  {
+   "name": "trades-owner-offset-past-end",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "offset=20000"
+  },
+  {
+   "name": "trades-owner-offset-huge",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "offset=99999999999999999999"
+  },
+  {
+   "name": "trades-plain",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "plain",
+   "note": "tenant isolation: another account's trades never show"
+  },
+  {
+   "name": "trades-subscriber",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "subscriber"
+  },
+  {
+   "name": "brokers-anon",
+   "method": "GET",
+   "path": "/api/v1/brokers"
+  },
+  {
+   "name": "brokers-owner",
+   "method": "GET",
+   "path": "/api/v1/brokers",
+   "user": "owner",
+   "note": "no session on the bed: zerodha is not_connected"
+  },
+  {
+   "name": "brokers-plain",
+   "method": "GET",
+   "path": "/api/v1/brokers",
+   "user": "plain"
+  },
+  {
+   "name": "broker-zerodha",
+   "method": "GET",
+   "path": "/api/v1/brokers/zerodha",
+   "user": "owner"
+  },
+  {
+   "name": "broker-groww",
+   "method": "GET",
+   "path": "/api/v1/brokers/groww",
+   "user": "plain"
+  },
+  {
+   "name": "broker-unknown",
+   "method": "GET",
+   "path": "/api/v1/brokers/robinhood",
+   "user": "owner"
+  },
+  {
+   "name": "broker-case",
+   "method": "GET",
+   "path": "/api/v1/brokers/ZERODHA",
+   "user": "owner"
+  },
+  {
+   "name": "broker-too-short",
+   "method": "GET",
+   "path": "/api/v1/brokers/z",
+   "user": "owner"
+  },
+  {
+   "name": "broker-too-long",
+   "method": "GET",
+   "path": "/api/v1/brokers/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "user": "owner"
+  },
+  {
+   "name": "broker-anon",
+   "method": "GET",
+   "path": "/api/v1/brokers/zerodha"
+  },
+  {
+   "name": "broker-callback-anon",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback"
+  },
+  {
+   "name": "broker-callback-missing",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner"
+  },
+  {
+   "name": "broker-callback-short",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abc&state=def"
+  },
+  {
+   "name": "broker-callback-no-tenant",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abcdefgh123&state=statestatestate",
+   "note": "no sole tenant configured on the bed: 503"
+  },
+  {
+   "name": "broker-callback-plain",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "plain",
+   "query": "request_token=abcdefgh123&state=statestatestate"
+  },
+  {
+   "name": "portfolios-sample-csv",
+   "method": "GET",
+   "path": "/api/v1/portfolios/sample-csv"
+  },
+  {
+   "name": "portfolios-sample-csv-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/sample-csv",
+   "user": "owner"
+  },
+  {
+   "name": "portfolios-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolios"
+  },
+  {
+   "name": "portfolios-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios",
+   "user": "owner"
+  },
+  {
+   "name": "portfolios-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolios",
+   "user": "subscriber"
+  },
+  {
+   "name": "portfolios-plain",
+   "method": "GET",
+   "path": "/api/v1/portfolios",
+   "user": "plain",
+   "note": "no portfolios: empty forest"
+  },
+  {
+   "name": "portfolio-3-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-7-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/7",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-8-owner-empty",
+   "method": "GET",
+   "path": "/api/v1/portfolios/8",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-2-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2",
+   "user": "subscriber"
+  },
+  {
+   "name": "portfolio-2-owner-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2",
+   "user": "owner",
+   "note": "another tenant's portfolio reads as absent"
+  },
+  {
+   "name": "portfolio-3-plain-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3",
+   "user": "plain"
+  },
+  {
+   "name": "portfolio-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3"
+  },
+  {
+   "name": "portfolio-bad-id",
+   "method": "GET",
+   "path": "/api/v1/portfolios/abc",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-float-id",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3.0",
+   "user": "owner",
+   "note": "pydantic's lax int accepts 3.0"
+  },
+  {
+   "name": "portfolio-underscore-id",
+   "method": "GET",
+   "path": "/api/v1/portfolios/0_3",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-zero",
+   "method": "GET",
+   "path": "/api/v1/portfolios/0",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-negative",
+   "method": "GET",
+   "path": "/api/v1/portfolios/-7",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-huge",
+   "method": "GET",
+   "path": "/api/v1/portfolios/99999999999999999999",
+   "user": "owner"
+  },
+  {
+   "name": "portfolio-trailing-slash",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/",
+   "user": "owner"
+  },
+  {
+   "name": "rollup-3-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "rollup-7-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/7/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "rollup-5-owner-empty",
+   "method": "GET",
+   "path": "/api/v1/portfolios/5/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "rollup-2-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/holdings",
+   "user": "subscriber"
+  },
+  {
+   "name": "rollup-2-owner-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "rollup-bad-id",
+   "method": "GET",
+   "path": "/api/v1/portfolios/x/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "rollup-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/holdings"
+  },
+  {
+   "name": "rebalances-6-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner"
+  },
+  {
+   "name": "rebalances-2-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/rebalances",
+   "user": "subscriber"
+  },
+  {
+   "name": "rebalances-3-owner-empty",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/rebalances",
+   "user": "owner"
+  },
+  {
+   "name": "rebalances-6-cursor-past",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=2"
+  },
+  {
+   "name": "rebalances-6-cursor-after",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=3&limit=1"
+  },
+  {
+   "name": "rebalances-cursor-bad",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=nope",
+   "note": "a bad cursor is a 404 here (not the invoices 400)"
+  },
+  {
+   "name": "rebalances-limit-0",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "limit=0"
+  },
+  {
+   "name": "rebalances-bad-id-and-limit",
+   "method": "GET",
+   "path": "/api/v1/portfolios/z/rebalances",
+   "user": "owner",
+   "query": "limit=900",
+   "note": "path and query errors accumulate"
+  },
+  {
+   "name": "rebalances-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/rebalances",
+   "user": "owner"
+  },
+  {
+   "name": "rebalance-2-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/2",
+   "user": "owner"
+  },
+  {
+   "name": "rebalance-1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/rebalances/1",
+   "user": "subscriber"
+  },
+  {
+   "name": "rebalance-wrong-portfolio",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/1",
+   "user": "owner"
+  },
+  {
+   "name": "rebalance-missing",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/999",
+   "user": "owner"
+  },
+  {
+   "name": "rebalance-bad-ids",
+   "method": "GET",
+   "path": "/api/v1/portfolios/a/rebalances/b",
+   "user": "owner"
+  },
+  {
+   "name": "rebalance-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/rebalances/1",
+   "user": "owner"
+  },
+  {
+   "name": "rebalance-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/2"
+  },
+  {
+   "name": "overview-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview"
+  },
+  {
+   "name": "overview-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "note": "trade XIRR, week/month moves, consolidated chart, sync status"
+  },
+  {
+   "name": "overview-owner-range-1M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=1M"
+  },
+  {
+   "name": "overview-owner-range-3M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=3M"
+  },
+  {
+   "name": "overview-owner-range-3Y",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=3Y"
+  },
+  {
+   "name": "overview-owner-range-ALL",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=ALL"
+  },
+  {
+   "name": "overview-owner-range-bad",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=1y"
+  },
+  {
+   "name": "overview-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "subscriber"
+  },
+  {
+   "name": "overview-plain",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "plain",
+   "note": "no portfolios, no brokers: the empty picture"
+  },
+  {
+   "name": "holdings-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/holdings"
+  },
+  {
+   "name": "holdings-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolio/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "holdings-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolio/holdings",
+   "user": "subscriber"
+  },
+  {
+   "name": "holdings-plain",
+   "method": "GET",
+   "path": "/api/v1/portfolio/holdings",
+   "user": "plain"
+  },
+  {
+   "name": "activity-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity"
+  },
+  {
+   "name": "activity-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner"
+  },
+  {
+   "name": "activity-owner-limit-1",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=1"
+  },
+  {
+   "name": "activity-owner-portfolio-3",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=3"
+  },
+  {
+   "name": "activity-owner-portfolio-6",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=6"
+  },
+  {
+   "name": "activity-owner-portfolio-7",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=7"
+  },
+  {
+   "name": "activity-owner-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=2"
+  },
+  {
+   "name": "activity-bad-params",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=0&limit=201"
+  },
+  {
+   "name": "activity-bad-int",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=abc&limit=0"
+  },
+  {
+   "name": "activity-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "subscriber"
+  },
+  {
+   "name": "activity-plain",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "plain"
+  },
+  {
+   "name": "reconciliation-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation"
+  },
+  {
+   "name": "reconciliation-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner"
+  },
+  {
+   "name": "reconciliation-owner-OPEN",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner",
+   "query": "state=OPEN"
+  },
+  {
+   "name": "reconciliation-owner-RESOLVED",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner",
+   "query": "state=RESOLVED"
+  },
+  {
+   "name": "reconciliation-owner-DISMISSED",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner",
+   "query": "state=DISMISSED"
+  },
+  {
+   "name": "reconciliation-bad-state",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner",
+   "query": "state=open"
+  },
+  {
+   "name": "reconciliation-plain",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "plain"
+  },
+  {
+   "name": "suggestions-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/suggestions"
+  },
+  {
+   "name": "suggestions-owner",
+   "method": "GET",
+   "path": "/api/v1/portfolio/suggestions",
+   "user": "owner"
+  },
+  {
+   "name": "suggestions-subscriber",
+   "method": "GET",
+   "path": "/api/v1/portfolio/suggestions",
+   "user": "subscriber"
+  },
+  {
+   "name": "suggestions-plain",
+   "method": "GET",
+   "path": "/api/v1/portfolio/suggestions",
+   "user": "plain"
+  },
+  {
+   "name": "detail-owner-3",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3",
+   "user": "owner"
+  },
+  {
+   "name": "nav-owner-3",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3/nav",
+   "user": "owner"
+  },
+  {
+   "name": "detail-owner-4",
+   "method": "GET",
+   "path": "/api/v1/portfolio/4",
+   "user": "owner"
+  },
+  {
+   "name": "nav-owner-4",
+   "method": "GET",
+   "path": "/api/v1/portfolio/4/nav",
+   "user": "owner"
+  },
+  {
+   "name": "detail-owner-5",
+   "method": "GET",
+   "path": "/api/v1/portfolio/5",
+   "user": "owner"
+  },
+  {
+   "name": "nav-owner-5",
+   "method": "GET",
+   "path": "/api/v1/portfolio/5/nav",
+   "user": "owner"
+  },
+  {
+   "name": "detail-owner-6",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6",
+   "user": "owner"
+  },
+  {
+   "name": "nav-owner-6",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner"
+  },
+  {
+   "name": "detail-owner-7",
+   "method": "GET",
+   "path": "/api/v1/portfolio/7",
+   "user": "owner"
+  },
+  {
+   "name": "nav-owner-7",
+   "method": "GET",
+   "path": "/api/v1/portfolio/7/nav",
+   "user": "owner"
+  },
+  {
+   "name": "detail-owner-8",
+   "method": "GET",
+   "path": "/api/v1/portfolio/8",
+   "user": "owner"
+  },
+  {
+   "name": "nav-owner-8",
+   "method": "GET",
+   "path": "/api/v1/portfolio/8/nav",
+   "user": "owner"
+  },
+  {
+   "name": "detail-subscriber-2",
+   "method": "GET",
+   "path": "/api/v1/portfolio/2",
+   "user": "subscriber"
+  },
+  {
+   "name": "detail-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolio/2",
+   "user": "owner"
+  },
+  {
+   "name": "detail-plain-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3",
+   "user": "plain"
+  },
+  {
+   "name": "detail-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3"
+  },
+  {
+   "name": "detail-zero",
+   "method": "GET",
+   "path": "/api/v1/portfolio/0",
+   "user": "owner"
+  },
+  {
+   "name": "detail-bad",
+   "method": "GET",
+   "path": "/api/v1/portfolio/abc",
+   "user": "owner"
+  },
+  {
+   "name": "detail-huge",
+   "method": "GET",
+   "path": "/api/v1/portfolio/99999999999999999999",
+   "user": "owner"
+  },
+  {
+   "name": "nav-subscriber-2",
+   "method": "GET",
+   "path": "/api/v1/portfolio/2/nav",
+   "user": "subscriber"
+  },
+  {
+   "name": "nav-owner-6-1M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner",
+   "query": "range=1M"
+  },
+  {
+   "name": "nav-owner-8-1M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/8/nav",
+   "user": "owner",
+   "query": "range=1M"
+  },
+  {
+   "name": "nav-owner-6-3M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner",
+   "query": "range=3M"
+  },
+  {
+   "name": "nav-owner-8-3M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/8/nav",
+   "user": "owner",
+   "query": "range=3M"
+  },
+  {
+   "name": "nav-owner-6-3Y",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner",
+   "query": "range=3Y"
+  },
+  {
+   "name": "nav-owner-8-3Y",
+   "method": "GET",
+   "path": "/api/v1/portfolio/8/nav",
+   "user": "owner",
+   "query": "range=3Y"
+  },
+  {
+   "name": "nav-owner-6-ALL",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner",
+   "query": "range=ALL"
+  },
+  {
+   "name": "nav-owner-8-ALL",
+   "method": "GET",
+   "path": "/api/v1/portfolio/8/nav",
+   "user": "owner",
+   "query": "range=ALL"
+  },
+  {
+   "name": "nav-bad-both",
+   "method": "GET",
+   "path": "/api/v1/portfolio/0/nav",
+   "user": "owner",
+   "query": "range=2Y"
+  },
+  {
+   "name": "nav-tenant",
+   "method": "GET",
+   "path": "/api/v1/portfolio/2/nav",
+   "user": "owner"
+  },
+  {
+   "name": "nav-anon",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav"
+  },
+  {
+   "name": "get-405-portfolio",
+   "method": "GET",
+   "path": "/api/v1/portfolio",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-portfolio-3-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-portfolio-reconciliation-1-resolve",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation/1/resolve",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-trades-import",
+   "method": "GET",
+   "path": "/api/v1/trades/import",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-trades-sync-today",
+   "method": "GET",
+   "path": "/api/v1/trades/sync-today",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-brokers-zerodha-connect",
+   "method": "GET",
+   "path": "/api/v1/brokers/zerodha/connect",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-brokers-zerodha-sync-holdings",
+   "method": "GET",
+   "path": "/api/v1/brokers/zerodha/sync-holdings",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-checkout-session",
+   "method": "GET",
+   "path": "/api/v1/checkout/session",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-webhooks-razorpay",
+   "method": "GET",
+   "path": "/api/v1/webhooks/razorpay",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-cb-paywall-checkout",
+   "method": "GET",
+   "path": "/api/v1/cb/paywall/checkout",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-cb-public-signup",
+   "method": "GET",
+   "path": "/api/v1/cb/public-signup",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-cb-fees-collect",
+   "method": "GET",
+   "path": "/api/v1/cb/fees/collect",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-portfolios-3-rebalance",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/rebalance",
+   "user": "owner"
+  },
+  {
+   "name": "get-405-garbage-token",
+   "method": "GET",
+   "path": "/api/v1/trades/import",
+   "user": "garbage",
+   "note": "a 405 is decided by routing, before the token is read"
+  },
+  {
+   "name": "portfolios-import-csv-get",
+   "method": "GET",
+   "path": "/api/v1/portfolios/import-csv",
+   "user": "owner",
+   "note": "Starlette: the GET /{portfolio_id} route matches it fully"
+  },
+  {
+   "name": "portfolio-trailing-slash-overview",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview/",
+   "user": "owner"
+  },
+  {
+   "name": "rv-auth-stale_epoch-portfolio-overview",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "stale_epoch",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-stale_epoch-portfolios",
+   "method": "GET",
+   "path": "/api/v1/portfolios",
+   "user": "stale_epoch",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-unknown-portfolios-3",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3",
+   "user": "unknown",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-wrong_key-trades",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "wrong_key",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-alg_none-invoices",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "alg_none",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-too_long-portfolio-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolio/holdings",
+   "user": "too_long",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-empty_bearer-portfolios",
+   "method": "GET",
+   "path": "/api/v1/portfolios",
+   "user": "empty_bearer",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-expired-portfolio-3-nav",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3/nav",
+   "user": "expired",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-unknown-brokers-callback",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "unknown",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-stale_epoch-portfolios-6-rebalances-2",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/2",
+   "user": "stale_epoch",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-garbage-portfolio-suggestions",
+   "method": "GET",
+   "path": "/api/v1/portfolio/suggestions",
+   "user": "garbage",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-unknown-plans",
+   "method": "GET",
+   "path": "/api/v1/plans",
+   "user": "unknown",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-empty_bearer-brokers",
+   "method": "GET",
+   "path": "/api/v1/brokers",
+   "user": "empty_bearer",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-wrong_key-cb-paywall",
+   "method": "GET",
+   "path": "/api/v1/cb/paywall",
+   "user": "wrong_key",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-stale_epoch-portfolio-reconciliation",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "stale_epoch",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-alg_none-portfolio-activity",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "alg_none",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-expired-portfolios-3-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/holdings",
+   "user": "expired",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-auth-unknown-invoices-X1-pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/X1/pdf",
+   "user": "unknown",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolios-3-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/holdings",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolios-6-rebalances",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolios-6-rebalances-2",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/2",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolio-6-nav",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolio-activity-portfolio_id=3",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "plain",
+   "query": "portfolio_id=3",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-trades-symbol=BOROLTD",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "plain",
+   "query": "symbol=BOROLTD",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolio-3",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3",
+   "user": "subscriber",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolio-3-nav",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3/nav",
+   "user": "subscriber",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolios-3",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3",
+   "user": "subscriber",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolios-3-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/3/holdings",
+   "user": "subscriber",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolios-6-rebalances-2",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/2",
+   "user": "subscriber",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolio-activity-portfolio_id=6",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "subscriber",
+   "query": "portfolio_id=6",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolios-2-rebalances-1",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/rebalances/1",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolios-2-rebalances",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/rebalances",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolio-reconciliation-state=RESOLVED",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "subscriber",
+   "query": "state=RESOLVED",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-invoices",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolio-2-nav-range=ALL",
+   "method": "GET",
+   "path": "/api/v1/portfolio/2/nav",
+   "user": "subscriber",
+   "query": "range=ALL",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-portfolios-2-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/holdings",
+   "user": "subscriber",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-plain-portfolio-suggestions",
+   "method": "GET",
+   "path": "/api/v1/portfolio/suggestions",
+   "user": "plain",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-subscriber-trades-symbol=BOROLTD",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "subscriber",
+   "query": "symbol=BOROLTD",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-tenant-owner-portfolio-activity-portfolio_id=2&limit=5",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=2&limit=5",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-overview-range=",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-overview-range=1Y",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=1Y",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-overview-range=1Y&range=1M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=1Y&range=1M",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-overview-range=%201Y",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=%201Y",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-overview-range=6M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "query": "range=6M",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-6-nav-range=1Y",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner",
+   "query": "range=1Y",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-6-nav-range=all",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav",
+   "user": "owner",
+   "query": "range=all",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-7-nav-range=6M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/7/nav",
+   "user": "owner",
+   "query": "range=6M",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-3-nav-range=ALL",
+   "method": "GET",
+   "path": "/api/v1/portfolio/3/nav",
+   "user": "owner",
+   "query": "range=ALL",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-4-nav-range=3M",
+   "method": "GET",
+   "path": "/api/v1/portfolio/4/nav",
+   "user": "owner",
+   "query": "range=3M",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-limit=200",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=200",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-limit=1_0",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=1_0",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-limit=%205",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=%205",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-limit=5.0",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=5.0",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-limit=5.5",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=5.5",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-limit=",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "limit=",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-portfolio_id=6&portfolio_id=x",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=6&portfolio_id=x",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-portfolio_id=99999999999999999999",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=99999999999999999999",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-portfolio_id=8&limit=3",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=8&limit=3",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-portfolio_id=4",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=4",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-activity-portfolio_id=5",
+   "method": "GET",
+   "path": "/api/v1/portfolio/activity",
+   "user": "owner",
+   "query": "portfolio_id=5",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-reconciliation-state=",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner",
+   "query": "state=",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-reconciliation-state=OPEN&state=RESOLVED",
+   "method": "GET",
+   "path": "/api/v1/portfolio/reconciliation",
+   "user": "owner",
+   "query": "state=OPEN&state=RESOLVED",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-+6",
+   "method": "GET",
+   "path": "/api/v1/portfolio/+6",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-06",
+   "method": "GET",
+   "path": "/api/v1/portfolio/06",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-6.0",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6.0",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-%206",
+   "method": "GET",
+   "path": "/api/v1/portfolio/%206",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolio-6-nav",
+   "method": "GET",
+   "path": "/api/v1/portfolio/6/nav/",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-cursor=",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-cursor=%203",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=%203",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-limit=500",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "limit=500",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-limit=501",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "limit=501",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-cursor=1_0",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=1_0",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-cursor=0x3",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=0x3",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-cursor=3.0",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=3.0",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-cursor=-1",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "cursor=-1",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-limit=1",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances",
+   "user": "owner",
+   "query": "limit=1",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-2.0",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/2.0",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-0",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/0",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-rebalances-99999999999999999999",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/rebalances/99999999999999999999",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-4",
+   "method": "GET",
+   "path": "/api/v1/portfolios/4",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-5",
+   "method": "GET",
+   "path": "/api/v1/portfolios/5",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-4-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/4/holdings",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-6-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/6/holdings",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-8-holdings",
+   "method": "GET",
+   "path": "/api/v1/portfolios/8/holdings",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-limit=1&offset=0&symbol=boroltd",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=1&offset=0&symbol=boroltd",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-symbol=%20%20",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "symbol=%20%20",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-limit=500&offset=10200",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=500&offset=10200",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-limit=",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-symbol=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "symbol=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-limit=2&limit=3",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "limit=2&limit=3",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-trades-offset=1_0&limit=2",
+   "method": "GET",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "query": "offset=1_0&limit=2",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-cursor=",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-cursor=1_000",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=1_000",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-cursor=%20",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=%20",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-limit=1&limit=2",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "limit=1&limit=2",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-cursor=-5",
+   "method": "GET",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "query": "cursor=-5",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-DCL%2F2026-27%2F000001-pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/DCL%2F2026-27%2F000001/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-a-b-c-d-e-f-g-h-pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/a/b/c/d/e/f/g/h/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-x%27y-pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/x%27y/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-invoices-pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-request_token=abcdefgh123",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abcdefgh123",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-state=statestatestate",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "state=statestatestate",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-request_token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=statestatestate",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=statestatestate",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-request_token=abcdefgh&state=abcdefgh",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abcdefgh&state=abcdefgh",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-it%27s",
+   "method": "GET",
+   "path": "/api/v1/brokers/it%27s",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-a%22b%5Cc",
+   "method": "GET",
+   "path": "/api/v1/brokers/a%22b%5Cc",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-%C3%A9t%C3%A9",
+   "method": "GET",
+   "path": "/api/v1/brokers/%C3%A9t%C3%A9",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-x%7Fy",
+   "method": "GET",
+   "path": "/api/v1/brokers/x%7Fy",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-upstox",
+   "method": "GET",
+   "path": "/api/v1/brokers/upstox",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-dhan",
+   "method": "GET",
+   "path": "/api/v1/brokers/dhan",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-zerodha%20",
+   "method": "GET",
+   "path": "/api/v1/brokers/zerodha%20",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "method": "GET",
+   "path": "/api/v1/brokers/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-cb-track-b-free-access-basket_access=Premium",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/free-access",
+   "user": "owner",
+   "query": "basket_access=Premium",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-cb-track-b-free-access-basket_access=%20free%20",
+   "method": "GET",
+   "path": "/api/v1/cb/track-b/free-access",
+   "user": "owner",
+   "query": "basket_access=%20free%20",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-x=1",
+   "method": "GET",
+   "path": "/api/v1/portfolios",
+   "user": "owner",
+   "query": "x=1",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-portfolios-sample-csv-x=1",
+   "method": "GET",
+   "path": "/api/v1/portfolios/sample-csv",
+   "user": "owner",
+   "query": "x=1",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-brokers-callback-subscriber",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "subscriber",
+   "query": "request_token=abcdefgh123&state=statestatestate",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-POST-portfolio-overview",
+   "method": "POST",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-DELETE-trades",
+   "method": "DELETE",
+   "path": "/api/v1/trades",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-PUT-plans",
+   "method": "PUT",
+   "path": "/api/v1/plans",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-POST-portfolio-3",
+   "method": "POST",
+   "path": "/api/v1/portfolio/3",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-PATCH-portfolio-3-nav",
+   "method": "PATCH",
+   "path": "/api/v1/portfolio/3/nav",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-DELETE-brokers-zerodha",
+   "method": "DELETE",
+   "path": "/api/v1/brokers/zerodha",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-POST-invoices",
+   "method": "POST",
+   "path": "/api/v1/invoices",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-POST-cb-track-b-flags",
+   "method": "POST",
+   "path": "/api/v1/cb/track-b/flags",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-HEAD-portfolio-overview",
+   "method": "HEAD",
+   "path": "/api/v1/portfolio/overview",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-HEAD-portfolios-sample-csv",
+   "method": "HEAD",
+   "path": "/api/v1/portfolios/sample-csv",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-method-POST-anon-portfolio-holdings-list",
+   "method": "POST",
+   "path": "/api/v1/portfolio/holdings",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-/invoices/x/pdf/",
+   "method": "GET",
+   "path": "/api/v1/invoices/x/pdf/",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-/invoices//pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices//pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-/invoices/a//b/pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/a//b/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-/invoices/%2F/pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/%2F/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-/invoices/a/pdf/pdf",
+   "method": "GET",
+   "path": "/api/v1/invoices/a/pdf/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-/invoices/DCL/2026-27/000001/pdf/",
+   "method": "GET",
+   "path": "/api/v1/invoices/DCL/2026-27/000001/pdf/",
+   "user": "owner",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-inv-post",
+   "method": "POST",
+   "path": "/api/v1/invoices/a/b/pdf",
+   "user": "owner",
+   "note": "adversarial review"
+  }
+ ]
+}

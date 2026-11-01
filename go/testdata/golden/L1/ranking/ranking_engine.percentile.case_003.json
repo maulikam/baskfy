@@ -1,0 +1,25 @@
+{
+ "fn": "baskfy_core.ranking_engine.percentile",
+ "inputs": {
+  "values": [
+   7.0
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "one value scores 1. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "dtype": "float64",
+  "index": [
+   0
+  ],
+  "values": [
+   1.0
+  ]
+ }
+}

@@ -1,0 +1,311 @@
+{
+ "fn": "baskfy_core.vbt.backtest.panel_from_frame",
+ "inputs": {
+  "column_of": [
+   "2024-06-03",
+   "2024-06-06",
+   "2024-06-01",
+   "2024-06-20"
+  ],
+  "frame": {
+   "columns": [
+    "instrument_id",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "ema_exit"
+   ],
+   "dtypes": {
+    "close": "Float64",
+    "date": "Date",
+    "ema_exit": "Float64",
+    "high": "Float64",
+    "instrument_id": "Int64",
+    "low": "Float64",
+    "open": "Float64"
+   },
+   "rows": [
+    [
+     20,
+     "2024-06-03",
+     102.0,
+     103.0,
+     101.0,
+     102.5,
+     100.0
+    ],
+    [
+     20,
+     "2024-06-07",
+     106.0,
+     107.0,
+     105.0,
+     106.5,
+     104.0
+    ],
+    [
+     10,
+     "2024-06-05",
+     103.0,
+     104.0,
+     102.0,
+     103.5,
+     101.0
+    ],
+    [
+     20,
+     "2024-06-06",
+     105.0,
+     106.0,
+     104.0,
+     105.5,
+     103.0
+    ],
+    [
+     20,
+     "2024-06-04",
+     103.0,
+     104.0,
+     102.0,
+     103.5,
+     101.0
+    ],
+    [
+     10,
+     "2024-06-04",
+     102.0,
+     103.0,
+     101.0,
+     102.5,
+     100.0
+    ],
+    [
+     10,
+     "2024-06-10",
+     106.0,
+     107.0,
+     105.0,
+     106.5,
+     104.0
+    ],
+    [
+     20,
+     "2024-06-10",
+     107.0,
+     108.0,
+     106.0,
+     107.5,
+     105.0
+    ],
+    [
+     10,
+     "2024-06-07",
+     105.0,
+     106.0,
+     104.0,
+     105.5,
+     103.0
+    ],
+    [
+     10,
+     "2024-06-03",
+     101.0,
+     102.0,
+     100.0,
+     101.5,
+     99.0
+    ],
+    [
+     10,
+     "2024-06-06",
+     104.0,
+     105.0,
+     103.0,
+     104.5,
+     102.0
+    ]
+   ]
+  },
+  "signal_column": "state"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "no signal column, no symbol, no turnover: all-False and NaN. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "column_of": {
+   "2024-06-01": 0,
+   "2024-06-03": 0,
+   "2024-06-06": 3,
+   "2024-06-20": 6
+  },
+  "panel": {
+   "close": [
+    [
+     101.5,
+     102.5,
+     103.5,
+     104.5,
+     105.5,
+     106.5
+    ],
+    [
+     102.5,
+     103.5,
+     null,
+     105.5,
+     106.5,
+     107.5
+    ]
+   ],
+   "ema_exit": [
+    [
+     99.0,
+     100.0,
+     101.0,
+     102.0,
+     103.0,
+     104.0
+    ],
+    [
+     100.0,
+     101.0,
+     null,
+     103.0,
+     104.0,
+     105.0
+    ]
+   ],
+   "high": [
+    [
+     102.0,
+     103.0,
+     104.0,
+     105.0,
+     106.0,
+     107.0
+    ],
+    [
+     103.0,
+     104.0,
+     null,
+     106.0,
+     107.0,
+     108.0
+    ]
+   ],
+   "instrument_ids": [
+    10,
+    20
+   ],
+   "low": [
+    [
+     100.0,
+     101.0,
+     102.0,
+     103.0,
+     104.0,
+     105.0
+    ],
+    [
+     101.0,
+     102.0,
+     null,
+     104.0,
+     105.0,
+     106.0
+    ]
+   ],
+   "open": [
+    [
+     101.0,
+     102.0,
+     103.0,
+     104.0,
+     105.0,
+     106.0
+    ],
+    [
+     102.0,
+     103.0,
+     null,
+     105.0,
+     106.0,
+     107.0
+    ]
+   ],
+   "sessions": [
+    "2024-06-03",
+    "2024-06-04",
+    "2024-06-05",
+    "2024-06-06",
+    "2024-06-07",
+    "2024-06-10"
+   ],
+   "signal": [
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "symbols": [
+    "",
+    ""
+   ],
+   "turnover_avg": [
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   ],
+   "turnover_inr": [
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   ]
+  }
+ }
+}

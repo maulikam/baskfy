@@ -1,0 +1,54 @@
+{
+ "fn": "baskfy_core.backtest.raw_weights",
+ "inputs": {
+  "rows": [
+   {
+    "instrument_id": 101,
+    "marketcap_cr": "1200.5",
+    "name": "AAA Industries Ltd",
+    "rank": 3,
+    "symbol": "AAA",
+    "volatility": "0.18"
+   },
+   {
+    "instrument_id": 102,
+    "marketcap_cr": "450",
+    "name": "BBB Industries Ltd",
+    "rank": 1,
+    "symbol": "BBB",
+    "volatility": "0.32"
+   },
+   {
+    "instrument_id": 103,
+    "marketcap_cr": "30000",
+    "name": "CCC Industries Ltd",
+    "rank": 7,
+    "symbol": "CCC",
+    "volatility": "0.22"
+   },
+   {
+    "instrument_id": 104,
+    "marketcap_cr": "800",
+    "name": "DDD Industries Ltd",
+    "rank": 2,
+    "symbol": "DDD",
+    "volatility": "0.41"
+   }
+  ],
+  "scheme": "inverse_volatility"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "inverse_volatility: 1/vol. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "101": "5.555555555555555555555555556",
+  "102": "3.125",
+  "103": "4.545454545454545454545454545",
+  "104": "2.439024390243902439024390244"
+ }
+}

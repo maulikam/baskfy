@@ -1,0 +1,6658 @@
+{
+ "fn": "baskfy_core.options.scan.scan_all",
+ "inputs": {
+  "ceilings": {
+   "book_daily_loss_inr_max": "30000",
+   "book_monthly_loss_inr_max": "75000",
+   "hard_exit_latest": "15:00:00",
+   "max_lots_max": 10,
+   "risk_pct_max": "1.0",
+   "risk_per_trade_inr_max": "25000"
+  },
+  "context": {
+   "event_days": [],
+   "sleeves": {},
+   "slot_holder": null
+  },
+  "market": {
+   "bars": [
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25198",
+     "open": "25200",
+     "ts": "2026-10-13T09:15:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:16:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:17:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:18:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:19:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:20:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:21:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:22:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:23:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:24:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:25:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:26:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:27:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:28:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:29:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:30:00+05:30"
+    }
+   ],
+   "contracts": [
+    {
+     "expiry": "2026-10-06",
+     "instrument_token": 61,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26100625000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-06",
+     "instrument_token": 62,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26100625000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 161,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324450CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 162,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324450PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 163,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324500CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 164,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324500PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 165,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324550CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 166,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324550PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 167,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324600CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 168,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324600PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 169,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324650CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 170,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324650PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 171,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324700CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 172,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324700PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 173,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324750CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 174,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324750PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 175,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324800CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 176,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324800PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 177,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324850CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 178,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324850PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 179,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324900CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 180,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324900PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 181,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324950CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 182,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101324950PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 183,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 184,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 185,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25050",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325050CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 186,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25050",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325050PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 187,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25100",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325100CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 188,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25100",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325100PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 189,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25150",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325150CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 190,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25150",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325150PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 191,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25200",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325200CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 192,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25200",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325200PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 193,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25250",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325250CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 194,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25250",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325250PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 195,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25300",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325300CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 196,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25300",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325300PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 197,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25350",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325350CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 198,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25350",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325350PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 199,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25400",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325400CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 200,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25400",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325400PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 201,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325450CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 202,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325450PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 203,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325500CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 204,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325500PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 205,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325550CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 206,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325550PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 207,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325600CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 208,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325600PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 209,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325650CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 210,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325650PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 211,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325700CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 212,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325700PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 213,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325750CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 214,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325750PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 215,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325800CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 216,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325800PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 217,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325850CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 218,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325850PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 219,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325900CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 220,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325900PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 221,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325950CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 222,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325950PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 283,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024450CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 284,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024450PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 285,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024500CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 286,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024500PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 287,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024550CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 288,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024550PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 289,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024600CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 290,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024600PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 291,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024650CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 292,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024650PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 293,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024700CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 294,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024700PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 295,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024750CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 296,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024750PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 297,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024800CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 298,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024800PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 299,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024850CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 300,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024850PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 301,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024900CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 302,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024900PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 303,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "24950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024950CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 304,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "24950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102024950PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 305,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 306,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 307,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25050",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025050CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 308,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25050",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025050PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 309,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25100",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025100CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 310,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25100",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025100PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 311,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25150",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025150CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 312,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25150",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025150PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 313,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25200",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025200CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 314,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25200",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025200PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 315,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25250",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025250CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 316,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25250",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025250PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 317,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25300",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025300CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 318,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25300",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025300PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 319,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25350",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025350CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 320,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25350",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025350PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 321,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25400",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025400CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 322,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25400",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025400PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 323,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025450CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 324,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25450",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025450PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 325,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025500CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 326,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25500",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025500PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 327,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025550CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 328,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25550",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025550PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 329,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025600CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 330,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25600",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025600PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 331,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025650CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 332,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25650",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025650PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 333,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025700CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 334,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25700",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025700PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 335,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025750CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 336,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25750",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025750PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 337,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025800CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 338,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25800",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025800PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 339,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025850CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 340,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25850",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025850PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 341,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025900CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 342,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25900",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025900PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 343,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025950CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 344,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25950",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025950PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-27",
+     "instrument_token": 427,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102725000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-27",
+     "instrument_token": 428,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102725000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-03",
+     "instrument_token": 549,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26110325000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-03",
+     "instrument_token": 550,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26110325000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-10",
+     "instrument_token": 671,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111025000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-10",
+     "instrument_token": 672,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111025000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-17",
+     "instrument_token": 793,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111725000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-17",
+     "instrument_token": 794,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111725000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-24",
+     "instrument_token": 915,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26112425000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-24",
+     "instrument_token": 916,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26112425000PE",
+     "underlying": "NIFTY"
+    }
+   ],
+   "daily_closes": [
+    "23820",
+    "23840",
+    "23860",
+    "23880",
+    "23900",
+    "23920",
+    "23940",
+    "23960",
+    "23980",
+    "24000",
+    "24020",
+    "24040",
+    "24060",
+    "24080",
+    "24100",
+    "24120",
+    "24140",
+    "24160",
+    "24180",
+    "24200",
+    "24220",
+    "24240",
+    "24260",
+    "24280",
+    "24300",
+    "24320",
+    "24340",
+    "24360",
+    "24380",
+    "24400",
+    "24420",
+    "24440",
+    "24460",
+    "24480",
+    "24500",
+    "24520",
+    "24540",
+    "24560",
+    "24580",
+    "24600",
+    "24620",
+    "24640",
+    "24660",
+    "24680",
+    "24700",
+    "24720",
+    "24740",
+    "24760",
+    "24780",
+    "24800",
+    "24820",
+    "24840",
+    "24860",
+    "24880",
+    "24900",
+    "24920",
+    "24940",
+    "24960",
+    "24980",
+    "25000"
+   ],
+   "trade_date": "2026-10-13",
+   "trading_day": true,
+   "vix_prev_close": "14"
+  },
+  "now": "2026-10-13T09:30:20+05:30",
+  "options": {
+   "calendar": {
+    "allowed_underlyings": [
+     "NIFTY"
+    ],
+    "market_close": "15:30:00",
+    "market_open": "09:15:00",
+    "underlying": "NIFTY"
+   },
+   "chain": {
+    "depth_levels": 3,
+    "greeks_model": "black76-parity-v1",
+    "iv_lower": 0.01,
+    "iv_tolerance": 1e-06,
+    "iv_upper": 5.0,
+    "max_spread_pct": "3.0",
+    "min_oi_lots": 200,
+    "min_premium": "0.50",
+    "oi_unit": "UNITS",
+    "rate": 0.065,
+    "snapshot_strikes": 15,
+    "stale_index_seconds": 30,
+    "stale_quote_seconds": 15,
+    "stale_scan_seconds": 120
+   },
+   "condor_monthly": {
+    "cost_share_max": "0.20",
+    "credit_floor_frac": "0.25",
+    "credit_target_frac": "0.30",
+    "delta_max": "0.25",
+    "delta_min": "0.20",
+    "delta_target": "0.22",
+    "entry_window_end": "10:15:00",
+    "er_max": "0.30",
+    "gap_max_pct": "0.75",
+    "hard_exit_time": "14:30:00",
+    "max_lots": 3,
+    "min_bars": 45,
+    "observation_end": "09:59:00",
+    "observation_start": "09:15:00",
+    "opening_range_end": "09:44:00",
+    "plan_time": "10:00:00",
+    "profit_take_frac": "0.50",
+    "range_max_pct": "0.80",
+    "reserve_per_lot_inr": "1000",
+    "risk_per_trade_pct": "1.0",
+    "stop_frac": "1.50",
+    "strike_buffer_points": "0",
+    "tier3_min_sessions": 12,
+    "variant": "MONTHLY",
+    "wing_width_points": "150"
+   },
+   "condor_weekly": {
+    "cost_share_max": "0.20",
+    "credit_floor_frac": "0.25",
+    "credit_target_frac": "0.30",
+    "delta_max": "0.25",
+    "delta_min": "0.20",
+    "delta_target": "0.22",
+    "entry_window_end": "10:15:00",
+    "er_max": "0.30",
+    "gap_max_pct": "0.75",
+    "hard_exit_time": "14:30:00",
+    "max_lots": 2,
+    "min_bars": 45,
+    "observation_end": "09:59:00",
+    "observation_start": "09:15:00",
+    "opening_range_end": "09:44:00",
+    "plan_time": "10:00:00",
+    "profit_take_frac": "0.50",
+    "range_max_pct": "0.80",
+    "reserve_per_lot_inr": "1000",
+    "risk_per_trade_pct": "0.5",
+    "stop_frac": "1.50",
+    "strike_buffer_points": "0",
+    "tier3_min_sessions": 20,
+    "variant": "WEEKLY",
+    "wing_width_points": "150"
+   },
+   "costs": {
+    "auto_squareoff_inr": "50",
+    "brokerage_per_order_inr": "20",
+    "exchange_txn_pct": "0.03553",
+    "gst_pct": "18",
+    "ipft_per_crore_inr": "0.01",
+    "review_after_days": 90,
+    "reviewed_on": "2026-09-22",
+    "sebi_per_crore_inr": "10",
+    "stamp_buy_pct": "0.003",
+    "stt_exercise_intrinsic_pct": "0.15",
+    "stt_sell_premium_pct": "0.15",
+    "synthetic_half_spread_min_inr": "0.10",
+    "synthetic_half_spread_pct": "1.5"
+   },
+   "directional": {
+    "bar_minutes": 5,
+    "buffer_pct": "0.05",
+    "cost_share_max": "0.15",
+    "delta_max": "0.75",
+    "delta_min": "0.50",
+    "entry_window_end": "13:30:00",
+    "entry_window_start": "09:30:00",
+    "gap_max_pct": "1.0",
+    "hard_exit_time": "15:00:00",
+    "itm_steps": 1,
+    "max_lots": 2,
+    "opening_range_bars": 15,
+    "opening_range_end": "09:29:00",
+    "opening_range_start": "09:15:00",
+    "or_max_pct": "0.90",
+    "premium_cap_pct": "10",
+    "reserve_per_lot_inr": "300",
+    "risk_per_trade_pct": "0.5",
+    "stop_frac": "0.30",
+    "target_frac": "0.60",
+    "tier3_min_sessions": 60,
+    "time_stop_min_gain": "0.10",
+    "time_stop_minutes": 45,
+    "trend_ema_days": 20,
+    "vix_max": "22"
+   },
+   "execution": {
+    "exit_final_marketable": true,
+    "feed_grace_seconds": 60,
+    "feed_watch_from": "14:00:00",
+    "fill_wait_seconds": 20,
+    "latency_ticks": 1,
+    "limit_improve_ticks": 1,
+    "plan_ttl_minutes": 30
+   },
+   "expiry_setups": {
+    "bar_minutes": 5,
+    "cost_share_max": "0.20",
+    "hard_exit_time": "14:45:00",
+    "max_debit_frac": "0.55",
+    "max_lots": 2,
+    "o3a_buffer_pct": "0.05",
+    "o3a_enabled": true,
+    "o3a_entry_window_end": "13:30:00",
+    "o3a_er_min": "0.40",
+    "o3a_range_bars": 60,
+    "o3a_range_end": "10:14:00",
+    "o3a_range_max_pct": "1.20",
+    "o3a_range_start": "09:15:00",
+    "o3a_window_end": "13:00:00",
+    "o3a_window_start": "10:19:00",
+    "o3b_enabled": true,
+    "o3b_gap_max_pct": "1.50",
+    "o3b_gap_min_pct": "0.50",
+    "o3b_hold_end": "09:44:00",
+    "o3b_plan_time": "09:45:00",
+    "o3b_window_end": "10:00:00",
+    "reserve_per_lot_inr": "500",
+    "risk_per_trade_pct": "0.5",
+    "stop_frac_of_debit": "0.50",
+    "target_frac_of_width": "0.80",
+    "tier3_min_sessions": 20,
+    "width_points": "100"
+   },
+   "risk": {
+    "book_daily_loss_pct": "1.5",
+    "book_monthly_loss_pct": "5",
+    "budget_breach_frac": "1.0",
+    "daily_loss_r": "2",
+    "monthly_loss_r": "8",
+    "weekly_loss_r": "4"
+   },
+   "sizing": {
+    "first_live_risk_multiplier": "0.5",
+    "first_live_trades": 5
+   }
+  },
+  "snapshots": [
+   {
+    "minute": null,
+    "snapshot": {
+     "quotes": [
+      {
+       "ask": "764.90",
+       "asks": [
+        {
+         "price": "764.90",
+         "quantity": 1300
+        },
+        {
+         "price": "764.90",
+         "quantity": 1300
+        },
+        {
+         "price": "764.90",
+         "quantity": 1300
+        }
+       ],
+       "bid": "757.25",
+       "bids": [
+        {
+         "price": "757.25",
+         "quantity": 1300
+        },
+        {
+         "price": "757.25",
+         "quantity": 1300
+        },
+        {
+         "price": "757.25",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 161,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 162,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "714.65",
+       "asks": [
+        {
+         "price": "714.65",
+         "quantity": 1300
+        },
+        {
+         "price": "714.65",
+         "quantity": 1300
+        },
+        {
+         "price": "714.65",
+         "quantity": 1300
+        }
+       ],
+       "bid": "707.50",
+       "bids": [
+        {
+         "price": "707.50",
+         "quantity": 1300
+        },
+        {
+         "price": "707.50",
+         "quantity": 1300
+        },
+        {
+         "price": "707.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 163,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 164,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "664.40",
+       "asks": [
+        {
+         "price": "664.40",
+         "quantity": 1300
+        },
+        {
+         "price": "664.40",
+         "quantity": 1300
+        },
+        {
+         "price": "664.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "657.75",
+       "bids": [
+        {
+         "price": "657.75",
+         "quantity": 1300
+        },
+        {
+         "price": "657.75",
+         "quantity": 1300
+        },
+        {
+         "price": "657.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 165,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 166,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "614.15",
+       "asks": [
+        {
+         "price": "614.15",
+         "quantity": 1300
+        },
+        {
+         "price": "614.15",
+         "quantity": 1300
+        },
+        {
+         "price": "614.15",
+         "quantity": 1300
+        }
+       ],
+       "bid": "608.00",
+       "bids": [
+        {
+         "price": "608.00",
+         "quantity": 1300
+        },
+        {
+         "price": "608.00",
+         "quantity": 1300
+        },
+        {
+         "price": "608.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 167,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 168,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "563.95",
+       "asks": [
+        {
+         "price": "563.95",
+         "quantity": 1300
+        },
+        {
+         "price": "563.95",
+         "quantity": 1300
+        },
+        {
+         "price": "563.95",
+         "quantity": 1300
+        }
+       ],
+       "bid": "558.25",
+       "bids": [
+        {
+         "price": "558.25",
+         "quantity": 1300
+        },
+        {
+         "price": "558.25",
+         "quantity": 1300
+        },
+        {
+         "price": "558.25",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 169,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 170,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "513.70",
+       "asks": [
+        {
+         "price": "513.70",
+         "quantity": 1300
+        },
+        {
+         "price": "513.70",
+         "quantity": 1300
+        },
+        {
+         "price": "513.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "508.50",
+       "bids": [
+        {
+         "price": "508.50",
+         "quantity": 1300
+        },
+        {
+         "price": "508.50",
+         "quantity": 1300
+        },
+        {
+         "price": "508.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 171,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 172,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "463.45",
+       "asks": [
+        {
+         "price": "463.45",
+         "quantity": 1300
+        },
+        {
+         "price": "463.45",
+         "quantity": 1300
+        },
+        {
+         "price": "463.45",
+         "quantity": 1300
+        }
+       ],
+       "bid": "458.75",
+       "bids": [
+        {
+         "price": "458.75",
+         "quantity": 1300
+        },
+        {
+         "price": "458.75",
+         "quantity": 1300
+        },
+        {
+         "price": "458.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 173,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 174,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "413.20",
+       "asks": [
+        {
+         "price": "413.20",
+         "quantity": 1300
+        },
+        {
+         "price": "413.20",
+         "quantity": 1300
+        },
+        {
+         "price": "413.20",
+         "quantity": 1300
+        }
+       ],
+       "bid": "409.00",
+       "bids": [
+        {
+         "price": "409.00",
+         "quantity": 1300
+        },
+        {
+         "price": "409.00",
+         "quantity": 1300
+        },
+        {
+         "price": "409.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 175,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 176,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "362.95",
+       "asks": [
+        {
+         "price": "362.95",
+         "quantity": 1300
+        },
+        {
+         "price": "362.95",
+         "quantity": 1300
+        },
+        {
+         "price": "362.95",
+         "quantity": 1300
+        }
+       ],
+       "bid": "359.25",
+       "bids": [
+        {
+         "price": "359.25",
+         "quantity": 1300
+        },
+        {
+         "price": "359.25",
+         "quantity": 1300
+        },
+        {
+         "price": "359.25",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 177,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 178,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "312.70",
+       "asks": [
+        {
+         "price": "312.70",
+         "quantity": 1300
+        },
+        {
+         "price": "312.70",
+         "quantity": 1300
+        },
+        {
+         "price": "312.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "309.55",
+       "bids": [
+        {
+         "price": "309.55",
+         "quantity": 1300
+        },
+        {
+         "price": "309.55",
+         "quantity": 1300
+        },
+        {
+         "price": "309.55",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 179,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.10",
+       "asks": [
+        {
+         "price": "0.10",
+         "quantity": 1300
+        },
+        {
+         "price": "0.10",
+         "quantity": 1300
+        },
+        {
+         "price": "0.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 180,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "262.50",
+       "asks": [
+        {
+         "price": "262.50",
+         "quantity": 1300
+        },
+        {
+         "price": "262.50",
+         "quantity": 1300
+        },
+        {
+         "price": "262.50",
+         "quantity": 1300
+        }
+       ],
+       "bid": "259.85",
+       "bids": [
+        {
+         "price": "259.85",
+         "quantity": 1300
+        },
+        {
+         "price": "259.85",
+         "quantity": 1300
+        },
+        {
+         "price": "259.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 181,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.15",
+       "asks": [
+        {
+         "price": "0.15",
+         "quantity": 1300
+        },
+        {
+         "price": "0.15",
+         "quantity": 1300
+        },
+        {
+         "price": "0.15",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 182,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "212.55",
+       "asks": [
+        {
+         "price": "212.55",
+         "quantity": 1300
+        },
+        {
+         "price": "212.55",
+         "quantity": 1300
+        },
+        {
+         "price": "212.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "210.35",
+       "bids": [
+        {
+         "price": "210.35",
+         "quantity": 1300
+        },
+        {
+         "price": "210.35",
+         "quantity": 1300
+        },
+        {
+         "price": "210.35",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 183,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25000",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.40",
+       "asks": [
+        {
+         "price": "0.40",
+         "quantity": 1300
+        },
+        {
+         "price": "0.40",
+         "quantity": 1300
+        },
+        {
+         "price": "0.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "0.25",
+       "bids": [
+        {
+         "price": "0.25",
+         "quantity": 1300
+        },
+        {
+         "price": "0.25",
+         "quantity": 1300
+        },
+        {
+         "price": "0.25",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 184,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25000",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "163.45",
+       "asks": [
+        {
+         "price": "163.45",
+         "quantity": 1300
+        },
+        {
+         "price": "163.45",
+         "quantity": 1300
+        },
+        {
+         "price": "163.45",
+         "quantity": 1300
+        }
+       ],
+       "bid": "161.75",
+       "bids": [
+        {
+         "price": "161.75",
+         "quantity": 1300
+        },
+        {
+         "price": "161.75",
+         "quantity": 1300
+        },
+        {
+         "price": "161.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 185,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25050",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "1.55",
+       "asks": [
+        {
+         "price": "1.55",
+         "quantity": 1300
+        },
+        {
+         "price": "1.55",
+         "quantity": 1300
+        },
+        {
+         "price": "1.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "1.40",
+       "bids": [
+        {
+         "price": "1.40",
+         "quantity": 1300
+        },
+        {
+         "price": "1.40",
+         "quantity": 1300
+        },
+        {
+         "price": "1.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 186,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25050",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "116.85",
+       "asks": [
+        {
+         "price": "116.85",
+         "quantity": 1300
+        },
+        {
+         "price": "116.85",
+         "quantity": 1300
+        },
+        {
+         "price": "116.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "115.60",
+       "bids": [
+        {
+         "price": "115.60",
+         "quantity": 1300
+        },
+        {
+         "price": "115.60",
+         "quantity": 1300
+        },
+        {
+         "price": "115.60",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 187,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25100",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "5.20",
+       "asks": [
+        {
+         "price": "5.20",
+         "quantity": 1300
+        },
+        {
+         "price": "5.20",
+         "quantity": 1300
+        },
+        {
+         "price": "5.20",
+         "quantity": 1300
+        }
+       ],
+       "bid": "5.05",
+       "bids": [
+        {
+         "price": "5.05",
+         "quantity": 1300
+        },
+        {
+         "price": "5.05",
+         "quantity": 1300
+        },
+        {
+         "price": "5.05",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 188,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25100",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "75.55",
+       "asks": [
+        {
+         "price": "75.55",
+         "quantity": 1300
+        },
+        {
+         "price": "75.55",
+         "quantity": 1300
+        },
+        {
+         "price": "75.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "74.75",
+       "bids": [
+        {
+         "price": "74.75",
+         "quantity": 1300
+        },
+        {
+         "price": "74.75",
+         "quantity": 1300
+        },
+        {
+         "price": "74.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 189,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25150",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "14.15",
+       "asks": [
+        {
+         "price": "14.15",
+         "quantity": 1300
+        },
+        {
+         "price": "14.15",
+         "quantity": 1300
+        },
+        {
+         "price": "14.15",
+         "quantity": 1300
+        }
+       ],
+       "bid": "13.95",
+       "bids": [
+        {
+         "price": "13.95",
+         "quantity": 1300
+        },
+        {
+         "price": "13.95",
+         "quantity": 1300
+        },
+        {
+         "price": "13.95",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 190,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25150",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "42.90",
+       "asks": [
+        {
+         "price": "42.90",
+         "quantity": 1300
+        },
+        {
+         "price": "42.90",
+         "quantity": 1300
+        },
+        {
+         "price": "42.90",
+         "quantity": 1300
+        }
+       ],
+       "bid": "42.45",
+       "bids": [
+        {
+         "price": "42.45",
+         "quantity": 1300
+        },
+        {
+         "price": "42.45",
+         "quantity": 1300
+        },
+        {
+         "price": "42.45",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 191,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25200",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "31.75",
+       "asks": [
+        {
+         "price": "31.75",
+         "quantity": 1300
+        },
+        {
+         "price": "31.75",
+         "quantity": 1300
+        },
+        {
+         "price": "31.75",
+         "quantity": 1300
+        }
+       ],
+       "bid": "31.35",
+       "bids": [
+        {
+         "price": "31.35",
+         "quantity": 1300
+        },
+        {
+         "price": "31.35",
+         "quantity": 1300
+        },
+        {
+         "price": "31.35",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 192,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25200",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "20.80",
+       "asks": [
+        {
+         "price": "20.80",
+         "quantity": 1300
+        },
+        {
+         "price": "20.80",
+         "quantity": 1300
+        },
+        {
+         "price": "20.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "20.50",
+       "bids": [
+        {
+         "price": "20.50",
+         "quantity": 1300
+        },
+        {
+         "price": "20.50",
+         "quantity": 1300
+        },
+        {
+         "price": "20.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 193,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25250",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "59.85",
+       "asks": [
+        {
+         "price": "59.85",
+         "quantity": 1300
+        },
+        {
+         "price": "59.85",
+         "quantity": 1300
+        },
+        {
+         "price": "59.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "59.20",
+       "bids": [
+        {
+         "price": "59.20",
+         "quantity": 1300
+        },
+        {
+         "price": "59.20",
+         "quantity": 1300
+        },
+        {
+         "price": "59.20",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 194,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25250",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "8.40",
+       "asks": [
+        {
+         "price": "8.40",
+         "quantity": 1300
+        },
+        {
+         "price": "8.40",
+         "quantity": 1300
+        },
+        {
+         "price": "8.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "8.25",
+       "bids": [
+        {
+         "price": "8.25",
+         "quantity": 1300
+        },
+        {
+         "price": "8.25",
+         "quantity": 1300
+        },
+        {
+         "price": "8.25",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 195,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25300",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "97.70",
+       "asks": [
+        {
+         "price": "97.70",
+         "quantity": 1300
+        },
+        {
+         "price": "97.70",
+         "quantity": 1300
+        },
+        {
+         "price": "97.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "96.65",
+       "bids": [
+        {
+         "price": "96.65",
+         "quantity": 1300
+        },
+        {
+         "price": "96.65",
+         "quantity": 1300
+        },
+        {
+         "price": "96.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 196,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25300",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "2.80",
+       "asks": [
+        {
+         "price": "2.80",
+         "quantity": 1300
+        },
+        {
+         "price": "2.80",
+         "quantity": 1300
+        },
+        {
+         "price": "2.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "2.65",
+       "bids": [
+        {
+         "price": "2.65",
+         "quantity": 1300
+        },
+        {
+         "price": "2.65",
+         "quantity": 1300
+        },
+        {
+         "price": "2.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 197,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25350",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "142.30",
+       "asks": [
+        {
+         "price": "142.30",
+         "quantity": 1300
+        },
+        {
+         "price": "142.30",
+         "quantity": 1300
+        },
+        {
+         "price": "142.30",
+         "quantity": 1300
+        }
+       ],
+       "bid": "140.85",
+       "bids": [
+        {
+         "price": "140.85",
+         "quantity": 1300
+        },
+        {
+         "price": "140.85",
+         "quantity": 1300
+        },
+        {
+         "price": "140.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 198,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25350",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.80",
+       "asks": [
+        {
+         "price": "0.80",
+         "quantity": 1300
+        },
+        {
+         "price": "0.80",
+         "quantity": 1300
+        },
+        {
+         "price": "0.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "0.65",
+       "bids": [
+        {
+         "price": "0.65",
+         "quantity": 1300
+        },
+        {
+         "price": "0.65",
+         "quantity": 1300
+        },
+        {
+         "price": "0.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 199,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25400",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "190.55",
+       "asks": [
+        {
+         "price": "190.55",
+         "quantity": 1300
+        },
+        {
+         "price": "190.55",
+         "quantity": 1300
+        },
+        {
+         "price": "190.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "188.60",
+       "bids": [
+        {
+         "price": "188.60",
+         "quantity": 1300
+        },
+        {
+         "price": "188.60",
+         "quantity": 1300
+        },
+        {
+         "price": "188.60",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 200,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25400",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.20",
+       "asks": [
+        {
+         "price": "0.20",
+         "quantity": 1300
+        },
+        {
+         "price": "0.20",
+         "quantity": 1300
+        },
+        {
+         "price": "0.20",
+         "quantity": 1300
+        }
+       ],
+       "bid": "0.10",
+       "bids": [
+        {
+         "price": "0.10",
+         "quantity": 1300
+        },
+        {
+         "price": "0.10",
+         "quantity": 1300
+        },
+        {
+         "price": "0.10",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 201,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "240.25",
+       "asks": [
+        {
+         "price": "240.25",
+         "quantity": 1300
+        },
+        {
+         "price": "240.25",
+         "quantity": 1300
+        },
+        {
+         "price": "240.25",
+         "quantity": 1300
+        }
+       ],
+       "bid": "237.80",
+       "bids": [
+        {
+         "price": "237.80",
+         "quantity": 1300
+        },
+        {
+         "price": "237.80",
+         "quantity": 1300
+        },
+        {
+         "price": "237.80",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 202,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.10",
+       "asks": [
+        {
+         "price": "0.10",
+         "quantity": 1300
+        },
+        {
+         "price": "0.10",
+         "quantity": 1300
+        },
+        {
+         "price": "0.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 203,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "290.35",
+       "asks": [
+        {
+         "price": "290.35",
+         "quantity": 1300
+        },
+        {
+         "price": "290.35",
+         "quantity": 1300
+        },
+        {
+         "price": "290.35",
+         "quantity": 1300
+        }
+       ],
+       "bid": "287.40",
+       "bids": [
+        {
+         "price": "287.40",
+         "quantity": 1300
+        },
+        {
+         "price": "287.40",
+         "quantity": 1300
+        },
+        {
+         "price": "287.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 204,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 205,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "340.60",
+       "asks": [
+        {
+         "price": "340.60",
+         "quantity": 1300
+        },
+        {
+         "price": "340.60",
+         "quantity": 1300
+        },
+        {
+         "price": "340.60",
+         "quantity": 1300
+        }
+       ],
+       "bid": "337.15",
+       "bids": [
+        {
+         "price": "337.15",
+         "quantity": 1300
+        },
+        {
+         "price": "337.15",
+         "quantity": 1300
+        },
+        {
+         "price": "337.15",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 206,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 207,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "390.85",
+       "asks": [
+        {
+         "price": "390.85",
+         "quantity": 1300
+        },
+        {
+         "price": "390.85",
+         "quantity": 1300
+        },
+        {
+         "price": "390.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "386.90",
+       "bids": [
+        {
+         "price": "386.90",
+         "quantity": 1300
+        },
+        {
+         "price": "386.90",
+         "quantity": 1300
+        },
+        {
+         "price": "386.90",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 208,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 209,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "441.10",
+       "asks": [
+        {
+         "price": "441.10",
+         "quantity": 1300
+        },
+        {
+         "price": "441.10",
+         "quantity": 1300
+        },
+        {
+         "price": "441.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": "436.65",
+       "bids": [
+        {
+         "price": "436.65",
+         "quantity": 1300
+        },
+        {
+         "price": "436.65",
+         "quantity": 1300
+        },
+        {
+         "price": "436.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 210,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 211,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "491.35",
+       "asks": [
+        {
+         "price": "491.35",
+         "quantity": 1300
+        },
+        {
+         "price": "491.35",
+         "quantity": 1300
+        },
+        {
+         "price": "491.35",
+         "quantity": 1300
+        }
+       ],
+       "bid": "486.40",
+       "bids": [
+        {
+         "price": "486.40",
+         "quantity": 1300
+        },
+        {
+         "price": "486.40",
+         "quantity": 1300
+        },
+        {
+         "price": "486.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 212,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 213,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "541.60",
+       "asks": [
+        {
+         "price": "541.60",
+         "quantity": 1300
+        },
+        {
+         "price": "541.60",
+         "quantity": 1300
+        },
+        {
+         "price": "541.60",
+         "quantity": 1300
+        }
+       ],
+       "bid": "536.15",
+       "bids": [
+        {
+         "price": "536.15",
+         "quantity": 1300
+        },
+        {
+         "price": "536.15",
+         "quantity": 1300
+        },
+        {
+         "price": "536.15",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 214,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 215,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "591.80",
+       "asks": [
+        {
+         "price": "591.80",
+         "quantity": 1300
+        },
+        {
+         "price": "591.80",
+         "quantity": 1300
+        },
+        {
+         "price": "591.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "585.90",
+       "bids": [
+        {
+         "price": "585.90",
+         "quantity": 1300
+        },
+        {
+         "price": "585.90",
+         "quantity": 1300
+        },
+        {
+         "price": "585.90",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 216,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 217,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "642.05",
+       "asks": [
+        {
+         "price": "642.05",
+         "quantity": 1300
+        },
+        {
+         "price": "642.05",
+         "quantity": 1300
+        },
+        {
+         "price": "642.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": "635.65",
+       "bids": [
+        {
+         "price": "635.65",
+         "quantity": 1300
+        },
+        {
+         "price": "635.65",
+         "quantity": 1300
+        },
+        {
+         "price": "635.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 218,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 219,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "692.30",
+       "asks": [
+        {
+         "price": "692.30",
+         "quantity": 1300
+        },
+        {
+         "price": "692.30",
+         "quantity": 1300
+        },
+        {
+         "price": "692.30",
+         "quantity": 1300
+        }
+       ],
+       "bid": "685.40",
+       "bids": [
+        {
+         "price": "685.40",
+         "quantity": 1300
+        },
+        {
+         "price": "685.40",
+         "quantity": 1300
+        },
+        {
+         "price": "685.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 220,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "0.05",
+       "asks": [
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        },
+        {
+         "price": "0.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": null,
+       "bids": [],
+       "expiry": "2026-10-13",
+       "instrument_token": 221,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "742.55",
+       "asks": [
+        {
+         "price": "742.55",
+         "quantity": 1300
+        },
+        {
+         "price": "742.55",
+         "quantity": 1300
+        },
+        {
+         "price": "742.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "735.15",
+       "bids": [
+        {
+         "price": "735.15",
+         "quantity": 1300
+        },
+        {
+         "price": "735.15",
+         "quantity": 1300
+        },
+        {
+         "price": "735.15",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-13",
+       "instrument_token": 222,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "806.50",
+       "asks": [
+        {
+         "price": "806.50",
+         "quantity": 1300
+        },
+        {
+         "price": "806.50",
+         "quantity": 1300
+        },
+        {
+         "price": "806.50",
+         "quantity": 1300
+        }
+       ],
+       "bid": "798.45",
+       "bids": [
+        {
+         "price": "798.45",
+         "quantity": 1300
+        },
+        {
+         "price": "798.45",
+         "quantity": 1300
+        },
+        {
+         "price": "798.45",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 283,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "11.00",
+       "asks": [
+        {
+         "price": "11.00",
+         "quantity": 1300
+        },
+        {
+         "price": "11.00",
+         "quantity": 1300
+        },
+        {
+         "price": "11.00",
+         "quantity": 1300
+        }
+       ],
+       "bid": "10.85",
+       "bids": [
+        {
+         "price": "10.85",
+         "quantity": 1300
+        },
+        {
+         "price": "10.85",
+         "quantity": 1300
+        },
+        {
+         "price": "10.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 284,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "759.35",
+       "asks": [
+        {
+         "price": "759.35",
+         "quantity": 1300
+        },
+        {
+         "price": "759.35",
+         "quantity": 1300
+        },
+        {
+         "price": "759.35",
+         "quantity": 1300
+        }
+       ],
+       "bid": "751.75",
+       "bids": [
+        {
+         "price": "751.75",
+         "quantity": 1300
+        },
+        {
+         "price": "751.75",
+         "quantity": 1300
+        },
+        {
+         "price": "751.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 285,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "14.00",
+       "asks": [
+        {
+         "price": "14.00",
+         "quantity": 1300
+        },
+        {
+         "price": "14.00",
+         "quantity": 1300
+        },
+        {
+         "price": "14.00",
+         "quantity": 1300
+        }
+       ],
+       "bid": "13.85",
+       "bids": [
+        {
+         "price": "13.85",
+         "quantity": 1300
+        },
+        {
+         "price": "13.85",
+         "quantity": 1300
+        },
+        {
+         "price": "13.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 286,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "712.85",
+       "asks": [
+        {
+         "price": "712.85",
+         "quantity": 1300
+        },
+        {
+         "price": "712.85",
+         "quantity": 1300
+        },
+        {
+         "price": "712.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "705.70",
+       "bids": [
+        {
+         "price": "705.70",
+         "quantity": 1300
+        },
+        {
+         "price": "705.70",
+         "quantity": 1300
+        },
+        {
+         "price": "705.70",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 287,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "17.70",
+       "asks": [
+        {
+         "price": "17.70",
+         "quantity": 1300
+        },
+        {
+         "price": "17.70",
+         "quantity": 1300
+        },
+        {
+         "price": "17.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "17.50",
+       "bids": [
+        {
+         "price": "17.50",
+         "quantity": 1300
+        },
+        {
+         "price": "17.50",
+         "quantity": 1300
+        },
+        {
+         "price": "17.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 288,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "667.10",
+       "asks": [
+        {
+         "price": "667.10",
+         "quantity": 1300
+        },
+        {
+         "price": "667.10",
+         "quantity": 1300
+        },
+        {
+         "price": "667.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": "660.45",
+       "bids": [
+        {
+         "price": "660.45",
+         "quantity": 1300
+        },
+        {
+         "price": "660.45",
+         "quantity": 1300
+        },
+        {
+         "price": "660.45",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 289,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "22.15",
+       "asks": [
+        {
+         "price": "22.15",
+         "quantity": 1300
+        },
+        {
+         "price": "22.15",
+         "quantity": 1300
+        },
+        {
+         "price": "22.15",
+         "quantity": 1300
+        }
+       ],
+       "bid": "21.90",
+       "bids": [
+        {
+         "price": "21.90",
+         "quantity": 1300
+        },
+        {
+         "price": "21.90",
+         "quantity": 1300
+        },
+        {
+         "price": "21.90",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 290,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "622.30",
+       "asks": [
+        {
+         "price": "622.30",
+         "quantity": 1300
+        },
+        {
+         "price": "622.30",
+         "quantity": 1300
+        },
+        {
+         "price": "622.30",
+         "quantity": 1300
+        }
+       ],
+       "bid": "616.05",
+       "bids": [
+        {
+         "price": "616.05",
+         "quantity": 1300
+        },
+        {
+         "price": "616.05",
+         "quantity": 1300
+        },
+        {
+         "price": "616.05",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 291,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "27.50",
+       "asks": [
+        {
+         "price": "27.50",
+         "quantity": 1300
+        },
+        {
+         "price": "27.50",
+         "quantity": 1300
+        },
+        {
+         "price": "27.50",
+         "quantity": 1300
+        }
+       ],
+       "bid": "27.20",
+       "bids": [
+        {
+         "price": "27.20",
+         "quantity": 1300
+        },
+        {
+         "price": "27.20",
+         "quantity": 1300
+        },
+        {
+         "price": "27.20",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 292,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "578.45",
+       "asks": [
+        {
+         "price": "578.45",
+         "quantity": 1300
+        },
+        {
+         "price": "578.45",
+         "quantity": 1300
+        },
+        {
+         "price": "578.45",
+         "quantity": 1300
+        }
+       ],
+       "bid": "572.65",
+       "bids": [
+        {
+         "price": "572.65",
+         "quantity": 1300
+        },
+        {
+         "price": "572.65",
+         "quantity": 1300
+        },
+        {
+         "price": "572.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 293,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "33.85",
+       "asks": [
+        {
+         "price": "33.85",
+         "quantity": 1300
+        },
+        {
+         "price": "33.85",
+         "quantity": 1300
+        },
+        {
+         "price": "33.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "33.50",
+       "bids": [
+        {
+         "price": "33.50",
+         "quantity": 1300
+        },
+        {
+         "price": "33.50",
+         "quantity": 1300
+        },
+        {
+         "price": "33.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 294,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "535.75",
+       "asks": [
+        {
+         "price": "535.75",
+         "quantity": 1300
+        },
+        {
+         "price": "535.75",
+         "quantity": 1300
+        },
+        {
+         "price": "535.75",
+         "quantity": 1300
+        }
+       ],
+       "bid": "530.40",
+       "bids": [
+        {
+         "price": "530.40",
+         "quantity": 1300
+        },
+        {
+         "price": "530.40",
+         "quantity": 1300
+        },
+        {
+         "price": "530.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 295,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "41.35",
+       "asks": [
+        {
+         "price": "41.35",
+         "quantity": 1300
+        },
+        {
+         "price": "41.35",
+         "quantity": 1300
+        },
+        {
+         "price": "41.35",
+         "quantity": 1300
+        }
+       ],
+       "bid": "40.90",
+       "bids": [
+        {
+         "price": "40.90",
+         "quantity": 1300
+        },
+        {
+         "price": "40.90",
+         "quantity": 1300
+        },
+        {
+         "price": "40.90",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 296,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "494.30",
+       "asks": [
+        {
+         "price": "494.30",
+         "quantity": 1300
+        },
+        {
+         "price": "494.30",
+         "quantity": 1300
+        },
+        {
+         "price": "494.30",
+         "quantity": 1300
+        }
+       ],
+       "bid": "489.35",
+       "bids": [
+        {
+         "price": "489.35",
+         "quantity": 1300
+        },
+        {
+         "price": "489.35",
+         "quantity": 1300
+        },
+        {
+         "price": "489.35",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 297,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "50.10",
+       "asks": [
+        {
+         "price": "50.10",
+         "quantity": 1300
+        },
+        {
+         "price": "50.10",
+         "quantity": 1300
+        },
+        {
+         "price": "50.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": "49.55",
+       "bids": [
+        {
+         "price": "49.55",
+         "quantity": 1300
+        },
+        {
+         "price": "49.55",
+         "quantity": 1300
+        },
+        {
+         "price": "49.55",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 298,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "454.25",
+       "asks": [
+        {
+         "price": "454.25",
+         "quantity": 1300
+        },
+        {
+         "price": "454.25",
+         "quantity": 1300
+        },
+        {
+         "price": "454.25",
+         "quantity": 1300
+        }
+       ],
+       "bid": "449.70",
+       "bids": [
+        {
+         "price": "449.70",
+         "quantity": 1300
+        },
+        {
+         "price": "449.70",
+         "quantity": 1300
+        },
+        {
+         "price": "449.70",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 299,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "60.25",
+       "asks": [
+        {
+         "price": "60.25",
+         "quantity": 1300
+        },
+        {
+         "price": "60.25",
+         "quantity": 1300
+        },
+        {
+         "price": "60.25",
+         "quantity": 1300
+        }
+       ],
+       "bid": "59.60",
+       "bids": [
+        {
+         "price": "59.60",
+         "quantity": 1300
+        },
+        {
+         "price": "59.60",
+         "quantity": 1300
+        },
+        {
+         "price": "59.60",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 300,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "415.70",
+       "asks": [
+        {
+         "price": "415.70",
+         "quantity": 1300
+        },
+        {
+         "price": "415.70",
+         "quantity": 1300
+        },
+        {
+         "price": "415.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "411.50",
+       "bids": [
+        {
+         "price": "411.50",
+         "quantity": 1300
+        },
+        {
+         "price": "411.50",
+         "quantity": 1300
+        },
+        {
+         "price": "411.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 301,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "71.85",
+       "asks": [
+        {
+         "price": "71.85",
+         "quantity": 1300
+        },
+        {
+         "price": "71.85",
+         "quantity": 1300
+        },
+        {
+         "price": "71.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "71.10",
+       "bids": [
+        {
+         "price": "71.10",
+         "quantity": 1300
+        },
+        {
+         "price": "71.10",
+         "quantity": 1300
+        },
+        {
+         "price": "71.10",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 302,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "378.75",
+       "asks": [
+        {
+         "price": "378.75",
+         "quantity": 1300
+        },
+        {
+         "price": "378.75",
+         "quantity": 1300
+        },
+        {
+         "price": "378.75",
+         "quantity": 1300
+        }
+       ],
+       "bid": "374.95",
+       "bids": [
+        {
+         "price": "374.95",
+         "quantity": 1300
+        },
+        {
+         "price": "374.95",
+         "quantity": 1300
+        },
+        {
+         "price": "374.95",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 303,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "24950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "85.10",
+       "asks": [
+        {
+         "price": "85.10",
+         "quantity": 1300
+        },
+        {
+         "price": "85.10",
+         "quantity": 1300
+        },
+        {
+         "price": "85.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": "84.20",
+       "bids": [
+        {
+         "price": "84.20",
+         "quantity": 1300
+        },
+        {
+         "price": "84.20",
+         "quantity": 1300
+        },
+        {
+         "price": "84.20",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 304,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "24950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "343.55",
+       "asks": [
+        {
+         "price": "343.55",
+         "quantity": 1300
+        },
+        {
+         "price": "343.55",
+         "quantity": 1300
+        },
+        {
+         "price": "343.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "340.05",
+       "bids": [
+        {
+         "price": "340.05",
+         "quantity": 1300
+        },
+        {
+         "price": "340.05",
+         "quantity": 1300
+        },
+        {
+         "price": "340.05",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 305,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25000",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "100.05",
+       "asks": [
+        {
+         "price": "100.05",
+         "quantity": 1300
+        },
+        {
+         "price": "100.05",
+         "quantity": 1300
+        },
+        {
+         "price": "100.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": "99.00",
+       "bids": [
+        {
+         "price": "99.00",
+         "quantity": 1300
+        },
+        {
+         "price": "99.00",
+         "quantity": 1300
+        },
+        {
+         "price": "99.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 306,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25000",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "310.10",
+       "asks": [
+        {
+         "price": "310.10",
+         "quantity": 1300
+        },
+        {
+         "price": "310.10",
+         "quantity": 1300
+        },
+        {
+         "price": "310.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": "307.00",
+       "bids": [
+        {
+         "price": "307.00",
+         "quantity": 1300
+        },
+        {
+         "price": "307.00",
+         "quantity": 1300
+        },
+        {
+         "price": "307.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 307,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25050",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "116.85",
+       "asks": [
+        {
+         "price": "116.85",
+         "quantity": 1300
+        },
+        {
+         "price": "116.85",
+         "quantity": 1300
+        },
+        {
+         "price": "116.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "115.60",
+       "bids": [
+        {
+         "price": "115.60",
+         "quantity": 1300
+        },
+        {
+         "price": "115.60",
+         "quantity": 1300
+        },
+        {
+         "price": "115.60",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 308,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25050",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "278.60",
+       "asks": [
+        {
+         "price": "278.60",
+         "quantity": 1300
+        },
+        {
+         "price": "278.60",
+         "quantity": 1300
+        },
+        {
+         "price": "278.60",
+         "quantity": 1300
+        }
+       ],
+       "bid": "275.75",
+       "bids": [
+        {
+         "price": "275.75",
+         "quantity": 1300
+        },
+        {
+         "price": "275.75",
+         "quantity": 1300
+        },
+        {
+         "price": "275.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 309,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25100",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "135.50",
+       "asks": [
+        {
+         "price": "135.50",
+         "quantity": 1300
+        },
+        {
+         "price": "135.50",
+         "quantity": 1300
+        },
+        {
+         "price": "135.50",
+         "quantity": 1300
+        }
+       ],
+       "bid": "134.10",
+       "bids": [
+        {
+         "price": "134.10",
+         "quantity": 1300
+        },
+        {
+         "price": "134.10",
+         "quantity": 1300
+        },
+        {
+         "price": "134.10",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 310,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25100",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "249.00",
+       "asks": [
+        {
+         "price": "249.00",
+         "quantity": 1300
+        },
+        {
+         "price": "249.00",
+         "quantity": 1300
+        },
+        {
+         "price": "249.00",
+         "quantity": 1300
+        }
+       ],
+       "bid": "246.45",
+       "bids": [
+        {
+         "price": "246.45",
+         "quantity": 1300
+        },
+        {
+         "price": "246.45",
+         "quantity": 1300
+        },
+        {
+         "price": "246.45",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 311,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25150",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "156.05",
+       "asks": [
+        {
+         "price": "156.05",
+         "quantity": 1300
+        },
+        {
+         "price": "156.05",
+         "quantity": 1300
+        },
+        {
+         "price": "156.05",
+         "quantity": 1300
+        }
+       ],
+       "bid": "154.45",
+       "bids": [
+        {
+         "price": "154.45",
+         "quantity": 1300
+        },
+        {
+         "price": "154.45",
+         "quantity": 1300
+        },
+        {
+         "price": "154.45",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 312,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25150",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "221.40",
+       "asks": [
+        {
+         "price": "221.40",
+         "quantity": 1300
+        },
+        {
+         "price": "221.40",
+         "quantity": 1300
+        },
+        {
+         "price": "221.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "219.10",
+       "bids": [
+        {
+         "price": "219.10",
+         "quantity": 1300
+        },
+        {
+         "price": "219.10",
+         "quantity": 1300
+        },
+        {
+         "price": "219.10",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 313,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25200",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "178.65",
+       "asks": [
+        {
+         "price": "178.65",
+         "quantity": 1300
+        },
+        {
+         "price": "178.65",
+         "quantity": 1300
+        },
+        {
+         "price": "178.65",
+         "quantity": 1300
+        }
+       ],
+       "bid": "176.85",
+       "bids": [
+        {
+         "price": "176.85",
+         "quantity": 1300
+        },
+        {
+         "price": "176.85",
+         "quantity": 1300
+        },
+        {
+         "price": "176.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 314,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25200",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "195.80",
+       "asks": [
+        {
+         "price": "195.80",
+         "quantity": 1300
+        },
+        {
+         "price": "195.80",
+         "quantity": 1300
+        },
+        {
+         "price": "195.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "193.80",
+       "bids": [
+        {
+         "price": "193.80",
+         "quantity": 1300
+        },
+        {
+         "price": "193.80",
+         "quantity": 1300
+        },
+        {
+         "price": "193.80",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 315,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25250",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "203.25",
+       "asks": [
+        {
+         "price": "203.25",
+         "quantity": 1300
+        },
+        {
+         "price": "203.25",
+         "quantity": 1300
+        },
+        {
+         "price": "203.25",
+         "quantity": 1300
+        }
+       ],
+       "bid": "201.15",
+       "bids": [
+        {
+         "price": "201.15",
+         "quantity": 1300
+        },
+        {
+         "price": "201.15",
+         "quantity": 1300
+        },
+        {
+         "price": "201.15",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 316,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25250",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "172.20",
+       "asks": [
+        {
+         "price": "172.20",
+         "quantity": 1300
+        },
+        {
+         "price": "172.20",
+         "quantity": 1300
+        },
+        {
+         "price": "172.20",
+         "quantity": 1300
+        }
+       ],
+       "bid": "170.40",
+       "bids": [
+        {
+         "price": "170.40",
+         "quantity": 1300
+        },
+        {
+         "price": "170.40",
+         "quantity": 1300
+        },
+        {
+         "price": "170.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 317,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25300",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "229.85",
+       "asks": [
+        {
+         "price": "229.85",
+         "quantity": 1300
+        },
+        {
+         "price": "229.85",
+         "quantity": 1300
+        },
+        {
+         "price": "229.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "227.50",
+       "bids": [
+        {
+         "price": "227.50",
+         "quantity": 1300
+        },
+        {
+         "price": "227.50",
+         "quantity": 1300
+        },
+        {
+         "price": "227.50",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 318,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25300",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "150.55",
+       "asks": [
+        {
+         "price": "150.55",
+         "quantity": 1300
+        },
+        {
+         "price": "150.55",
+         "quantity": 1300
+        },
+        {
+         "price": "150.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "149.05",
+       "bids": [
+        {
+         "price": "149.05",
+         "quantity": 1300
+        },
+        {
+         "price": "149.05",
+         "quantity": 1300
+        },
+        {
+         "price": "149.05",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 319,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25350",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "258.40",
+       "asks": [
+        {
+         "price": "258.40",
+         "quantity": 1300
+        },
+        {
+         "price": "258.40",
+         "quantity": 1300
+        },
+        {
+         "price": "258.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "255.80",
+       "bids": [
+        {
+         "price": "255.80",
+         "quantity": 1300
+        },
+        {
+         "price": "255.80",
+         "quantity": 1300
+        },
+        {
+         "price": "255.80",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 320,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25350",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "130.90",
+       "asks": [
+        {
+         "price": "130.90",
+         "quantity": 1300
+        },
+        {
+         "price": "130.90",
+         "quantity": 1300
+        },
+        {
+         "price": "130.90",
+         "quantity": 1300
+        }
+       ],
+       "bid": "129.55",
+       "bids": [
+        {
+         "price": "129.55",
+         "quantity": 1300
+        },
+        {
+         "price": "129.55",
+         "quantity": 1300
+        },
+        {
+         "price": "129.55",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 321,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25400",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "288.95",
+       "asks": [
+        {
+         "price": "288.95",
+         "quantity": 1300
+        },
+        {
+         "price": "288.95",
+         "quantity": 1300
+        },
+        {
+         "price": "288.95",
+         "quantity": 1300
+        }
+       ],
+       "bid": "286.00",
+       "bids": [
+        {
+         "price": "286.00",
+         "quantity": 1300
+        },
+        {
+         "price": "286.00",
+         "quantity": 1300
+        },
+        {
+         "price": "286.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 322,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25400",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "113.15",
+       "asks": [
+        {
+         "price": "113.15",
+         "quantity": 1300
+        },
+        {
+         "price": "113.15",
+         "quantity": 1300
+        },
+        {
+         "price": "113.15",
+         "quantity": 1300
+        }
+       ],
+       "bid": "112.00",
+       "bids": [
+        {
+         "price": "112.00",
+         "quantity": 1300
+        },
+        {
+         "price": "112.00",
+         "quantity": 1300
+        },
+        {
+         "price": "112.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 323,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "321.35",
+       "asks": [
+        {
+         "price": "321.35",
+         "quantity": 1300
+        },
+        {
+         "price": "321.35",
+         "quantity": 1300
+        },
+        {
+         "price": "321.35",
+         "quantity": 1300
+        }
+       ],
+       "bid": "318.10",
+       "bids": [
+        {
+         "price": "318.10",
+         "quantity": 1300
+        },
+        {
+         "price": "318.10",
+         "quantity": 1300
+        },
+        {
+         "price": "318.10",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 324,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25450",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "97.20",
+       "asks": [
+        {
+         "price": "97.20",
+         "quantity": 1300
+        },
+        {
+         "price": "97.20",
+         "quantity": 1300
+        },
+        {
+         "price": "97.20",
+         "quantity": 1300
+        }
+       ],
+       "bid": "96.20",
+       "bids": [
+        {
+         "price": "96.20",
+         "quantity": 1300
+        },
+        {
+         "price": "96.20",
+         "quantity": 1300
+        },
+        {
+         "price": "96.20",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 325,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "355.60",
+       "asks": [
+        {
+         "price": "355.60",
+         "quantity": 1300
+        },
+        {
+         "price": "355.60",
+         "quantity": 1300
+        },
+        {
+         "price": "355.60",
+         "quantity": 1300
+        }
+       ],
+       "bid": "352.00",
+       "bids": [
+        {
+         "price": "352.00",
+         "quantity": 1300
+        },
+        {
+         "price": "352.00",
+         "quantity": 1300
+        },
+        {
+         "price": "352.00",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 326,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25500",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "83.00",
+       "asks": [
+        {
+         "price": "83.00",
+         "quantity": 1300
+        },
+        {
+         "price": "83.00",
+         "quantity": 1300
+        },
+        {
+         "price": "83.00",
+         "quantity": 1300
+        }
+       ],
+       "bid": "82.15",
+       "bids": [
+        {
+         "price": "82.15",
+         "quantity": 1300
+        },
+        {
+         "price": "82.15",
+         "quantity": 1300
+        },
+        {
+         "price": "82.15",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 327,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "391.55",
+       "asks": [
+        {
+         "price": "391.55",
+         "quantity": 1300
+        },
+        {
+         "price": "391.55",
+         "quantity": 1300
+        },
+        {
+         "price": "391.55",
+         "quantity": 1300
+        }
+       ],
+       "bid": "387.65",
+       "bids": [
+        {
+         "price": "387.65",
+         "quantity": 1300
+        },
+        {
+         "price": "387.65",
+         "quantity": 1300
+        },
+        {
+         "price": "387.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 328,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25550",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "70.45",
+       "asks": [
+        {
+         "price": "70.45",
+         "quantity": 1300
+        },
+        {
+         "price": "70.45",
+         "quantity": 1300
+        },
+        {
+         "price": "70.45",
+         "quantity": 1300
+        }
+       ],
+       "bid": "69.65",
+       "bids": [
+        {
+         "price": "69.65",
+         "quantity": 1300
+        },
+        {
+         "price": "69.65",
+         "quantity": 1300
+        },
+        {
+         "price": "69.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 329,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "429.20",
+       "asks": [
+        {
+         "price": "429.20",
+         "quantity": 1300
+        },
+        {
+         "price": "429.20",
+         "quantity": 1300
+        },
+        {
+         "price": "429.20",
+         "quantity": 1300
+        }
+       ],
+       "bid": "424.85",
+       "bids": [
+        {
+         "price": "424.85",
+         "quantity": 1300
+        },
+        {
+         "price": "424.85",
+         "quantity": 1300
+        },
+        {
+         "price": "424.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 330,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25600",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "59.40",
+       "asks": [
+        {
+         "price": "59.40",
+         "quantity": 1300
+        },
+        {
+         "price": "59.40",
+         "quantity": 1300
+        },
+        {
+         "price": "59.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "58.75",
+       "bids": [
+        {
+         "price": "58.75",
+         "quantity": 1300
+        },
+        {
+         "price": "58.75",
+         "quantity": 1300
+        },
+        {
+         "price": "58.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 331,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "468.30",
+       "asks": [
+        {
+         "price": "468.30",
+         "quantity": 1300
+        },
+        {
+         "price": "468.30",
+         "quantity": 1300
+        },
+        {
+         "price": "468.30",
+         "quantity": 1300
+        }
+       ],
+       "bid": "463.60",
+       "bids": [
+        {
+         "price": "463.60",
+         "quantity": 1300
+        },
+        {
+         "price": "463.60",
+         "quantity": 1300
+        },
+        {
+         "price": "463.60",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 332,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25650",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "49.75",
+       "asks": [
+        {
+         "price": "49.75",
+         "quantity": 1300
+        },
+        {
+         "price": "49.75",
+         "quantity": 1300
+        },
+        {
+         "price": "49.75",
+         "quantity": 1300
+        }
+       ],
+       "bid": "49.20",
+       "bids": [
+        {
+         "price": "49.20",
+         "quantity": 1300
+        },
+        {
+         "price": "49.20",
+         "quantity": 1300
+        },
+        {
+         "price": "49.20",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 333,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "508.85",
+       "asks": [
+        {
+         "price": "508.85",
+         "quantity": 1300
+        },
+        {
+         "price": "508.85",
+         "quantity": 1300
+        },
+        {
+         "price": "508.85",
+         "quantity": 1300
+        }
+       ],
+       "bid": "503.75",
+       "bids": [
+        {
+         "price": "503.75",
+         "quantity": 1300
+        },
+        {
+         "price": "503.75",
+         "quantity": 1300
+        },
+        {
+         "price": "503.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 334,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25700",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "41.40",
+       "asks": [
+        {
+         "price": "41.40",
+         "quantity": 1300
+        },
+        {
+         "price": "41.40",
+         "quantity": 1300
+        },
+        {
+         "price": "41.40",
+         "quantity": 1300
+        }
+       ],
+       "bid": "40.95",
+       "bids": [
+        {
+         "price": "40.95",
+         "quantity": 1300
+        },
+        {
+         "price": "40.95",
+         "quantity": 1300
+        },
+        {
+         "price": "40.95",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 335,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "550.70",
+       "asks": [
+        {
+         "price": "550.70",
+         "quantity": 1300
+        },
+        {
+         "price": "550.70",
+         "quantity": 1300
+        },
+        {
+         "price": "550.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "545.20",
+       "bids": [
+        {
+         "price": "545.20",
+         "quantity": 1300
+        },
+        {
+         "price": "545.20",
+         "quantity": 1300
+        },
+        {
+         "price": "545.20",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 336,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25750",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "34.25",
+       "asks": [
+        {
+         "price": "34.25",
+         "quantity": 1300
+        },
+        {
+         "price": "34.25",
+         "quantity": 1300
+        },
+        {
+         "price": "34.25",
+         "quantity": 1300
+        }
+       ],
+       "bid": "33.85",
+       "bids": [
+        {
+         "price": "33.85",
+         "quantity": 1300
+        },
+        {
+         "price": "33.85",
+         "quantity": 1300
+        },
+        {
+         "price": "33.85",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 337,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "593.70",
+       "asks": [
+        {
+         "price": "593.70",
+         "quantity": 1300
+        },
+        {
+         "price": "593.70",
+         "quantity": 1300
+        },
+        {
+         "price": "593.70",
+         "quantity": 1300
+        }
+       ],
+       "bid": "587.75",
+       "bids": [
+        {
+         "price": "587.75",
+         "quantity": 1300
+        },
+        {
+         "price": "587.75",
+         "quantity": 1300
+        },
+        {
+         "price": "587.75",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 338,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25800",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "28.10",
+       "asks": [
+        {
+         "price": "28.10",
+         "quantity": 1300
+        },
+        {
+         "price": "28.10",
+         "quantity": 1300
+        },
+        {
+         "price": "28.10",
+         "quantity": 1300
+        }
+       ],
+       "bid": "27.80",
+       "bids": [
+        {
+         "price": "27.80",
+         "quantity": 1300
+        },
+        {
+         "price": "27.80",
+         "quantity": 1300
+        },
+        {
+         "price": "27.80",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 339,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "637.80",
+       "asks": [
+        {
+         "price": "637.80",
+         "quantity": 1300
+        },
+        {
+         "price": "637.80",
+         "quantity": 1300
+        },
+        {
+         "price": "637.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "631.40",
+       "bids": [
+        {
+         "price": "631.40",
+         "quantity": 1300
+        },
+        {
+         "price": "631.40",
+         "quantity": 1300
+        },
+        {
+         "price": "631.40",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 340,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25850",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "22.95",
+       "asks": [
+        {
+         "price": "22.95",
+         "quantity": 1300
+        },
+        {
+         "price": "22.95",
+         "quantity": 1300
+        },
+        {
+         "price": "22.95",
+         "quantity": 1300
+        }
+       ],
+       "bid": "22.65",
+       "bids": [
+        {
+         "price": "22.65",
+         "quantity": 1300
+        },
+        {
+         "price": "22.65",
+         "quantity": 1300
+        },
+        {
+         "price": "22.65",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 341,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "682.80",
+       "asks": [
+        {
+         "price": "682.80",
+         "quantity": 1300
+        },
+        {
+         "price": "682.80",
+         "quantity": 1300
+        },
+        {
+         "price": "682.80",
+         "quantity": 1300
+        }
+       ],
+       "bid": "675.95",
+       "bids": [
+        {
+         "price": "675.95",
+         "quantity": 1300
+        },
+        {
+         "price": "675.95",
+         "quantity": 1300
+        },
+        {
+         "price": "675.95",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 342,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25900",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "18.60",
+       "asks": [
+        {
+         "price": "18.60",
+         "quantity": 1300
+        },
+        {
+         "price": "18.60",
+         "quantity": 1300
+        },
+        {
+         "price": "18.60",
+         "quantity": 1300
+        }
+       ],
+       "bid": "18.35",
+       "bids": [
+        {
+         "price": "18.35",
+         "quantity": 1300
+        },
+        {
+         "price": "18.35",
+         "quantity": 1300
+        },
+        {
+         "price": "18.35",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 343,
+       "last": null,
+       "oi": 500000,
+       "option_type": "CE",
+       "strike": "25950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      },
+      {
+       "ask": "728.65",
+       "asks": [
+        {
+         "price": "728.65",
+         "quantity": 1300
+        },
+        {
+         "price": "728.65",
+         "quantity": 1300
+        },
+        {
+         "price": "728.65",
+         "quantity": 1300
+        }
+       ],
+       "bid": "721.35",
+       "bids": [
+        {
+         "price": "721.35",
+         "quantity": 1300
+        },
+        {
+         "price": "721.35",
+         "quantity": 1300
+        },
+        {
+         "price": "721.35",
+         "quantity": 1300
+        }
+       ],
+       "expiry": "2026-10-20",
+       "instrument_token": 344,
+       "last": null,
+       "oi": 500000,
+       "option_type": "PE",
+       "strike": "25950",
+       "ts": "2026-10-13T09:30:00+05:30",
+       "volume": 0
+      }
+     ],
+     "spot": "25210",
+     "ts": "2026-10-13T09:30:00+05:30"
+    }
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "as_of_minute": null,
+   "candidates": [],
+   "numbers": {
+    "next_date": "2026-10-27"
+   },
+   "reasons": [
+    "NOT_MONTHLY"
+   ],
+   "sleeve": "O1M",
+   "stale": false,
+   "state": "NOT_TODAY",
+   "ts": "2026-10-13T09:30:00+05:30"
+  },
+  {
+   "as_of_minute": null,
+   "candidates": [],
+   "numbers": {
+    "bars": 15,
+    "contained": null,
+    "entry_window_end": "10:15",
+    "er": "0.0370",
+    "er_max": "0.30",
+    "gap_max_pct": "0.75",
+    "gap_pct": "0.8000",
+    "last_close": "25210.00",
+    "min_bars": 45,
+    "obs_high": "25212.00",
+    "obs_low": "25188.00",
+    "open_0915": "25200.00",
+    "or_high": "25212.00",
+    "or_low": "25188.00",
+    "plan_time": "10:00",
+    "prev_close": "25000.00",
+    "range_max_pct": "0.80",
+    "range_pct": "0.0960",
+    "variant": "WEEKLY"
+   },
+   "reasons": [
+    "GAP_TOO_BIG"
+   ],
+   "sleeve": "O1W",
+   "stale": false,
+   "state": "OBSERVING",
+   "ts": "2026-10-13T09:30:00+05:30"
+  },
+  {
+   "as_of_minute": "2026-10-13T09:30:00+05:30",
+   "candidates": [
+    {
+     "cost_share": "0.0088",
+     "direction": "UP",
+     "expected_gain_inr": "9712.95",
+     "expiry": "2026-10-20",
+     "gap_through_inr": "16188.25",
+     "gap_through_per_lot_inr": "16188.25",
+     "half_size": false,
+     "legs": [
+      {
+       "ask": "249.00",
+       "bid": "246.45",
+       "delta": "0.576961",
+       "expiry": "2026-10-20",
+       "instrument_token": 311,
+       "iv": "0.140007",
+       "limit_price": "249.05",
+       "option_type": "CE",
+       "role": "LONG_CALL",
+       "side": "BUY",
+       "strike": "25150.00"
+      }
+     ],
+     "lot_size": 65,
+     "lots": 1,
+     "max_loss_inr": "4856.48",
+     "message": "paper, sleeve capital ₹0: one lot, R = one lot's risk",
+     "points": "249.05",
+     "r_inr": "5156.48",
+     "rejection": null,
+     "risk_per_lot_inr": "5156.48",
+     "round_trip_inr": "85.24",
+     "sizing_mode": "PAPER_ONE_LOT",
+     "structure": "LONG_OPTION",
+     "warnings": []
+    }
+   ],
+   "numbers": {
+    "bars": 15,
+    "counter_trend_breaks": [],
+    "direction": "UP",
+    "distance_pct": "0.0579",
+    "distance_points": "14.61",
+    "ema": "24810.00",
+    "expiry": "2026-10-20",
+    "gap_max_pct": "1.0",
+    "gap_pct": "0.8000",
+    "index": "NIFTY 50",
+    "last_close": "25210.00",
+    "level_down": "25175.41",
+    "level_up": "25224.61",
+    "open_0915": "25200.00",
+    "or_high": "25212.00",
+    "or_low": "25188.00",
+    "or_max_pct": "0.90",
+    "or_pct": "0.0960",
+    "prev_close": "25000.00",
+    "trend": "UP",
+    "trend_ema_days": 20,
+    "trigger_level": "25224.61",
+    "vix": "14.00",
+    "vix_max": "22"
+   },
+   "reasons": [],
+   "sleeve": "O2",
+   "stale": false,
+   "state": "ARMED",
+   "ts": "2026-10-13T09:30:00+05:30"
+  },
+  {
+   "as_of_minute": "2026-10-13T09:30:00+05:30",
+   "candidates": [
+    {
+     "cost_share": "0.0347",
+     "direction": "UP",
+     "expected_gain_inr": "2947.75",
+     "expiry": "2026-10-13",
+     "half_size": false,
+     "legs": [
+      {
+       "ask": "42.90",
+       "bid": "42.45",
+       "delta": "0.548640",
+       "expiry": "2026-10-13",
+       "instrument_token": 191,
+       "iv": "0.140015",
+       "limit_price": "42.95",
+       "option_type": "CE",
+       "role": "LONG_CALL",
+       "side": "BUY",
+       "strike": "25200.00"
+      },
+      {
+       "ask": "8.40",
+       "bid": "8.25",
+       "delta": "0.169050",
+       "expiry": "2026-10-13",
+       "instrument_token": 195,
+       "iv": "0.140103",
+       "limit_price": "8.20",
+       "option_type": "CE",
+       "role": "SHORT_CALL",
+       "side": "SELL",
+       "strike": "25300.00"
+      }
+     ],
+     "lot_size": 65,
+     "lots": 1,
+     "max_debit_points": "55.00",
+     "max_loss_inr": "2252.25",
+     "message": "paper, sleeve capital ₹0: one lot, R = one lot's risk",
+     "points": "34.65",
+     "r_inr": "2752.25",
+     "rejection": null,
+     "risk_per_lot_inr": "2752.25",
+     "round_trip_inr": "102.23",
+     "sizing_mode": "PAPER_ONE_LOT",
+     "structure": "DEBIT_SPREAD",
+     "warnings": [],
+     "width_points": "100"
+    }
+   ],
+   "numbers": {
+    "bars": 15,
+    "direction": "UP",
+    "gap_max_pct": "1.50",
+    "gap_min_pct": "0.50",
+    "gap_pct": "0.8000",
+    "gap_points": "200.00",
+    "half_gap": "25100.00",
+    "held_so_far": true,
+    "hold_end": "09:44",
+    "open_0915": "25200.00",
+    "plan_time": "09:45",
+    "prev_close": "25000.00",
+    "window_end": "10:00"
+   },
+   "reasons": [],
+   "sleeve": "O3B",
+   "stale": false,
+   "state": "BUILDING_RANGE",
+   "ts": "2026-10-13T09:30:00+05:30"
+  },
+  {
+   "as_of_minute": null,
+   "candidates": [],
+   "numbers": {
+    "bars": 15,
+    "er_min": "0.40",
+    "last_close": "25210.00",
+    "level_down": "25175.41",
+    "level_up": "25224.61",
+    "low_er_breaks": [],
+    "prev_close": "25000.00",
+    "range_high": "25212.00",
+    "range_low": "25188.00",
+    "range_max_pct": "1.20",
+    "range_pct": "0.0960",
+    "window_end": "13:00",
+    "window_start": "10:19"
+   },
+   "reasons": [],
+   "sleeve": "O3A",
+   "stale": false,
+   "state": "BUILDING_RANGE",
+   "ts": "2026-10-13T09:30:00+05:30"
+  }
+ ]
+}

@@ -1,0 +1,268 @@
+{
+ "fn": "baskfy_core.twt.plan.assemble",
+ "inputs": {
+  "entries": [
+   {
+    "cap": "SLOT",
+    "entry_price": "205.40",
+    "high_since": null,
+    "instrument_id": 2,
+    "kind": "BUY_AT_OPEN",
+    "note": "",
+    "position_id": null,
+    "previous_stop": null,
+    "quantity": 1217,
+    "stop_price": "164.30",
+    "symbol": "BBB",
+    "value_inr": "249971.80"
+   },
+   {
+    "cap": "SLOT",
+    "entry_price": "412.35",
+    "high_since": null,
+    "instrument_id": 1,
+    "kind": "BUY_AT_OPEN",
+    "note": "buy",
+    "position_id": null,
+    "previous_stop": null,
+    "quantity": 606,
+    "stop_price": "329.85",
+    "symbol": "AAA",
+    "value_inr": "249884.10"
+   }
+  ],
+  "equity": "2500000",
+  "exits": [
+   {
+    "cap": null,
+    "entry_price": null,
+    "high_since": "520.10",
+    "instrument_id": 4,
+    "kind": "RAISE_GTT_STOP",
+    "note": "",
+    "position_id": 12,
+    "previous_stop": "400.00",
+    "quantity": 100,
+    "stop_price": "416.05",
+    "symbol": "DDD",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "entry_price": null,
+    "high_since": null,
+    "instrument_id": 3,
+    "kind": "ARM_GTT",
+    "note": "",
+    "position_id": null,
+    "previous_stop": null,
+    "quantity": 300,
+    "stop_price": "50.00",
+    "symbol": "CCC",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "entry_price": null,
+    "high_since": null,
+    "instrument_id": 5,
+    "kind": "SELL_AT_OPEN",
+    "note": "",
+    "position_id": 13,
+    "previous_stop": null,
+    "quantity": 100,
+    "stop_price": null,
+    "symbol": "EEE",
+    "value_inr": "0"
+   }
+  ],
+  "gate": "SHUT",
+  "session": "2024-05-20",
+  "skips": [
+   {
+    "detail": "3 a session",
+    "instrument_id": 6,
+    "reason": "SESSION_CAP",
+    "symbol": "FFF"
+   }
+  ],
+  "source": "EVENING"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the same lines under the other gate hash differently. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "derived": {
+   "canonical": [
+    {
+     "entry_price": "",
+     "instrument_id": 5,
+     "kind": "SELL_AT_OPEN",
+     "position_id": 13,
+     "quantity": 100,
+     "stop_price": "",
+     "symbol": "EEE"
+    },
+    {
+     "entry_price": "",
+     "instrument_id": 3,
+     "kind": "ARM_GTT",
+     "position_id": "",
+     "quantity": 300,
+     "stop_price": "50.00",
+     "symbol": "CCC"
+    },
+    {
+     "entry_price": "",
+     "instrument_id": 4,
+     "kind": "RAISE_GTT_STOP",
+     "position_id": 12,
+     "quantity": 100,
+     "stop_price": "416.05",
+     "symbol": "DDD"
+    },
+    {
+     "entry_price": "412.35",
+     "instrument_id": 1,
+     "kind": "BUY_AT_OPEN",
+     "position_id": "",
+     "quantity": 606,
+     "stop_price": "329.85",
+     "symbol": "AAA"
+    },
+    {
+     "entry_price": "205.40",
+     "instrument_id": 2,
+     "kind": "BUY_AT_OPEN",
+     "position_id": "",
+     "quantity": 1217,
+     "stop_price": "164.30",
+     "symbol": "BBB"
+    }
+   ],
+   "entries": [
+    {
+     "cap": "SLOT",
+     "entry_price": "412.35",
+     "high_since": null,
+     "instrument_id": 1,
+     "kind": "BUY_AT_OPEN",
+     "note": "buy",
+     "position_id": null,
+     "previous_stop": null,
+     "quantity": 606,
+     "stop_price": "329.85",
+     "symbol": "AAA",
+     "value_inr": "249884.10"
+    },
+    {
+     "cap": "SLOT",
+     "entry_price": "205.40",
+     "high_since": null,
+     "instrument_id": 2,
+     "kind": "BUY_AT_OPEN",
+     "note": "",
+     "position_id": null,
+     "previous_stop": null,
+     "quantity": 1217,
+     "stop_price": "164.30",
+     "symbol": "BBB",
+     "value_inr": "249971.80"
+    }
+   ],
+   "plan_hash": "e4bcd8b583ab63bd7281a9a7b90e42e28b1303ff5cdd28890cb15fa28aa0c5b3",
+   "total_new_exposure_inr": "499855.90"
+  },
+  "plan": {
+   "gate": "SHUT",
+   "generated_from": "EVENING",
+   "lines": [
+    {
+     "cap": null,
+     "entry_price": null,
+     "high_since": null,
+     "instrument_id": 5,
+     "kind": "SELL_AT_OPEN",
+     "note": "",
+     "position_id": 13,
+     "previous_stop": null,
+     "quantity": 100,
+     "stop_price": null,
+     "symbol": "EEE",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "entry_price": null,
+     "high_since": null,
+     "instrument_id": 3,
+     "kind": "ARM_GTT",
+     "note": "",
+     "position_id": null,
+     "previous_stop": null,
+     "quantity": 300,
+     "stop_price": "50.00",
+     "symbol": "CCC",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "entry_price": null,
+     "high_since": "520.10",
+     "instrument_id": 4,
+     "kind": "RAISE_GTT_STOP",
+     "note": "",
+     "position_id": 12,
+     "previous_stop": "400.00",
+     "quantity": 100,
+     "stop_price": "416.05",
+     "symbol": "DDD",
+     "value_inr": "0"
+    },
+    {
+     "cap": "SLOT",
+     "entry_price": "412.35",
+     "high_since": null,
+     "instrument_id": 1,
+     "kind": "BUY_AT_OPEN",
+     "note": "buy",
+     "position_id": null,
+     "previous_stop": null,
+     "quantity": 606,
+     "stop_price": "329.85",
+     "symbol": "AAA",
+     "value_inr": "249884.10"
+    },
+    {
+     "cap": "SLOT",
+     "entry_price": "205.40",
+     "high_since": null,
+     "instrument_id": 2,
+     "kind": "BUY_AT_OPEN",
+     "note": "",
+     "position_id": null,
+     "previous_stop": null,
+     "quantity": 1217,
+     "stop_price": "164.30",
+     "symbol": "BBB",
+     "value_inr": "249971.80"
+    }
+   ],
+   "session": "2024-05-20",
+   "skips": [
+    {
+     "detail": "3 a session",
+     "instrument_id": 6,
+     "reason": "SESSION_CAP",
+     "symbol": "FFF"
+    }
+   ],
+   "sleeve_equity_inr": "2500000"
+  }
+ }
+}

@@ -50,11 +50,19 @@ def force_ipv4() -> bool:
     return True
 
 
-def outbound_ip(timeout: float = 6.0) -> str | None:
+def kite_proxies(proxy_url: str) -> dict[str, str] | None:
+    url = proxy_url.strip()
+    return {"http": url, "https": url} if url else None
+
+
+def outbound_ip(timeout: float = 6.0, proxy_url: str = "") -> str | None:
     """The address the world actually sees. Read-only, and never on the order path."""
     import urllib.request
+    opener = urllib.request.build_opener(
+        *([urllib.request.ProxyHandler(kite_proxies(proxy_url))] if proxy_url.strip() else [])
+    )
     try:
-        with urllib.request.urlopen("https://api.ipify.org", timeout=timeout) as r:
+        with opener.open("https://api.ipify.org", timeout=timeout) as r:
             return r.read().decode().strip()
     except Exception:                                              # noqa: BLE001
         return None

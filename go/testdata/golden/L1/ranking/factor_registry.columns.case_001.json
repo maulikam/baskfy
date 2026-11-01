@@ -1,0 +1,230 @@
+{
+ "fn": "baskfy_core.factor_registry.columns",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "docs/01 §4's column picker, in order. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "is_factor": false,
+   "key": "series",
+   "label": "SERIES",
+   "unit": "text"
+  },
+  {
+   "is_factor": true,
+   "key": "marketcap_cr",
+   "label": "MARKETCAP",
+   "unit": "crore"
+  },
+  {
+   "is_factor": true,
+   "key": "pe",
+   "label": "PRICE TO EARNINGS",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "ret_12m",
+   "label": "ABSOLUTE RETURN 1 YEAR",
+   "unit": "percent"
+  },
+  {
+   "is_factor": true,
+   "key": "ret_9m",
+   "label": "ABSOLUTE RETURN 9 MONTHS",
+   "unit": "percent"
+  },
+  {
+   "is_factor": true,
+   "key": "ret_6m",
+   "label": "ABSOLUTE RETURN 6 MONTHS",
+   "unit": "percent"
+  },
+  {
+   "is_factor": true,
+   "key": "ret_3m",
+   "label": "ABSOLUTE RETURN 3 MONTHS",
+   "unit": "percent"
+  },
+  {
+   "is_factor": true,
+   "key": "ret_1m",
+   "label": "ABSOLUTE RETURN 1 MONTH",
+   "unit": "percent"
+  },
+  {
+   "is_factor": true,
+   "key": "sharpe_12m",
+   "label": "SHARPE RETURN 1 YEAR",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "sharpe_9m",
+   "label": "SHARPE RETURN 9 MONTHS",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "sharpe_6m",
+   "label": "SHARPE RETURN 6 MONTHS",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "sharpe_3m",
+   "label": "SHARPE RETURN 3 MONTHS",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "sharpe_1m",
+   "label": "SHARPE RETURN 1 MONTH",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "rsi_12m",
+   "label": "RSI 1 YEAR",
+   "unit": "index"
+  },
+  {
+   "is_factor": true,
+   "key": "rsi_9m",
+   "label": "RSI 9 MONTHS",
+   "unit": "index"
+  },
+  {
+   "is_factor": true,
+   "key": "rsi_6m",
+   "label": "RSI 6 MONTHS",
+   "unit": "index"
+  },
+  {
+   "is_factor": true,
+   "key": "rsi_3m",
+   "label": "RSI 3 MONTHS",
+   "unit": "index"
+  },
+  {
+   "is_factor": true,
+   "key": "rsi_1m",
+   "label": "RSI 1 MONTH",
+   "unit": "index"
+  },
+  {
+   "is_factor": true,
+   "key": "beta_12m",
+   "label": "BETA",
+   "unit": "ratio"
+  },
+  {
+   "is_factor": true,
+   "key": "vol_12m",
+   "label": "VOLATILITY 1 YEAR",
+   "unit": "fraction"
+  },
+  {
+   "is_factor": false,
+   "key": "high_1y",
+   "label": "HIGH ONE YEAR",
+   "unit": "price"
+  },
+  {
+   "is_factor": false,
+   "key": "high_ath",
+   "label": "HIGH ALL TIME",
+   "unit": "price"
+  },
+  {
+   "is_factor": true,
+   "key": "away_high_1y",
+   "label": "AWAY FROM HIGH 1 YEAR",
+   "unit": "percent"
+  },
+  {
+   "is_factor": true,
+   "key": "away_high_ath",
+   "label": "AWAY FROM HIGH ALL TIME",
+   "unit": "percent"
+  },
+  {
+   "is_factor": false,
+   "key": "ma_200",
+   "label": "MA 200",
+   "unit": "price"
+  },
+  {
+   "is_factor": false,
+   "key": "ma_100",
+   "label": "MA 100",
+   "unit": "price"
+  },
+  {
+   "is_factor": false,
+   "key": "ma_50",
+   "label": "MA 50",
+   "unit": "price"
+  },
+  {
+   "is_factor": false,
+   "key": "ma_20",
+   "label": "MA 20",
+   "unit": "price"
+  },
+  {
+   "is_factor": false,
+   "key": "median_vol_12m",
+   "label": "MEDIAN VOLUME ONE YEAR",
+   "unit": "rupees"
+  },
+  {
+   "is_factor": true,
+   "key": "close",
+   "label": "CLOSE",
+   "unit": "price"
+  },
+  {
+   "is_factor": true,
+   "key": "close_raw",
+   "label": "CLOSE RAW",
+   "unit": "price"
+  },
+  {
+   "is_factor": false,
+   "key": "circuits_12m",
+   "label": "CIRCUITS 1 YEAR",
+   "unit": "count"
+  },
+  {
+   "is_factor": false,
+   "key": "circuits_9m",
+   "label": "CIRCUITS 9 MONTHS",
+   "unit": "count"
+  },
+  {
+   "is_factor": false,
+   "key": "circuits_6m",
+   "label": "CIRCUITS 6 MONTHS",
+   "unit": "count"
+  },
+  {
+   "is_factor": false,
+   "key": "circuits_3m",
+   "label": "CIRCUITS 3 MONTHS",
+   "unit": "count"
+  },
+  {
+   "is_factor": false,
+   "key": "circuits_1m",
+   "label": "CIRCUITS 1 MONTH",
+   "unit": "count"
+  }
+ ]
+}

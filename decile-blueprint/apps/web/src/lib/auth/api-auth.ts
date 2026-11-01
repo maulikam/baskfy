@@ -15,6 +15,7 @@ import "server-only";
  * `/auth/refresh` and the server-rendered pages read the Auth.js session. `docs/12a` §5.
  */
 import { serverApiOrigin } from "@/lib/api/config";
+import { mintAccessToken } from "@/lib/auth/jwt";
 
 export interface Account {
   publicId: string;
@@ -88,4 +89,72 @@ export async function exchangeGoogleIdToken(idToken: string): Promise<Account | 
   const response = await post("/auth/google", { id_token: idToken });
   if (!response?.ok) return null;
   return toAccount((await response.json()) as SessionPayload);
+}
+
+/**
+ * The one account this machine signs in as, when it is the operator's own Mac and not a website.
+ *
+ * Maulik, 29 Oct 2026, after Baskfy moved off AWS onto his Mac (reachable only from his own
+ * devices, over Tailscale): "since it is on localhost, no google login required". Set only by
+ * `tools/deploy/local.sh`, in `compose.local.yml`; production compose never names it, so on any
+ * deployment that is a website this is `undefined` and the provider below is never registered.
+ */
+export function localSignInPublicId(): string | undefined {
+  const value = process.env.BASKFY_LOCAL_SIGNIN_PUBLIC_ID?.trim();
+  return value ? value : undefined;
+}
+
+/** Above any real `session_epoch`, so the probe below is never refused for being stale. */
+const PROBE_EPOCH = 2 ** 31 - 1;
+
+/**
+ * An API session for `publicId` without Google: the same access token the Google path ends with.
+ *
+ * This app already mints every access token after the first (the `jwt` callback re-mints with
+ * the shared secret), so nothing here is a new power — only a new first step. The account's real
+ * `session_epoch` is read back from `GET /me` with a short-lived probe token and stamped into the
+ * session, so a revocation (an epoch bump) still kills a locally-signed-in session exactly as it
+ * kills a Google one. `null` when the API does not know the account, it is deleted, or the API
+ * is unreachable — none of those is a sign-in.
+ */
+export async function signInLocally(
+  publicId: string,
+  secret: string | undefined,
+  issuer: string | undefined,
+  audience: string | undefined,
+): Promise<Account | null> {
+  const probe = await mintAccessToken(
+    { subject: publicId, epoch: PROBE_EPOCH, issuer, audience },
+    secret,
+  );
+  let response: Response;
+  try {
+    response = await fetch(`${serverApiOrigin()}/api/v1/me`, {
+      headers: { Authorization: `Bearer ${probe.token}` },
+      cache: "no-store",
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const me = (await response.json()) as {
+    public_id: string;
+    email: string;
+    name?: string | null;
+    session_epoch?: number;
+  };
+  if (me.public_id !== publicId) return null;
+  const sessionEpoch = me.session_epoch ?? 0;
+  const minted = await mintAccessToken(
+    { subject: publicId, epoch: sessionEpoch, issuer, audience },
+    secret,
+  );
+  return {
+    publicId,
+    email: me.email,
+    name: me.name ?? null,
+    accessToken: minted.token,
+    accessTokenExpiresAt: minted.expiresAt,
+    sessionEpoch,
+  };
 }

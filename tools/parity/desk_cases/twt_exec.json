@@ -1,0 +1,515 @@
+{
+  "note": "Wave D lane twt_exec (lanes/twt/execute.rs + auto.rs, ported from app/twt_execute.py and app/twt_auto.py): the confirm path end to end in DRY_RUN on the bed's real tw_ rows. Graded here: SELL_AT_OPEN (partial and full, MA-trail and manual, not-in-book refusals) on EVENING plans 72, 83 and 87; RAISE_GTT_STOP on plan 72; the refusals before any read (422 on a missing/garbled field, 400 without confirm=true, 404 unknown plan/line or a line of another plan, 405); 409 on a second confirm; both sides of plan 72's expiry at 21:50:00.207377 IST (410 is checked before the line's state); SESSION_CAP on plan 22 (28 Sep already holds five sent buys); BUY_AT_OPEN refused PROTECTION_UNRESOLVED (plans 72 and 25: the bed carries twelve open twt lv_protection_issue rows); rearm, the 15:15 sweep and reconcile. Wave D2 adds the BUY PATH section at the end: the twt lv_protection_issue rows resolved as the LV reconciler would resolve them, and a seeded MORNING plan 9001 for 30 Oct (five BUY_AT_OPEN lines with their tw_signal_daily turnover rows, one ARM_GTT line), so a buy reaches the gateway: the re-size against the live quote and against the plan's preview, the turnover-cap refusal, place (DRY_RUN), apply_fill, the GTT stop armed in the same request (non-negotiable 4), client_id = plan_id:symbol and the gateway's own idempotency on a re-posted line, the three-entries-a-session cap on the fourth buy, and the ARM_GTT kind on a position whose stop was cancelled by hand. First-ten half size is a live-money rule (DRY_RUN never moves the countdown) and is pinned by the unit tests. The replay Kite must record no order or GTT call. db_mask: server-stamped now() columns only (risk_ledger.updated_at, tw_fill.created_at, tw_session/tw_plan_line/tw_position created_at/updated_at, tw_order.updated_at, tw_plan.created_at, tw_signal_daily.created_at) — the injected clock cannot reach the database.",
+  "db_mask": {"public.risk_ledger": ["updated_at"], "public.tw_fill": ["created_at"], "public.tw_session": ["created_at", "updated_at"], "public.tw_order": ["updated_at"], "public.tw_plan": ["created_at"], "public.tw_plan_line": ["created_at", "updated_at"], "public.tw_position": ["created_at", "updated_at"], "public.tw_signal_daily": ["created_at"]},
+  "cases": [
+    {
+      "name": "plan 72 page before confirming (19 Oct 21:30)",
+      "method": "GET",
+      "path": "/twt/data",
+      "clock": "2026-10-19T21:30:00+05:30"
+    },
+    {
+      "name": "no confirm field is a 422 before anything",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "271"
+      }
+    },
+    {
+      "name": "confirm=false is 400, nothing read",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "271",
+        "confirm": "false"
+      }
+    },
+    {
+      "name": "confirm=yes is 400 (only 'true', any case)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "271",
+        "confirm": "yes"
+      }
+    },
+    {
+      "name": "confirm=' true' with a space is 400",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "271",
+        "confirm": " true"
+      }
+    },
+    {
+      "name": "unknown plan is 404",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "00000000-0000-0000-0000-000000000000",
+        "line_id": "271",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "a line of another plan (325 is plan 83's) is 404",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "325",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "unknown line is 404",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "999999",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "line_id not an integer is 422",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "abc",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "missing plan_id is 422",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "line_id": "271",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "GET /twt/execute is 405",
+      "method": "GET",
+      "path": "/twt/execute"
+    },
+    {
+      "name": "confirm SELL_AT_OPEN CUPID on plan 72",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "268",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm RAISE_GTT_STOP CUPID on plan 72",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "273",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY_AT_OPEN ATHERENERG on plan 72 is refused PROTECTION_UNRESOLVED (the bed's open lv_protection_issue rows), line REJECTED, nothing sent",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "274",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "the same (now REJECTED) buy again is 409",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "274",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY_AT_OPEN MEESHO on plan 72: PROTECTION_UNRESOLVED",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "275",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY_AT_OPEN PERSISTENT on plan 72: PROTECTION_UNRESOLVED",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "276",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm SELL_AT_OPEN ETERNAL on plan 72",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "269",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm SELL_AT_OPEN LALPATHLAB on plan 72",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "270",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "plan 72 page after confirming",
+      "method": "GET",
+      "path": "/twt/data"
+    },
+    {
+      "name": "plan 72 377 microseconds before its expiry (21:50:00.207377) still confirms SELL_AT_OPEN line 272",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "272",
+        "confirm": "true"
+      },
+      "clock": "2026-10-19T21:50:00.207+05:30"
+    },
+    {
+      "name": "plan 72 just past its expiry (21:50:00.207377; the harness clock is a float, so the exact instant is pinned by the unit test) refuses the rest (410)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "271",
+        "confirm": "true"
+      },
+      "clock": "2026-10-19T21:50:00.208+05:30"
+    },
+    {
+      "name": "an already-confirmed line on the expired plan is 410, not 409 (expiry is checked first)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "399d01b4-f99d-46b1-a952-20de28350623",
+        "line_id": "274",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm SELL_AT_OPEN CUPID on plan 83 (27 Oct 21:30)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "8d5dbe04-36bc-40c5-91ea-ffa294cbd5ab",
+        "line_id": "325",
+        "confirm": "true"
+      },
+      "clock": "2026-10-27T21:30:00+05:30"
+    },
+    {
+      "name": "confirm SELL_AT_OPEN SYRMA on plan 83",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "8d5dbe04-36bc-40c5-91ea-ffa294cbd5ab",
+        "line_id": "328",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm SELL_AT_OPEN NAUKRI on plan 87 (29 Oct 21:30)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "608961ab-2120-4106-8e5f-07bee2e2847d",
+        "line_id": "334",
+        "confirm": "true"
+      },
+      "clock": "2026-10-29T21:30:00+05:30"
+    },
+    {
+      "name": "confirm SELL_AT_OPEN CUPID on plan 87",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "608961ab-2120-4106-8e5f-07bee2e2847d",
+        "line_id": "333",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm on plan 87 with confirm=TRUE is a confirm (409 now)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "608961ab-2120-4106-8e5f-07bee2e2847d",
+        "line_id": "333",
+        "confirm": "TRUE"
+      }
+    },
+    {
+      "name": "plan 87 page after confirming",
+      "method": "GET",
+      "path": "/twt/data"
+    },
+    {
+      "name": "the page itself after confirming",
+      "method": "GET",
+      "path": "/twt"
+    },
+    {
+      "name": "rearm a position after the sells",
+      "method": "POST",
+      "path": "/twt/rearm",
+      "form": {
+        "position_id": "3",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "rearm an unknown position is 404",
+      "method": "POST",
+      "path": "/twt/rearm",
+      "form": {
+        "position_id": "7",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "sweep at 15:15 after the confirms",
+      "method": "POST",
+      "path": "/twt/sweep",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "2026-10-30T15:15:00+05:30"
+    },
+    {
+      "name": "reconcile after the confirms",
+      "method": "POST",
+      "path": "/twt/reconcile",
+      "form": {
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "the data at the close",
+      "method": "GET",
+      "path": "/twt/data",
+      "clock": "close"
+    },
+    {
+      "name": "SESSION_CAP: 28 Sep already has five buys sent, so plan 22's buy (line 34) is refused at 21:30",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "4cdc5b7a-98e2-43b4-bc90-d64bcb21ae16",
+        "line_id": "34",
+        "confirm": "true"
+      },
+      "clock": "2026-09-28T21:30:00+05:30"
+    },
+    {
+      "name": "SESSION_CAP: plan 22's next buy (line 35) refused too, the line REJECTED, nothing sent",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "4cdc5b7a-98e2-43b4-bc90-d64bcb21ae16",
+        "line_id": "35",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "plan 25's first buy (line 43, 29 Sep, one buy already sent): under the cap, so the protection refusal answers (PROTECTION_UNRESOLVED)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "9015d2ed-7775-401b-8084-798f7814f3eb",
+        "line_id": "43",
+        "confirm": "true"
+      },
+      "clock": "2026-09-29T21:30:00+05:30"
+    },
+    {
+      "name": "plan 25's second buy (line 44): PROTECTION_UNRESOLVED",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "9015d2ed-7775-401b-8084-798f7814f3eb",
+        "line_id": "44",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "plan 25's third buy (line 45): PROTECTION_UNRESOLVED (no entry was taken, so the cap does not answer)",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "9015d2ed-7775-401b-8084-798f7814f3eb",
+        "line_id": "45",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "re-confirming plan 25's first buy is 409, nothing sent twice",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "9015d2ed-7775-401b-8084-798f7814f3eb",
+        "line_id": "43",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "the data after the cap cases",
+      "method": "GET",
+      "path": "/twt/data"
+    },
+    {
+      "name": "BUY PATH: the reconciler has resolved the twt findings and a MORNING plan (9001: five buys and an ARM_GTT) is built for 30 Oct 09:05; its page at 09:16",
+      "method": "GET",
+      "path": "/twt/data",
+      "clock": "open",
+      "sql": [
+        "UPDATE public.lv_protection_issue SET resolved_at = '2026-10-30 09:10:00+05:30' WHERE sleeve = 'twt' AND resolved_at IS NULL",
+        "INSERT INTO public.tw_plan (id, plan_id, user_id, session_date, source, built_at, expires_at, plan_hash, gate, sleeve_equity_inr, total_new_exposure_inr) OVERRIDING SYSTEM VALUE VALUES (9001, 'd2c0ffee-0000-4000-8000-000000009001', 1, '2026-10-29', 'MORNING', '2026-10-30 09:05:00+05:30', '2026-10-30 09:35:00+05:30', 'rsd-twt-exec-buy-path', 'OPEN', 2500000.00, 594917.75)",
+        "INSERT INTO public.tw_signal_daily (user_id, date, instrument_id, state, entry_reference_close, stop_preview, sessions_out_before, rank_key, turnover_avg_20) VALUES (1, '2026-10-29', 6, 'SIGNAL', 1480.45, 1184.36, 3, 500000000, 500000000)",
+        "INSERT INTO public.tw_signal_daily (user_id, date, instrument_id, state, entry_reference_close, stop_preview, sessions_out_before, rank_key, turnover_avg_20) VALUES (1, '2026-10-29', 1727, 'SIGNAL', 183.65, 146.92, 3, 100000, 100000)",
+        "INSERT INTO public.tw_signal_daily (user_id, date, instrument_id, state, entry_reference_close, stop_preview, sessions_out_before, rank_key, turnover_avg_20) VALUES (1, '2026-10-29', 1998, 'SIGNAL', 2094.25, 1675.40, 3, 500000000, 500000000)",
+        "INSERT INTO public.tw_signal_daily (user_id, date, instrument_id, state, entry_reference_close, stop_preview, sessions_out_before, rank_key, turnover_avg_20) VALUES (1, '2026-10-29', 78, 'SIGNAL', 357.15, 285.72, 3, 500000000, 500000000)",
+        "INSERT INTO public.tw_signal_daily (user_id, date, instrument_id, state, entry_reference_close, stop_preview, sessions_out_before, rank_key, turnover_avg_20) VALUES (1, '2026-10-29', 146, 'SIGNAL', 3032.50, 2426.00, 3, 500000000, 500000000)",
+        "INSERT INTO public.tw_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, stop_price, value_inr, note, client_id) OVERRIDING SYSTEM VALUE VALUES (9101, 9001, 1, 6, 'BUY_AT_OPEN', 'PROPOSED', 80, 1184.36, 118436.00, '', 'd2c0ffee-0000-4000-8000-000000009001:ATHERENERG')",
+        "INSERT INTO public.tw_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, stop_price, value_inr, note, client_id) OVERRIDING SYSTEM VALUE VALUES (9102, 9001, 1, 1727, 'BUY_AT_OPEN', 'PROPOSED', 600, 146.92, 110190.00, '', 'd2c0ffee-0000-4000-8000-000000009001:MEESHO')",
+        "INSERT INTO public.tw_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, stop_price, value_inr, note, client_id) OVERRIDING SYSTEM VALUE VALUES (9103, 9001, 1, 1998, 'BUY_AT_OPEN', 'PROPOSED', 59, 1675.40, 123560.75, '', 'd2c0ffee-0000-4000-8000-000000009001:PERSISTENT')",
+        "INSERT INTO public.tw_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, stop_price, value_inr, note, client_id) OVERRIDING SYSTEM VALUE VALUES (9104, 9001, 1, 78, 'BUY_AT_OPEN', 'PROPOSED', 340, 285.72, 121431.00, '', 'd2c0ffee-0000-4000-8000-000000009001:ABB')",
+        "INSERT INTO public.tw_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, stop_price, value_inr, note, client_id) OVERRIDING SYSTEM VALUE VALUES (9105, 9001, 1, 146, 'BUY_AT_OPEN', 'PROPOSED', 40, 2426.00, 121300.00, '', 'd2c0ffee-0000-4000-8000-000000009001:ADANIENT')",
+        "INSERT INTO public.tw_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, stop_price, value_inr, note, client_id) OVERRIDING SYSTEM VALUE VALUES (9106, 9001, 1, 6, 'ARM_GTT', 'PROPOSED', 80, 1184.36, 0.00, '', 'd2c0ffee-0000-4000-8000-000000009001:ATHERENERG:ARM_GTT')"
+      ]
+    },
+    {
+      "name": "BUY PATH: BUY_AT_OPEN ATHERENERG reaches the gateway (re-size against the live quote, place DRY_RUN, apply_fill) and its GTT stop is armed in the same request",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9101",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY PATH: BUY_AT_OPEN MEESHO (no quote: the plan's preview prices it) is refused by the 1%-of-turnover cap at the re-size, line REJECTED, nothing sent, not counted against the cap",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9102",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY PATH: BUY_AT_OPEN PERSISTENT, the second entry of the session, filled and stopped",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9103",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY PATH: re-confirming ATHERENERG is 409 before the gateway",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9101",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY PATH: a re-posted ATHERENERG line (forced back to PROPOSED) reaches the gateway with the same client_id plan_id:ATHERENERG — the gateway's own idempotency answers",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9101",
+        "confirm": "true"
+      },
+      "sql": [
+        "UPDATE public.tw_plan_line SET state = 'PROPOSED' WHERE id = 9101"
+      ]
+    },
+    {
+      "name": "BUY PATH: BUY_AT_OPEN ABB",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9104",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY PATH: BUY_AT_OPEN ADANIENT meets the three-entries-a-session cap (SESSION_CAP), line REJECTED, nothing sent",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9105",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "ARM_GTT: ATHERENERG's stop was cancelled by hand (gtt_id cleared); the plan's ARM_GTT line arms it through the gateway",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9106",
+        "confirm": "true"
+      },
+      "sql": [
+        "UPDATE public.tw_position SET gtt_id = NULL, gtt_trigger = NULL WHERE instrument_id = 6 AND state = 'OPEN'"
+      ]
+    },
+    {
+      "name": "ARM_GTT: confirming the armed line again is 409",
+      "method": "POST",
+      "path": "/twt/execute",
+      "form": {
+        "plan_id": "d2c0ffee-0000-4000-8000-000000009001",
+        "line_id": "9106",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "BUY PATH: the data after the buys",
+      "method": "GET",
+      "path": "/twt/data"
+    }
+  ]
+}

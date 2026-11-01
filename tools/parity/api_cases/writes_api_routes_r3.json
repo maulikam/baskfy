@@ -1,0 +1,586 @@
+{
+ "mode": "writes",
+ "lane": "r3",
+ "note": "Lane R3: the screener-running routes (R8.ar6).",
+ "env": {
+  "BASKFY_SOLE_USER_ID": "1"
+ },
+ "db_mask": {
+  "screen_run": [
+   "created_at"
+  ],
+  "cb_basket": [
+   "created_at",
+   "updated_at"
+  ],
+  "cb_basket_version": [
+   "created_at"
+  ],
+  "portfolio_rebalance": [
+   "created_at"
+  ]
+ },
+ "tables": [
+  "screen_run",
+  "cb_basket",
+  "cb_basket_version",
+  "cb_constituent",
+  "portfolio_rebalance"
+ ],
+ "cases": [
+  {
+   "name": "preview-anon-legacy",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    }
+   }
+  },
+  {
+   "name": "preview-owner-legacy-columns",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "columns": [
+     "ret_12m",
+     "rsi_1m"
+    ]
+   }
+  },
+  {
+   "name": "preview-owner-ranking",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    }
+   }
+  },
+  {
+   "name": "preview-owner-historical",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "as_of": "2026-10-25"
+   }
+  },
+  {
+   "name": "preview-future",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "as_of": "2030-01-01"
+   }
+  },
+  {
+   "name": "preview-stale",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "data_version": 1
+   }
+  },
+  {
+   "name": "preview-bad-column",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "columns": [
+     "nope"
+    ]
+   }
+  },
+  {
+   "name": "preview-extra",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "x": 1
+   }
+  },
+  {
+   "name": "preview-no-body",
+   "method": "POST",
+   "path": "/api/v1/screens/preview",
+   "user": "owner"
+  },
+  {
+   "name": "preview-get-falls-to-id",
+   "method": "GET",
+   "path": "/api/v1/screens/preview",
+   "user": "owner"
+  },
+  {
+   "name": "explain-anon",
+   "method": "POST",
+   "path": "/api/v1/screens/explain",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "symbol": "AXISBANK"
+   }
+  },
+  {
+   "name": "explain-legacy",
+   "method": "POST",
+   "path": "/api/v1/screens/explain",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m"
+    },
+    "symbol": "AXISBANK"
+   }
+  },
+  {
+   "name": "explain-owner",
+   "method": "POST",
+   "path": "/api/v1/screens/explain",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "symbol": "axisbank"
+   }
+  },
+  {
+   "name": "explain-missing-symbol",
+   "method": "POST",
+   "path": "/api/v1/screens/explain",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "symbol": "NOPE"
+   }
+  },
+  {
+   "name": "selection-inline",
+   "method": "POST",
+   "path": "/api/v1/screens/selection",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "holdings": [
+     {
+      "symbol": "AXISBANK",
+      "quantity": "10"
+     },
+     {
+      "symbol": "ASIANPAINT",
+      "quantity": 5
+     }
+    ],
+    "constraints": {
+     "capital_inr": "1000000",
+     "max_per_sector": 2
+    }
+   }
+  },
+  {
+   "name": "selection-corr",
+   "method": "POST",
+   "path": "/api/v1/screens/selection",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "holdings": [],
+    "constraints": {
+     "max_correlation": 0.8,
+     "turnover_budget_names": 3
+    }
+   }
+  },
+  {
+   "name": "selection-portfolio",
+   "method": "POST",
+   "path": "/api/v1/screens/selection",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "portfolio_id": 3
+   }
+  },
+  {
+   "name": "selection-both",
+   "method": "POST",
+   "path": "/api/v1/screens/selection",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "portfolio_id": 3,
+    "holdings": []
+   }
+  },
+  {
+   "name": "selection-inverted",
+   "method": "POST",
+   "path": "/api/v1/screens/selection",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "holdings": [],
+    "constraints": {
+     "entry_rank": 20,
+     "retention_rank": 10
+    }
+   }
+  },
+  {
+   "name": "selection-unknown-symbol",
+   "method": "POST",
+   "path": "/api/v1/screens/selection",
+   "user": "owner",
+   "body": {
+    "definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    },
+    "holdings": [
+     {
+      "symbol": "ZZZNOPE",
+      "quantity": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "run-example",
+   "method": "POST",
+   "path": "/api/v1/screens/exmpl0000002/run",
+   "user": "owner"
+  },
+  {
+   "name": "run-example-again",
+   "method": "POST",
+   "path": "/api/v1/screens/exmpl0000002/run",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "run-override-ranking",
+   "method": "POST",
+   "path": "/api/v1/screens/exmpl0000002/run",
+   "user": "owner",
+   "body": {
+    "override_definition": {
+     "index": "nifty-50",
+     "sort_by": "ret_12m",
+     "ranking_terms": [
+      {
+       "factor": "ret_12m",
+       "preference": "higher"
+      },
+      {
+       "factor": "vol_12m",
+       "preference": "lower"
+      }
+     ],
+     "ranking_mode": "composite"
+    }
+   }
+  },
+  {
+   "name": "run-missing",
+   "method": "POST",
+   "path": "/api/v1/screens/nope00000000/run",
+   "user": "owner"
+  },
+  {
+   "name": "run-anon-example",
+   "method": "POST",
+   "path": "/api/v1/screens/exmpl0000004/run"
+  },
+  {
+   "name": "from-screen-create",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/from-screen",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "amount": "500000",
+    "holdings": 10
+   },
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "from-screen-rank",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/from-screen",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "exmpl0000004",
+    "amount": 250000,
+    "method": "RANK",
+    "profile": "AGGRESSIVE",
+    "name": "Rank cut"
+   },
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "from-screen-bad-method",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/from-screen",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "amount": "500000",
+    "method": "NOPE"
+   }
+  },
+  {
+   "name": "from-screen-missing",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/from-screen",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "nope",
+    "amount": "1"
+   }
+  },
+  {
+   "name": "recut-preview",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/trend-stack/recut",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "recut-confirm",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/trend-stack/recut",
+   "user": "owner",
+   "body": {
+    "confirm": true,
+    "holdings": 5
+   }
+  },
+  {
+   "name": "recut-not-screen",
+   "method": "POST",
+   "path": "/api/v1/cb/baskets/rs-parity-none/recut",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "rebalance-owner",
+   "method": "POST",
+   "path": "/api/v1/portfolios/3/rebalance",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "top_n": 10,
+    "hold_buffer": 5
+   },
+   "mask": [
+    "created_at"
+   ]
+  },
+  {
+   "name": "rebalance-stale",
+   "method": "POST",
+   "path": "/api/v1/portfolios/3/rebalance",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "top_n": 10,
+    "hold_buffer": 5,
+    "data_version": 2
+   }
+  },
+  {
+   "name": "rebalance-bad",
+   "method": "POST",
+   "path": "/api/v1/portfolios/3/rebalance",
+   "user": "owner",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "top_n": 0,
+    "hold_buffer": 5
+   }
+  },
+  {
+   "name": "rebalance-others",
+   "method": "POST",
+   "path": "/api/v1/portfolios/3/rebalance",
+   "user": "plain",
+   "body": {
+    "screen_public_id": "exmpl0000002",
+    "top_n": 10,
+    "hold_buffer": 5
+   }
+  }
+ ]
+}

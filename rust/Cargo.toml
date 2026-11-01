@@ -1,0 +1,145 @@
+# Baskfy backend in Rust (docs/rust-rewrite/README.md, DECISIONS-RS R0.1/R0.2).
+# Every third-party version is pinned exactly ("=x.y.z"): a porter grading against a golden
+# must never see a dependency move underneath them. Bumping one is a DECISIONS-RS entry.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+publish = false
+license = "UNLICENSED"
+
+[workspace.dependencies]
+baskfy-core = { path = "crates/baskfy-core" }
+baskfy-testkit = { path = "crates/baskfy-testkit" }
+
+# Computation only (law 1). polars: no IO, no parquet/csv, no default features; the features
+# below are the window/rolling/rank kernels baskfy_core's Python uses. Adding one is fine,
+# adding an IO feature (csv, parquet, json, ipc, cloud, http) is not — law_one.rs refuses it.
+polars = { version = "=0.55.2", default-features = false, features = [
+    "lazy",
+    "dtype-date",
+    "temporal",
+    "fmt_no_tty",
+    "rolling_window",
+    "ewma",
+    "cum_agg",
+    "round_series",
+    "abs",
+    "is_in",
+    "diff",
+    "pct_change",
+    "rank",
+    "strings",
+    "is_between",
+    "log",
+] }
+# serde-str: a Decimal serialises as "12.34" — exactly golden.py's encoding of Python Decimal.
+rust_decimal = { version = "=1.43.0", default-features = false, features = ["std", "serde-str", "maths"] }
+# No "clock" feature: Local::now/Utc::now do not exist in this build of chrono (law 1).
+chrono = { version = "=0.4.45", default-features = false, features = ["std", "serde"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+# float_roundtrip: parse every JSON float to the nearest f64, as Python's json does (the default
+# parser can land 1 ulp off on 16-17 digit floats, so a golden would be graded on perturbed
+# inputs). DECISIONS-RS R2.1.
+serde_json = { version = "=1.0.154", features = ["float_roundtrip", "raw_value"] }
+thiserror = { version = "=2.0.21" }
+# Python's unbounded `int` where a route echoes or computes one (DECISIONS-RS R8.ar1). Already in
+# the build through redis; pinning it adds no crate.
+num-bigint = { version = "=0.4.8" }
+
+# ---------------------------------------------------------------------------------------------
+# I/O stack for baskfy-providers and every wave-4 crate after it (DECISIONS-RS R4.1). Never a
+# dependency of baskfy-core: law_one.rs refuses each of these in the core's manifest.
+# ---------------------------------------------------------------------------------------------
+baskfy-providers = { path = "crates/baskfy-providers" }
+# The async runtime. "test-util" (paused virtual time) is added by test crates only.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "net", "fs", "io-util"] }
+# HTTP for Kite and NSE: rustls (no OpenSSL), a cookie jar (NSE's session discipline), and the
+# content codings httpx decodes (gzip, deflate, brotli).
+reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls", "cookies", "gzip", "brotli", "deflate", "json", "http2", "charset"] }
+# The shared rate-limit clocks live in Redis (ratelimit.rs runs Python's own Lua scripts).
+redis = { version = "=0.32.7", default-features = false, features = ["script", "tokio-comp", "connection-manager"] }
+# dyn-compatible async ports (BarsProvider, ReferenceProvider, HoldingsProvider, ...).
+async-trait = { version = "=0.1.92" }
+# The Kite access token at rest, byte-compatible with Python's cryptography.fernet.
+fernet = { version = "=0.2.2", default-features = false, features = ["rustcrypto"] }
+# Full jitter (random.uniform) in retry and the token bucket.
+rand = { version = "=0.9.5" }
+# The process-wide monotonic clock Python's time.monotonic reads (CLOCK_MONOTONIC on Linux), so
+# a Rust and a Python process can share one Redis token bucket. Safe API, no `unsafe`.
+rustix = { version = "=1.1.6", default-features = false, features = ["std", "time"] }
+# NSE bhavcopies arrive zipped; pure-Rust inflate.
+zip = { version = "=9.1.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Kite's instrument dump is CSV (the kiteconnect client parses it with Python's csv module).
+csv = { version = "=1.4.0" }
+# NSE's parsers use Python's `re`; urllib.parse.quote for symbols in NSE URLs.
+regex = { version = "=1.13.1" }
+percent-encoding = { version = "=2.3.2" }
+# SHA-256 (archive metadata, Kite's login checksum) and HMAC (an S3 SigV4 signer, if the archive
+# port signs by hand). The 0.10/0.12 lines are the ones fernet already builds.
+sha2 = { version = "=0.10.9" }
+hmac = { version = "=0.12.1" }
+# Test-only: temporary directories for the token store and the raw archive.
+tempfile = { version = "=3.27.0" }
+
+# ---------------------------------------------------------------------------------------------
+# Wave 4b: the database and the HTTP API (DECISIONS-RS R5.1). Never dependencies of baskfy-core.
+# ---------------------------------------------------------------------------------------------
+baskfy-db = { path = "crates/baskfy-db" }
+baskfy-api = { path = "crates/baskfy-api" }
+baskfy-worker = { path = "crates/baskfy-worker" }
+# Postgres only, runtime queries only (no macros: Alembic owns the schema and no build may need a
+# live database), rustls over ring with webpki roots (no OpenSSL). rust_decimal/chrono/json are
+# the numeric, timestamptz/date and jsonb decoders.
+sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "rust_decimal", "chrono", "json"] }
+# The HTTP server. http1 only (uvicorn serves HTTP/1.1), no json/query/form extractors: the API
+# parses query strings and renders bodies itself so they match Starlette and pydantic exactly.
+axum = { version = "=0.8.9", default-features = false, features = ["tokio", "http1", "matched-path", "original-uri"] }
+# The `Service` trait, to dispatch a probe through the router for Starlette's slash redirect
+# (DECISIONS-RS R5.1); already in the lock through axum.
+tower = { version = "=0.5.3", default-features = false }
+# JWT segments are base64url (PyJWT's base64url_decode); already in the lock through reqwest.
+base64 = { version = "=0.22.1" }
+
+# ---------------------------------------------------------------------------------------------
+# Wave D: the desk (`baskfy-desk`, DECISIONS-RS R8.1-R8.4). Never dependencies of baskfy-core.
+# ---------------------------------------------------------------------------------------------
+baskfy-desk = { path = "crates/baskfy-desk" }
+# The desk's pages are Jinja2 templates rendered by Starlette; minijinja is Jinja2's Rust
+# reimplementation by Jinja2's own author. "serde" for context values, "loop_controls" for
+# {% break %}/{% continue %} parity, "preserve_order" so a dict context keeps insertion order
+# as Python's does. minijinja-contrib's pycompat gives the str/dict methods templates call
+# (`.items()`, `.get()`, `.startswith()`); `.format()` is the desk's own (pyfmt.rs). R8.3.
+minijinja = { version = "=3.0.5", default-features = false, features = ["builtins", "macros", "multi_template", "adjacent_loop_items", "std_collections", "serde", "json", "loop_controls", "preserve_order", "debug"] }
+minijinja-contrib = { version = "=3.0.5", default-features = false, features = ["pycompat"] }
+# `ASSET_V` (md5 of app.css) and Starlette's static-file ETag; already in the lock through sqlx.
+md-5 = { version = "=0.10.6" }
+# The swing notifier's SMTP STARTTLS (DECISIONS-RS R8.SM3): rustls over ring with the webpki roots,
+# both already in the lock through reqwest/hyper-rustls; aws-lc stays out (default features off).
+tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = { version = "=1.0.11" }
+# Starlette's `Last-Modified` (email.utils.formatdate(usegmt=True)); already in the lock.
+httpdate = { version = "=1.0.3" }
+# Reading a raw (simple-protocol) query's rows and its row count together (`fetch_many`), as
+# psycopg's cursor holds both; already in the lock through sqlx.
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# House rule 3 in Rust: no unwrap/expect/panic on paths that handle input. Tests opt out
+# file-by-file with an explicit #![allow(...)] at the top of the test crate.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+float_cmp = "deny"

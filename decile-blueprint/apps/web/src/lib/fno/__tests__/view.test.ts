@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { filterRows, sortRows } from "@/components/fno/info-table";
 import { widths } from "@/components/fno/overnight";
 
-import { asOfClose, liveLabel, markedAtSettle, stateText } from "../view";
+import {
+  asOfClose,
+  f3DirectionText,
+  f3ExpiryKind,
+  liveLabel,
+  markedAtSettle,
+  stateText,
+} from "../view";
 import { info } from "./fixtures";
 
 /** `docs/fno/05` §2-§3's labels, character for character, and `04` §5's table behaviour. */
@@ -67,5 +74,19 @@ describe("the proposed condor's widths", () => {
         { role: "LONG_CALL", strike: "56500", option_type: "CE" },
       ]),
     ).toEqual({ put: 1000, call: 1000 });
+  });
+});
+
+describe("F3's words (M.5)", () => {
+  it("names NIFTY's weekly and BANKNIFTY's monthly", () => {
+    expect(f3ExpiryKind("NIFTY")).toBe("Weekly expiry");
+    expect(f3ExpiryKind("BANKNIFTY")).toBe("Monthly expiry");
+  });
+
+  it("says which spread a direction sells, and never guesses one", () => {
+    expect(f3DirectionText("UP")).toMatch(/put spread below support/);
+    expect(f3DirectionText("DOWN")).toMatch(/call spread above resistance/);
+    expect(f3DirectionText("NONE")).toBe("No direction");
+    expect(f3DirectionText(null)).toBe("Not read");
   });
 });

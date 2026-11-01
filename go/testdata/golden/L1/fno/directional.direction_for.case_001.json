@@ -1,0 +1,158 @@
+{
+ "fn": "baskfy_core.fno.directional.direction_for",
+ "inputs": {
+  "bars": [
+   {
+    "close": "24700.00",
+    "high": "24710.00",
+    "low": "24690.00",
+    "open": "24695.00",
+    "start": "2026-10-12T09:15:00"
+   },
+   {
+    "close": "24710.00",
+    "high": "24720.00",
+    "low": "24700.00",
+    "open": "24705.00",
+    "start": "2026-10-12T10:30:00"
+   },
+   {
+    "close": "24720.00",
+    "high": "24730.00",
+    "low": "24710.00",
+    "open": "24715.00",
+    "start": "2026-10-12T11:45:00"
+   },
+   {
+    "close": "24730.00",
+    "high": "24740.00",
+    "low": "24720.00",
+    "open": "24725.00",
+    "start": "2026-10-12T13:00:00"
+   },
+   {
+    "close": "24740.00",
+    "high": "24750.00",
+    "low": "24730.00",
+    "open": "24735.00",
+    "start": "2026-10-12T14:15:00"
+   },
+   {
+    "close": "24750.00",
+    "high": "24760.00",
+    "low": "24740.00",
+    "open": "24745.00",
+    "start": "2026-10-13T09:15:00"
+   },
+   {
+    "close": "24760.00",
+    "high": "24770.00",
+    "low": "24750.00",
+    "open": "24755.00",
+    "start": "2026-10-13T10:30:00"
+   },
+   {
+    "close": "24770.00",
+    "high": "24780.00",
+    "low": "24760.00",
+    "open": "24765.00",
+    "start": "2026-10-13T11:45:00"
+   },
+   {
+    "close": "24780.00",
+    "high": "24790.00",
+    "low": "24770.00",
+    "open": "24775.00",
+    "start": "2026-10-13T13:00:00"
+   },
+   {
+    "close": "24790.00",
+    "high": "24800.00",
+    "low": "24780.00",
+    "open": "24785.00",
+    "start": "2026-10-13T14:15:00"
+   },
+   {
+    "close": "24800.00",
+    "high": "24810.00",
+    "low": "24790.00",
+    "open": "24795.00",
+    "start": "2026-10-14T09:15:00"
+   },
+   {
+    "close": "24810.00",
+    "high": "24820.00",
+    "low": "24800.00",
+    "open": "24805.00",
+    "start": "2026-10-14T10:30:00"
+   }
+  ],
+  "f3": {
+   "add_working_pct": "20",
+   "confirm_bars": 10,
+   "decay_target_pct": "80",
+   "distance_pct": "1.0",
+   "entry_share_pct": "25",
+   "entry_window_end": "10:30:00",
+   "full_share_pct": "50",
+   "level_buffer_pct": "0.10",
+   "loss_cut_mult": "2.0",
+   "max_open_per_underlying": 1,
+   "min_sessions_monthly": 5,
+   "min_sessions_weekly": 2,
+   "pivot_lookback": 60,
+   "pivot_width": 3,
+   "plan_time": "09:20:00",
+   "risk_per_trade_pct": "1.0",
+   "short_premium_min_inr": "10",
+   "slippage_min_inr": "0.05",
+   "slippage_pct": "0.5",
+   "trend_sessions": 20,
+   "underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "weekly_sessions": 5,
+   "wing_pct": "2.0"
+  },
+  "levels": {
+   "as_of": "2026-10-16",
+   "close": "24800",
+   "pivot_highs": [
+    {
+     "date": "2026-09-20",
+     "price": "25100"
+    }
+   ],
+   "pivot_lows": [
+    {
+     "date": "2026-10-01",
+     "price": "24400"
+    }
+   ],
+   "resistance": "25100",
+   "support": "24400",
+   "trend_avg": "24650",
+   "weekly_high": "24850",
+   "weekly_low": "24560.4"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "UP confirmed. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  "UP",
+  {
+   "agrees": true,
+   "average": "24765.00",
+   "bar_start": "2026-10-14T10:30:00",
+   "last_close": "24810.00",
+   "message": "75-minute close 24810.00 is above its 10-bar average 24765.00"
+  }
+ ]
+}

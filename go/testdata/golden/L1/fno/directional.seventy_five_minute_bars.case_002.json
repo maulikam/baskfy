@@ -1,0 +1,73 @@
+{
+ "fn": "baskfy_core.fno.directional.seventy_five_minute_bars",
+ "inputs": {
+  "minutes": [
+   {
+    "close": "24815.00",
+    "high": "24818.00",
+    "low": "24812.00",
+    "open": "24815.00",
+    "ts": "2026-10-12T10:29:00"
+   },
+   {
+    "close": "1.00",
+    "high": "4.00",
+    "low": "-2.00",
+    "open": "1.00",
+    "ts": "2026-10-12T09:14:00"
+   },
+   {
+    "close": "2.00",
+    "high": "5.00",
+    "low": "-1.00",
+    "open": "2.00",
+    "ts": "2026-10-12T15:30:00"
+   },
+   {
+    "close": "24800.00",
+    "high": "24803.00",
+    "low": "24797.00",
+    "open": "24800.00",
+    "ts": "2026-10-12T09:15:00"
+   },
+   {
+    "close": "24700.00",
+    "high": "24703.00",
+    "low": "24697.00",
+    "open": "24700.00",
+    "ts": "2026-10-12T14:15:00"
+   },
+   {
+    "close": "24750.00",
+    "high": "24753.00",
+    "low": "24747.00",
+    "open": "24750.00",
+    "ts": "2026-10-12T15:29:00"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "minutes out of order and outside 09:15-15:30 are sorted and ignored. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "close": "24815.00",
+   "high": "24818.00",
+   "low": "24797.00",
+   "open": "24800.00",
+   "start": "2026-10-12T09:15:00"
+  },
+  {
+   "close": "24750.00",
+   "high": "24753.00",
+   "low": "24697.00",
+   "open": "24700.00",
+   "start": "2026-10-12T14:15:00"
+  }
+ ]
+}

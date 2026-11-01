@@ -1,0 +1,89 @@
+{
+ "fn": "baskfy_core.fno.condor.LegQuote",
+ "inputs": {
+  "quotes": [
+   {
+    "ask": "12",
+    "bid": "10",
+    "oi_lots": 1000
+   },
+   {
+    "ask": "12",
+    "bid": null,
+    "oi_lots": 1000
+   },
+   {
+    "ask": null,
+    "bid": "10",
+    "oi_lots": 1000
+   },
+   {
+    "ask": "12",
+    "bid": "0",
+    "oi_lots": 1000
+   },
+   {
+    "ask": "10",
+    "bid": "12",
+    "oi_lots": 1000
+   },
+   {
+    "ask": "10.10",
+    "bid": "10.05",
+    "oi_lots": 1000
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "two_sided and mid over the edge cases. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "ask": "12",
+   "bid": "10",
+   "mid": "11",
+   "oi_lots": 1000,
+   "two_sided": true
+  },
+  {
+   "ask": "12",
+   "bid": null,
+   "mid": null,
+   "oi_lots": 1000,
+   "two_sided": false
+  },
+  {
+   "ask": null,
+   "bid": "10",
+   "mid": null,
+   "oi_lots": 1000,
+   "two_sided": false
+  },
+  {
+   "ask": "12",
+   "bid": "0",
+   "mid": null,
+   "oi_lots": 1000,
+   "two_sided": false
+  },
+  {
+   "ask": "10",
+   "bid": "12",
+   "mid": "11",
+   "oi_lots": 1000,
+   "two_sided": true
+  },
+  {
+   "ask": "10.10",
+   "bid": "10.05",
+   "mid": "10.075",
+   "oi_lots": 1000,
+   "two_sided": true
+  }
+ ]
+}

@@ -1,0 +1,202 @@
+{
+ "note": "Adversarial review of lane vbt, scenario 1 of 2: ONLY refusals \u2014 no confirm ever reaches the gateway \u2014 so whatever a refused confirm writes (Python builds the shared risk manager, and with it the day's risk_ledger row, before execute_line runs) is graded on its own. Also: confirm is case-insensitive ('TRUE'), an empty confirm is 400, a line_id beyond int64, a negative line_id, an unknown line on a real plan.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ],
+  "public.vb_fill": [
+   "created_at"
+  ],
+  "public.vb_order": [
+   "updated_at"
+  ],
+  "public.vb_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.vb_scan_run": [
+   "created_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "refused: confirm=false is 400 (first touch of the gateway)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "132",
+    "confirm": "false"
+   },
+   "clock": "2026-10-21T09:10:00+05:30"
+  },
+  {
+   "name": "refused: empty confirm is 400",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "132",
+    "confirm": ""
+   }
+  },
+  {
+   "name": "refused: confirm=yes is 400",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "132",
+    "confirm": "yes"
+   }
+  },
+  {
+   "name": "refused: confirm=TRUE on an expired plan is 410 (case-insensitive confirm)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "132",
+    "confirm": "TRUE"
+   },
+   "clock": "mid"
+  },
+  {
+   "name": "refused: one second before expiry an unknown line is 404",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "999999",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:29:59+05:30"
+  },
+  {
+   "name": "refused: AT the exact expiry instant (09:30:00.355993, the stored microsecond) the plan is still live, so an unknown line is 404, not 410 (CPython's clock is microseconds, half-even)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "999999",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:30:00.355993+05:30"
+  },
+  {
+   "name": "refused: one microsecond past expiry is 410",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "999999",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:30:00.355994+05:30"
+  },
+  {
+   "name": "refused: a negative line_id is 404",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "-1",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:10:00+05:30"
+  },
+  {
+   "name": "refused: a line_id beyond int64",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "99999999999999999999",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "refused: a negative line_id beyond int64 with underscores",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": " -000_99999999999999999999 ",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "refused: a huge line_id without confirm is still 400 first",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "99999999999999999999",
+    "confirm": "no"
+   }
+  },
+  {
+   "name": "refused: a huge line_id on an expired plan is 410",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "99999999999999999999",
+    "confirm": "true"
+   },
+   "clock": "mid"
+  },
+  {
+   "name": "refused: line_id 1.5 is 422",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "1.5",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:10:00+05:30"
+  },
+  {
+   "name": "refused: line_id +0132.00 is line 132, and confirm=false keeps it a 400",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "+0132.00",
+    "confirm": "false"
+   }
+  },
+  {
+   "name": "refused: an upper-case plan uuid",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6C89B1D7-3108-4CF6-A2A1-040671219CFC",
+    "line_id": "132",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "refused: a line of another plan is 404",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "126",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "GET /vbt/execute is 405",
+   "method": "GET",
+   "path": "/vbt/execute"
+  },
+  {
+   "name": "vbt data after the refusals (nothing written)",
+   "method": "GET",
+   "path": "/vbt/data",
+   "clock": "2026-10-21T09:10:00+05:30"
+  }
+ ]
+}

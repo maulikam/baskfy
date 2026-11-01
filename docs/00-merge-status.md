@@ -1823,6 +1823,8 @@ far wing; auto-exit under `BASKFY_FNO_F3_AUTO_EXIT`, default false, his hand; NI
 BANKNIFTY monthly). F3-0…F3-5 green (`docs/fno/F3-PLAN.md`, `gates/f3-*.md`); paper only, both F3
 flags false. The EOD re-test says the daily half alone loses after costs (NIFTY −0.021R,
 BANKNIFTY −0.020R); the intraday half — his edge — is untestable from a closing file and the
-paper period is its test. **Not done:** the web app's F3 card; F3 in the quarterly re-test
-families; the index history backfill on the box (F3-6 runs it).
+paper period is its test. F3-6 deployed it and backfilled the index history on the box. F3-7
+(29 Sep) built the web app's read-only F3 section and put `F3N`/`F3B` in the quarterly re-test's
+families. **Not done:** F3-7's deploy (the cloud session's AWS keys were refused), and its
+DB-backed tests, which need a TimescaleDB test database.
 

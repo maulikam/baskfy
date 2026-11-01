@@ -1,0 +1,57 @@
+{
+ "fn": "baskfy_core.twt.exits.manage",
+ "inputs": {
+  "bar": {
+   "close": null,
+   "high": null,
+   "low": null,
+   "open": null,
+   "session": "2024-03-04"
+  },
+  "blank_sessions": 5,
+  "config": {
+   "close_clamp_fallback": "0.999",
+   "close_clamp_fraction": "0.9999",
+   "gtt_band_max_pct": "0.30",
+   "gtt_band_min_pct": "0.005",
+   "gtt_limit_fraction": "0.97",
+   "no_bar_sessions": 5,
+   "qulla": {
+    "breakeven_after_r": 1.0,
+    "fast_trail_min_adr_pct": 6.0,
+    "max_stop_adr_multiple": 1.0,
+    "max_stop_distance_pct": 10.0,
+    "partial_denominator": 3,
+    "partial_earliest_bar": 3,
+    "partial_latest_bar": 5,
+    "partial_numerator": 1
+   },
+   "qulla_exits": true,
+   "stop_pct": "20.0",
+   "trail_pct": "20.0"
+  },
+  "position": {
+   "entry_date": "2024-03-01",
+   "fill_price": "100",
+   "high_since": "100",
+   "initial_stop": "80",
+   "instrument_id": 1,
+   "quantity": 250,
+   "stop_price": "80"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "no bar for 5 sessions: WRITE_OFF, NO_BAR. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "action": "WRITE_OFF",
+  "note": "no bar for 5 sessions",
+  "price": null,
+  "reason": "NO_BAR"
+ }
+}

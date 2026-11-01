@@ -1,0 +1,81 @@
+{
+ "fn": "baskfy_core.exposure.allocation.order_sales",
+ "inputs": {
+  "nearby_band": 0,
+  "positions": [
+   {
+    "average_price": 41.12,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 321.85,
+    "quantity": 21,
+    "rank": 20,
+    "symbol": "P00"
+   },
+   {
+    "average_price": 376.03,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 49.18,
+    "quantity": 262,
+    "rank": 24,
+    "symbol": "P01"
+   },
+   {
+    "average_price": 428.54,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 76.73,
+    "quantity": 402,
+    "rank": 39,
+    "symbol": "P02"
+   }
+  ],
+  "tax_flagged": [
+   "P00"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "positions in sale order. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "average_price": 428.54,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 76.73,
+   "quantity": 402,
+   "rank": 39,
+   "symbol": "P02"
+  },
+  {
+   "average_price": 376.03,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 49.18,
+   "quantity": 262,
+   "rank": 24,
+   "symbol": "P01"
+  },
+  {
+   "average_price": 41.12,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 321.85,
+   "quantity": 21,
+   "rank": 20,
+   "symbol": "P00"
+  }
+ ]
+}

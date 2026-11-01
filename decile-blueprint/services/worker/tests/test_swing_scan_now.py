@@ -906,8 +906,8 @@ class TestALoginAtAnyHourGetsTodaysData:
                     assert swing_scan_now.session_has_started(moment), moment
 
 
-#: The benchmark the gate actually reads (SW17), and the config the reading is taken with.
-INDEX_SLUG = "nifty-mid-small-400"
+#: The benchmark the gate actually reads (SW29), and the config the reading is taken with.
+INDEX_SLUG = "nifty-smallcap-250"
 CONFIG = DEFAULT_SWING_CONFIG
 
 
@@ -989,6 +989,7 @@ class TestTheGateSeesTodaysIndex:
 
     def test_the_benchmark_maps_to_a_kite_symbol(self) -> None:
         """A slug with no mapping silently has no live level, so the one the gate actually reads
-        must be present — `nifty-mid-small-400` (SW17), not just the fallback."""
-        assert "nifty-mid-small-400" in KiteProvider.INDEX_QUOTE_SYMBOL
-        assert KiteProvider.INDEX_QUOTE_SYMBOL["nifty-mid-small-400"] == "NIFTY MIDSML 400"
+        must be present — `nifty-smallcap-250` (SW29), not just the fallback. Kite's name for it
+        is `NIFTY SMLCAP 250` (instrument 267273, the chart Maulik linked)."""
+        assert "nifty-smallcap-250" in KiteProvider.INDEX_QUOTE_SYMBOL
+        assert KiteProvider.INDEX_QUOTE_SYMBOL["nifty-smallcap-250"] == "NIFTY SMLCAP 250"

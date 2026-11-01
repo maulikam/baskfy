@@ -1,0 +1,98 @@
+{
+ "plain": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n12345,48,NIFTY26OCT25000CE,NIFTY,101.5,2026-10-27,25000,0.05,65,CE,NFO-OPT,NFO\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}, {'instrument_token': 12345, 'exchange_token': '48', 'tradingsymbol': 'NIFTY26OCT25000CE', 'name': 'NIFTY', 'last_price': 101.5, 'expiry': datetime.date(2026, 10, 27), 'strike': 25000.0, 'tick_size': 0.05, 'lot_size': 65, 'instrument_type': 'CE', 'segment': 'NFO-OPT', 'exchange': 'NFO'}]"
+ },
+ "bom": {
+  "body": "\u00ef\u00bb\u00bfinstrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n",
+  "err": "KeyError"
+ },
+ "crlf": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\r\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\r\n12345,48,NIFTY26OCT25000CE,NIFTY,101.5,2026-10-27,25000,0.05,65,CE,NFO-OPT,NFO\r\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}, {'instrument_token': 12345, 'exchange_token': '48', 'tradingsymbol': 'NIFTY26OCT25000CE', 'name': 'NIFTY', 'last_price': 101.5, 'expiry': datetime.date(2026, 10, 27), 'strike': 25000.0, 'tick_size': 0.05, 'lot_size': 65, 'instrument_type': 'CE', 'segment': 'NFO-OPT', 'exchange': 'NFO'}]"
+ },
+ "cr_only": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\r408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\r",
+  "err": "Error"
+ },
+ "blank_lines": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n\n\n12345,48,NIFTY26OCT25000CE,NIFTY,101.5,2026-10-27,25000,0.05,65,CE,NFO-OPT,NFO\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}, {'instrument_token': 12345, 'exchange_token': '48', 'tradingsymbol': 'NIFTY26OCT25000CE', 'name': 'NIFTY', 'last_price': 101.5, 'expiry': datetime.date(2026, 10, 27), 'strike': 25000.0, 'tick_size': 0.05, 'lot_size': 65, 'instrument_type': 'CE', 'segment': 'NFO-OPT', 'exchange': 'NFO'}]"
+ },
+ "header_only": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n",
+  "ok": "[]"
+ },
+ "empty": {
+  "body": "",
+  "ok": "[]"
+ },
+ "whitespace": {
+  "body": "  \n \n",
+  "ok": "[]"
+ },
+ "leading_blank": {
+  "body": "\n\ninstrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}]"
+ },
+ "quoted_comma": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,\"INFOSYS, LTD\",0,,0,0.05,1,EQ,NSE,NSE\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS, LTD', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}]"
+ },
+ "quoted_quote": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,\"INFO \"\"SYS\"\"\",0,,0,0.05,1,EQ,NSE,NSE\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFO \"SYS\"', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}]"
+ },
+ "short_row": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY\n",
+  "err": "TypeError"
+ },
+ "extra_field": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE,EXTRA\n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE', None: ['EXTRA']}]"
+ },
+ "no_expiry_column": {
+  "body": "instrument_token,last_price,strike,tick_size,lot_size\n1,0,0,0.05,1\n",
+  "err": "KeyError"
+ },
+ "bad_int": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\nabc,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n",
+  "err": "ValueError"
+ },
+ "float_token": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n1.0,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n",
+  "err": "ValueError"
+ },
+ "spaced_numbers": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n 7 ,1594,INFY,INFOSYS, 1.5 ,,0,0.05, 2 ,EQ,NSE,NSE\n",
+  "ok": "[{'instrument_token': 7, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 1.5, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 2, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}]"
+ },
+ "nan_price": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n7,1594,INFY,INFOSYS,nan,,inf,0.05,2,EQ,NSE,NSE\n",
+  "ok": "[{'instrument_token': 7, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': nan, 'expiry': '', 'strike': inf, 'tick_size': 0.05, 'lot_size': 2, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}]"
+ },
+ "expiry_9": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n7,1,X,X,0,2026-1-27,0,0.05,1,CE,NFO-OPT,NFO\n",
+  "ok": "[{'instrument_token': 7, 'exchange_token': '1', 'tradingsymbol': 'X', 'name': 'X', 'last_price': 0.0, 'expiry': '2026-1-27', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'CE', 'segment': 'NFO-OPT', 'exchange': 'NFO'}]"
+ },
+ "expiry_basic": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n7,1,X,X,0,2026102700,0,0.05,1,CE,NFO-OPT,NFO\n",
+  "err": "ParserError"
+ },
+ "duplicate_header": {
+  "body": "instrument_token,last_price,strike,tick_size,lot_size,expiry,last_price\n1,2,0,0.05,1,,3\n",
+  "ok": "[{'instrument_token': 1, 'last_price': 3.0, 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'expiry': ''}]"
+ },
+ "space_row": {
+  "body": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n   \n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE\n",
+  "err": "ValueError"
+ },
+ "trailing_spaces": {
+  "body": "  instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n408065,1594,INFY,INFOSYS,0,,0,0.05,1,EQ,NSE,NSE  \n",
+  "ok": "[{'instrument_token': 408065, 'exchange_token': '1594', 'tradingsymbol': 'INFY', 'name': 'INFOSYS', 'last_price': 0.0, 'expiry': '', 'strike': 0.0, 'tick_size': 0.05, 'lot_size': 1, 'instrument_type': 'EQ', 'segment': 'NSE', 'exchange': 'NSE'}]"
+ },
+ "invalid_utf8": {
+  "body": "\u00ff\u00fe",
+  "err": "UnicodeDecodeError"
+ }
+}

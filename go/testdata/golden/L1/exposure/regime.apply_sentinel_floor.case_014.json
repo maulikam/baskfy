@@ -1,0 +1,53 @@
+{
+ "fn": "baskfy_core.exposure.regime.apply_sentinel_floor",
+ "inputs": {
+  "sentinel": {
+   "as_of_date": "2026-06-01",
+   "bearish_stack": false,
+   "close": 100.0,
+   "has_data": true,
+   "index_name": "NIFTY 500 MOMENTUM 50",
+   "instrument_token": null,
+   "is_stale": false,
+   "signals": {
+    "20": {
+     "close": 100.0,
+     "confirming_closes": 3,
+     "distance_pct": 0.0,
+     "ma": 100.0,
+     "ma_length": 20,
+     "state": "above"
+    },
+    "200": {
+     "close": 100.0,
+     "confirming_closes": 3,
+     "distance_pct": 0.0,
+     "ma": 100.0,
+     "ma_length": 200,
+     "state": "unknown"
+    },
+    "50": {
+     "close": 100.0,
+     "confirming_closes": 3,
+     "distance_pct": 0.0,
+     "ma": 100.0,
+     "ma_length": 50,
+     "state": "unknown"
+    }
+   }
+  },
+  "tier": "R2"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "[tier, codes]. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  "R2",
+  []
+ ]
+}

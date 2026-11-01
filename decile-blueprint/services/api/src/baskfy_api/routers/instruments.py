@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from baskfy_api import instrument_appearances as appearances_service
-from baskfy_api.auth import AuthenticatedDep
+from baskfy_api.auth import AuthenticatedDep, PrincipalDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.http_cache import snapshot_headers
@@ -35,6 +35,7 @@ from baskfy_api.instruments import (
     search_instruments,
 )
 from baskfy_api.problems import Problem, ProblemType, not_found
+from baskfy_api.routers.screens import is_visible
 from baskfy_api.schemas import (
     CorporateActionOut,
     CorporateActionsOut,
@@ -321,6 +322,7 @@ async def instrument_appearances(
 async def rank_history(
     symbol: str,
     session: SessionDep,
+    principal: PrincipalDep,
     screen: Annotated[str, Query(description="The screen's public id.")],
     limit: Annotated[int, Query(ge=1, le=500)] = 120,
 ) -> Response:
@@ -334,6 +336,11 @@ async def rank_history(
     That also means the series is only as long as the screen's run history. A screen run once has
     one point, and the response says so rather than padding it.
     """
+    # Visibility is the screen's own (`routers/screens.py`): a system screen is everyone's, a
+    # private one is its owner's only, and not-yours is the same 404 as no-such-screen. Until
+    # 30 Oct 2026 this route had no principal at all, so anyone holding a private screen's
+    # `public_id` could read its rank history (DECISIONS-RS R5.28). A comment rather than the
+    # docstring, because the docstring is the OpenAPI description and the contract is unchanged.
     try:
         instrument = await load_instrument(session, symbol)
     except InstrumentNotFound as exc:
@@ -342,7 +349,7 @@ async def rank_history(
     found = (
         await session.execute(select(Screen).where(Screen.public_id == screen))
     ).scalar_one_or_none()
-    if found is None:
+    if found is None or not is_visible(found, principal):
         raise not_found("screen", screen)
 
     runs = (

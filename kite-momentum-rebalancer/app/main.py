@@ -45,6 +45,9 @@ from .core.websec import DeskSecurity                     # noqa: E402
 from .core.websec import check_secret_permissions as _secret_perm_check  # noqa: E402
 
 app.add_middleware(DeskSecurity)
+from .core.path_prefix import PathPrefix                    # noqa: E402
+# Added last, so outermost: it rewrites the final bytes. A no-op while DESK_PATH_PREFIX is empty.
+app.add_middleware(PathPrefix, prefix=C.DESK_PATH_PREFIX)
 
 # Credential files are tightened at startup rather than trusted to a deploy step, because
 # the deploy step is the thing most likely to be skipped.
@@ -1316,7 +1319,7 @@ def status(ip: str = ""):
            "read_limiter": kite_limits.shared_mode()}
     if ip:
         from .core.net import outbound_ip
-        out["outbound_ip"] = outbound_ip()
+        out["outbound_ip"] = outbound_ip(proxy_url=C.KITE_PROXY_URL)
     try:
         k = kite()
         out |= {"authed": k.is_authed(),

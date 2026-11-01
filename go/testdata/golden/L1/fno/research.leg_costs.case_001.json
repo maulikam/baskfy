@@ -1,0 +1,44 @@
+{
+ "fn": "baskfy_core.fno.research.leg_costs",
+ "inputs": {
+  "cases": [
+   {
+    "lot": 75.0,
+    "price": 100.0,
+    "sell": true
+   },
+   {
+    "lot": 75.0,
+    "price": 100.0,
+    "sell": false
+   },
+   {
+    "lot": 75.0,
+    "price": 1.0,
+    "sell": false
+   },
+   {
+    "lot": 500.0,
+    "price": 0.0,
+    "sell": true
+   }
+  ],
+  "params": {
+   "slip_pct": 0.005
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "index slippage 0.5 %, ₹0.05 floor. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  1.0065566666666668,
+  0.8565566666666666,
+  0.36508556666666664,
+  0.09720000000000001
+ ]
+}

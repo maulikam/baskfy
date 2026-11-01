@@ -45,6 +45,8 @@ describe("/options/overnight with the scan off (the state FO5 ships in)", () => 
     expect(screen.getByTestId("options-fno-caveat")).toBeInTheDocument();
     expect(screen.getByTestId("fno-f2-banner")).toHaveTextContent(F2_BANNER);
     expect(screen.getAllByTestId("fno-unscanned")).toHaveLength(2);
+    expect(screen.getAllByTestId("fno-f3-unscanned")).toHaveLength(2);
+    expect(screen.getByTestId("fno-f3-no-open")).toBeInTheDocument();
     expect(screen.queryByTestId("fno-hard-exit-tomorrow")).toBeNull();
     expect(screen.getByTestId("fno-evidence")).toHaveTextContent(
       /End-of-day closes, not fills\. Slippage is an assumed 3 % of premium per leg per crossing/,
@@ -105,6 +107,51 @@ describe("/options/overnight after a scanned night", () => {
     expect(
       within(screen.getByTestId("fno-f2-banner")).queryByRole("button"),
     ).toBeNull();
+  });
+
+  it("draws F3's two cards: the night's read, the levels and the proposed spread", async () => {
+    await renderWith(scanned);
+    const section = within(screen.getByTestId("fno-f3"));
+    const nifty = within(section.getByTestId("fno-f3-NIFTY"));
+    expect(nifty.getByText(/Weekly expiry · F3N/)).toBeInTheDocument();
+    expect(nifty.getByTestId("fno-f3-state")).toHaveTextContent("No signal");
+    expect(nifty.getByTestId("fno-f3-direction")).toHaveTextContent(
+      "Down: sell a call spread above resistance",
+    );
+    expect(nifty.getByTestId("fno-f3-confirm")).toHaveTextContent(
+      "not below its 10-bar average",
+    );
+    expect(nifty.queryByTestId("fno-f3-spread")).toBeNull();
+
+    const bank = within(section.getByTestId("fno-f3-BANKNIFTY"));
+    expect(bank.getByText(/Monthly expiry · F3B/)).toBeInTheDocument();
+    expect(bank.getByTestId("fno-f3-state")).toHaveTextContent("Candidate");
+    const spread = bank.getByTestId("fno-f3-spread");
+    expect(spread).toHaveTextContent("long put");
+    expect(spread).toHaveTextContent("short put");
+    expect(spread).toHaveTextContent("₹32,119.50");
+    expect(spread).toHaveTextContent("paper at ₹0 capital: one lot");
+    expect(bank.getByTestId("fno-f3-next")).toHaveTextContent(/23 Sept? 2026/);
+    expect(
+      screen.getAllByText("As of close, Tue 22 Sep").length,
+    ).toBeGreaterThan(1);
+  });
+
+  it("shows F3's open spread marked at settle, its exits and what was not tested", async () => {
+    await renderWith(scanned);
+    const open = screen.getByTestId("fno-f3-open");
+    expect(open).toHaveTextContent("NIFTY directional spread · 2 lots · paper");
+    expect(open).toHaveTextContent("Marked at settle, 22 Sep");
+    expect(open).toHaveTextContent("24,790");
+    expect(screen.getByTestId("fno-f3-exits")).toHaveTextContent(
+      /Each waits for a click on the desk unless its auto-exit switch is on/,
+    );
+    const notTested = screen.getByTestId("fno-f3-not-tested");
+    expect(notTested).toHaveTextContent("the 75-minute confirm");
+    expect(screen.getByTestId("fno-f3-research")).toHaveTextContent("-0.021R");
+    expect(screen.getByTestId("fno-f3-retest")).toHaveTextContent(
+      "No re-test has run yet",
+    );
   });
 
   it("binds no action and draws the Options sub-nav", async () => {

@@ -173,13 +173,18 @@ async def list_trades(
     scope = select(BrokerTrade).where(BrokerTrade.user_id == user_id)
     if symbol:
         scope = scope.where(BrokerTrade.symbol == symbol.strip().upper())
+    # The aggregate reads the *subquery's* columns. Naming `BrokerTrade.trade_date` here (as this
+    # did until 30 Oct 2026) made SQLAlchemy add the table itself to the FROM list —
+    # `FROM (scope) AS anon_1, broker_trade` — so `total` was the caller's rows times everyone's,
+    # and the first/last dates spanned every account's trades (DECISIONS-RS R5.28).
+    scoped = scope.subquery()
     bounds = (
         await session.execute(
             select(
                 func.count(),
-                func.min(BrokerTrade.trade_date),
-                func.max(BrokerTrade.trade_date),
-            ).select_from(scope.subquery())
+                func.min(scoped.c.trade_date),
+                func.max(scoped.c.trade_date),
+            )
         )
     ).one()
     rows = (

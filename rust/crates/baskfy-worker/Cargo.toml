@@ -1,0 +1,52 @@
+[package]
+name = "baskfy-worker"
+version = "0.1.0"
+description = "Baskfy's worker in Rust, ported from decile-blueprint/services/worker (baskfy_worker): the nightly pipeline first — its step bookkeeping, the orchestrator, catch-up — with each step's body owned by a wave-5 lane."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "baskfy-worker"
+path = "src/main.rs"
+
+[dependencies]
+baskfy-core = { workspace = true }
+baskfy-db = { workspace = true }
+baskfy-providers = { workspace = true }
+# The worker imports baskfy_api.settings and baskfy_api.email in Python; the Rust worker reads
+# the same Settings and sends alert mail through the same Mailer (DECISIONS-RS R7.2).
+baskfy-api = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+sqlx = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rust_decimal = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+redis = { workspace = true }
+# Lane nightly-sleeves: the detectors hand baskfy_core DataFrames (polars, already pinned for
+# the core) and filter the register with Python's ETF patterns (regex, already pinned for the
+# providers). No new third-party dependency in the workspace.
+polars = { workspace = true }
+regex = { workspace = true }
+# RS5 integrator, step 11 (refresh_basket): the desk's uploaded scan is a CSV and the scan's
+# screen_run_id is a SHA-256 digest. Both are already pinned in the workspace (csv for the
+# providers, sha2 for the API); no new third-party dependency (DECISIONS-RS R7.14).
+csv = { workspace = true }
+sha2 = { workspace = true }
+# Wave-6 lane ops_alerts: the webhook sweep POSTs a signed body (`baskfy_api.webhooks`) and the
+# ops alert webhook sink posts JSON, both through `baskfy_providers::net`'s guarded client (whose
+# builder is a `reqwest::ClientBuilder`: httpx does not follow redirects, so the sweep needs
+# `redirect::Policy::none()`), and the signature is HMAC-SHA256. Both already pinned in the
+# workspace and in the lock through baskfy-providers; no new crate (DECISIONS-RS R8.oa1).
+reqwest = { workspace = true }
+hmac = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

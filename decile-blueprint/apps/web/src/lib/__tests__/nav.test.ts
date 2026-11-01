@@ -105,6 +105,7 @@ describe("the primary consumer IA", () => {
       "Backtests",
       "Create",
       "Overlap",
+      "Opportunities",
     ]);
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/build/overlap");
     expect(PAGES["/build/overlap"]).toBeDefined();
@@ -269,6 +270,7 @@ describe("the primary consumer IA", () => {
       "/build/backtests",
       "/create",
       "/build/overlap",
+      "/opportunities",
       "/swing",
       "/vbt",
       "/twt",
@@ -279,6 +281,7 @@ describe("the primary consumer IA", () => {
       "Backtests",
       "Create",
       "Overlap",
+      "Opportunities",
       "Swing",
       "Volume",
       "Tight",
@@ -337,7 +340,26 @@ describe("the sidebar IA", () => {
       "/vbt",
       "/twt",
       "/options",
+      "/opportunities/swing",
     ]);
+  });
+
+  it("gives the Opportunities workspace a nav entry, Swing | Options tabs and a lit Build pill", () => {
+    const entry = NAV_ITEMS.find((item) => item.href === "/opportunities/swing");
+    expect(entry?.label).toBe(PAGES["/opportunities/swing"].title);
+    expect(SECTION_TABS.opportunities.map((t) => t.label)).toEqual(["Swing", "Options"]);
+    expect(SECTION_TABS.opportunities.map((t) => t.href)).toEqual([
+      "/opportunities/swing",
+      "/opportunities/options",
+    ]);
+    for (const tab of SECTION_TABS.opportunities) {
+      expect(PAGES[tab.href as keyof typeof PAGES], `${tab.href} has no page record`).toBeDefined();
+    }
+    expect(primarySection("/opportunities")).toBe("opportunities");
+    expect(primarySection("/opportunities/options")).toBe("opportunities");
+    expect(primarySection("/options")).toBe("options");
+    expect(SECTION_LABEL.opportunities).toBe("Build");
+    expect(PRIMARY_NAV).toHaveLength(5);
   });
 
   it("lists the account group with fees and brokers", () => {

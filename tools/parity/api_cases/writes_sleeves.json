@@ -1,0 +1,2593 @@
+{
+ "mode": "writes",
+ "lane": "writes-sleeves",
+ "note": "Wave 4c lane writes-sleeves: every write of the swing, twt, vbt, sleeves, options, fno, overlap and backtests routers (but PUT/DELETE /overlap/reviews, which stay on Python with GET /overlap, R5.21) as one scenario on two fresh clones of the bed. Run: python3 tools/parity/api_diff.py --writes --lane wsleeves --smtp-port 18233 --redis-db-py 10 --redis-db-rs 11 --py-port 18231 --rs-port 18232 --cases tools/parity/api_cases/writes_sleeves.json. Seeded: a DONE vb_scan_run requested in 2099 (so POST /vbt/scan answers its 429), and an F3 fo_sleeve_config row (so the F&O config is seeded and its in-memory overlay is visible). BASKFY_BACKTEST_EXECUTOR=celery: the in-process executor is refused by Rust (503).",
+ "env": {
+  "BASKFY_SOLE_USER_ID": "1",
+  "BASKFY_BACKTEST_EXECUTOR": "celery"
+ },
+ "seed_sql": [
+  "INSERT INTO vb_scan_run (user_id, requested_at, status, source, created_at) VALUES (1, '2099-01-01T00:00:00Z', 'DONE', 'desk', '2026-10-01T00:00:00Z')",
+  "INSERT INTO fo_sleeve_config (user_id, sleeve, capital_inr, risk_per_trade_pct, max_lots, max_open_positions, paper_enabled, updated_at, updated_by) VALUES (1, 'F3', 0, 1.00, 2, 1, true, '2026-09-24T22:22:46Z', 'seed')"
+ ],
+ "db_mask": {
+  "sw_scan_run": [
+   "requested_at",
+   "task_id"
+  ],
+  "sw_watch": [
+   "updated_at",
+   "created_at"
+  ],
+  "sw_config": [
+   "updated_at"
+  ],
+  "sw_config_audit": [
+   "changed_at"
+  ],
+  "tw_scan_run": [
+   "requested_at",
+   "task_id",
+   "created_at"
+  ],
+  "vb_config": [
+   "updated_at"
+  ],
+  "vb_config_audit": [
+   "changed_at"
+  ],
+  "op_event_day": [
+   "created_at"
+  ],
+  "op_book_config": [
+   "updated_at"
+  ],
+  "op_sleeve_config": [
+   "updated_at"
+  ],
+  "op_config_audit": [
+   "changed_at"
+  ],
+  "fo_book_config": [
+   "updated_at"
+  ],
+  "fo_sleeve_config": [
+   "updated_at"
+  ],
+  "fo_config_audit": [
+   "changed_at"
+  ],
+  "portfolio_sleeve": [
+   "created_at"
+  ],
+  "catalyst_tag_correction": [
+   "created_at",
+   "updated_at"
+  ],
+  "backtest": [
+   "public_id",
+   "created_at"
+  ]
+ },
+ "redis_presence_only": [
+  "^overlap:catalyst-scan:"
+ ],
+ "redis_mask_captures": [
+  "bt1",
+  "bt2"
+ ],
+ "cases": [
+  {
+   "name": "sw-scan-anon",
+   "method": "POST",
+   "path": "/api/v1/swing/scan"
+  },
+  {
+   "name": "sw-scan-plain",
+   "method": "POST",
+   "path": "/api/v1/swing/scan",
+   "user": "plain"
+  },
+  {
+   "name": "sw-scan-stale",
+   "method": "POST",
+   "path": "/api/v1/swing/scan",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "sw-scan-expired",
+   "method": "POST",
+   "path": "/api/v1/swing/scan",
+   "user": "expired"
+  },
+  {
+   "name": "sw-scan-owner",
+   "method": "POST",
+   "path": "/api/v1/swing/scan",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ],
+   "capture": {
+    "swrun": "json:/run_id"
+   }
+  },
+  {
+   "name": "sw-scan-owner-again",
+   "method": "POST",
+   "path": "/api/v1/swing/scan",
+   "user": "owner"
+  },
+  {
+   "name": "sw-scan-read",
+   "method": "GET",
+   "path": "/api/v1/swing/scan/${swrun}",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ]
+  },
+  {
+   "name": "sw-watch-anon",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "TCS"
+   }
+  },
+  {
+   "name": "sw-watch-anon-badjson",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "raw_body": "{\"setup\": ",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "sw-watch-badjson",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "raw_body": "{\"setup\":\"FLAG\",}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "sw-watch-nobody",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-notjson",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "raw_body": "setup=FLAG",
+   "headers": {
+    "Content-Type": "text/plain"
+   }
+  },
+  {
+   "name": "sw-watch-list",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": [
+    1
+   ]
+  },
+  {
+   "name": "sw-watch-empty",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "sw-watch-both",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "TCS",
+    "instrument_id": 2568
+   }
+  },
+  {
+   "name": "sw-watch-neither",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "EP"
+   }
+  },
+  {
+   "name": "sw-watch-errors",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "zz": 1,
+    "setup": "X",
+    "symbol": "",
+    "trigger": 0,
+    "stop_ref": "abc",
+    "note": 5,
+    "instrument_id": "x"
+   }
+  },
+  {
+   "name": "sw-watch-errors2",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "trigger": true,
+    "stop_ref": -1,
+    "catalyst": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "sw-watch-nan",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "raw_body": "{\"setup\":\"FLAG\",\"symbol\":\"TCS\",\"trigger\":NaN,\"stop_ref\":\"Infinity\"}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "sw-watch-plain",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "plain",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "TCS"
+   }
+  },
+  {
+   "name": "sw-watch-unknown",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "NOSUCHNAME"
+   }
+  },
+  {
+   "name": "sw-watch-zero-id",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "instrument_id": 0
+   }
+  },
+  {
+   "name": "sw-watch-missing-id",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "instrument_id": "999999999"
+   }
+  },
+  {
+   "name": "sw-watch-add",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "symbol": " tcs ",
+    "trigger": "4100.005",
+    "stop_ref": 3900,
+    "note": "base",
+    "catalyst": null
+   },
+   "capture": {
+    "wtcs": "json:/id"
+   }
+  },
+  {
+   "name": "sw-watch-readd",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "TCS",
+    "trigger": 100.0,
+    "note": "base"
+   }
+  },
+  {
+   "name": "sw-watch-readd-same",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "FLAG",
+    "symbol": "TCS"
+   }
+  },
+  {
+   "name": "sw-watch-add-id",
+   "method": "POST",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "body": {
+    "setup": "EP",
+    "instrument_id": "1359",
+    "trigger": "1_500.5",
+    "catalyst": "results"
+   },
+   "capture": {
+    "winfy": "json:/id"
+   }
+  },
+  {
+   "name": "sw-watch-patch-note",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/${wtcs}",
+   "user": "owner",
+   "body": {
+    "note": "changed",
+    "catalyst": "filing"
+   }
+  },
+  {
+   "name": "sw-watch-patch-same",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/${wtcs}",
+   "user": "owner",
+   "body": {
+    "note": "changed"
+   }
+  },
+  {
+   "name": "sw-watch-patch-reconfirm",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/${winfy}",
+   "user": "owner",
+   "body": {
+    "reconfirm": "yes"
+   }
+  },
+  {
+   "name": "sw-watch-patch-detector",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/48",
+   "user": "owner",
+   "body": {
+    "note": "x",
+    "reconfirm": true
+   }
+  },
+  {
+   "name": "sw-watch-patch-expired-reconfirm",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/29",
+   "user": "owner",
+   "body": {
+    "reconfirm": 1
+   }
+  },
+  {
+   "name": "sw-watch-patch-expired-note",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/29",
+   "user": "owner",
+   "body": {
+    "note": "rolled back"
+   }
+  },
+  {
+   "name": "sw-watch-patch-detector-note",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/47",
+   "user": "owner",
+   "body": {
+    "catalyst": "seen",
+    "reconfirm": false
+   }
+  },
+  {
+   "name": "sw-watch-patch-unknown",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/987654",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "sw-watch-patch-badid",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/abc",
+   "user": "owner",
+   "body": {
+    "zz": 1,
+    "reconfirm": "maybe"
+   }
+  },
+  {
+   "name": "sw-watch-patch-badid-ok",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/1.5",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "sw-watch-patch-anon",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/47",
+   "body": {}
+  },
+  {
+   "name": "sw-watch-patch-plain",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/47",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "sw-watch-patch-nobody",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/47",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-patch-null",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/47",
+   "user": "owner",
+   "raw_body": "null",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "sw-watch-patch-levels",
+   "method": "PATCH",
+   "path": "/api/v1/swing/watch/47",
+   "user": "owner",
+   "body": {
+    "trigger": 1
+   }
+  },
+  {
+   "name": "sw-watch-delete",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/${winfy}",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-delete-again",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/${winfy}",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-delete-expired",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/28",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-delete-unknown",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/987654",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-delete-badid",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/x1",
+   "user": "owner"
+  },
+  {
+   "name": "sw-watch-delete-anon",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/28"
+  },
+  {
+   "name": "sw-watch-delete-plain",
+   "method": "DELETE",
+   "path": "/api/v1/swing/watch/28",
+   "user": "plain"
+  },
+  {
+   "name": "sw-watch-list-all",
+   "method": "GET",
+   "path": "/api/v1/swing/watch",
+   "user": "owner",
+   "query": {
+    "state": "all"
+   }
+  },
+  {
+   "name": "sw-watch-list-watching",
+   "method": "GET",
+   "path": "/api/v1/swing/watch",
+   "user": "owner"
+  },
+  {
+   "name": "sw-config-anon",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "body": {}
+  },
+  {
+   "name": "sw-config-plain",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "sw-config-extra",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "exposure_level": 3,
+    "first_live_sessions_left": 0
+   }
+  },
+  {
+   "name": "sw-config-errors",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "sleeve_capital_inr": -1,
+    "risk_per_trade_pct": 0,
+    "max_position_pct": 101,
+    "max_open_positions": 5.5,
+    "or_window_minutes": "5",
+    "stop_mode": "ATR",
+    "adr_min_pct": true,
+    "turnover_min_inr": [],
+    "price_min": "x"
+   }
+  },
+  {
+   "name": "sw-config-ceiling",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "price_min": 30,
+    "risk_per_trade_pct": "1.5"
+   }
+  },
+  {
+   "name": "sw-config-ceiling-int",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "max_open_positions": 12345678901234567890123
+   }
+  },
+  {
+   "name": "sw-config-ceiling-pos",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "max_position_pct": "30.01"
+   }
+  },
+  {
+   "name": "sw-config-partial",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "adr_min_pct": "4.5",
+    "max_position_pct": "30.01"
+   },
+   "note": "review: a valid change beside a refused ceiling is not written"
+  },
+  {
+   "name": "sw-config-empty",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {},
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "sw-config-same",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "risk_per_trade_pct": 0.5,
+    "max_open_positions": 10,
+    "price_min": null
+   },
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "sw-config-set",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "max_position_pct": "25",
+    "adr_min_pct": 10.0,
+    "or_window_minutes": true,
+    "stop_mode": "OPENING_RANGE_LOW",
+    "turnover_min_inr": "1E+7",
+    "sleeve_capital_inr": "2500000.005",
+    "price_min": "0.0000001"
+   },
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "sw-config-max",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "risk_per_trade_pct": "1.0",
+    "max_position_pct": 30,
+    "max_open_positions": "20"
+   },
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "sw-config-huge",
+   "method": "PATCH",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "body": {
+    "sleeve_capital_inr": "1e40"
+   }
+  },
+  {
+   "name": "sw-config-read",
+   "method": "GET",
+   "path": "/api/v1/swing/config",
+   "user": "owner",
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "tw-scan-anon",
+   "method": "POST",
+   "path": "/api/v1/twt/scan"
+  },
+  {
+   "name": "tw-scan-plain",
+   "method": "POST",
+   "path": "/api/v1/twt/scan",
+   "user": "plain"
+  },
+  {
+   "name": "tw-scan-garbage",
+   "method": "POST",
+   "path": "/api/v1/twt/scan",
+   "user": "garbage"
+  },
+  {
+   "name": "tw-scan-owner",
+   "method": "POST",
+   "path": "/api/v1/twt/scan",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ],
+   "capture": {
+    "twrun": "json:/run_id"
+   }
+  },
+  {
+   "name": "tw-scan-owner-again",
+   "method": "POST",
+   "path": "/api/v1/twt/scan",
+   "user": "owner"
+  },
+  {
+   "name": "tw-scan-read",
+   "method": "GET",
+   "path": "/api/v1/twt/scan/${twrun}",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ]
+  },
+  {
+   "name": "tw-scan-body-ignored",
+   "method": "POST",
+   "path": "/api/v1/twt/scan",
+   "user": "owner",
+   "raw_body": "{not json",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "vb-scan-anon",
+   "method": "POST",
+   "path": "/api/v1/vbt/scan"
+  },
+  {
+   "name": "vb-scan-plain",
+   "method": "POST",
+   "path": "/api/v1/vbt/scan",
+   "user": "plain"
+  },
+  {
+   "name": "vb-scan-owner-too-soon",
+   "method": "POST",
+   "path": "/api/v1/vbt/scan",
+   "user": "owner"
+  },
+  {
+   "name": "vb-config-anon",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "body": {}
+  },
+  {
+   "name": "vb-config-plain",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "vb-config-extra",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "body": {
+    "dry_run_sessions": 20
+   }
+  },
+  {
+   "name": "vb-config-errors",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "body": {
+    "sleeve_capital_inr": "-0.01",
+    "max_open_positions": 0,
+    "max_position_pct": 0,
+    "stop_pct": "100.0001"
+   }
+  },
+  {
+   "name": "vb-config-ceiling",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "body": {
+    "sleeve_capital_inr": 1,
+    "stop_pct": "15.5"
+   }
+  },
+  {
+   "name": "vb-config-ceiling-open",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "body": {
+    "max_open_positions": 16
+   }
+  },
+  {
+   "name": "vb-config-empty",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "body": {},
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "vb-config-set",
+   "method": "PATCH",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "body": {
+    "sleeve_capital_inr": 2600000,
+    "max_open_positions": "12",
+    "max_position_pct": 12.5,
+    "stop_pct": "14.999"
+   },
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "vb-config-read",
+   "method": "GET",
+   "path": "/api/v1/vbt/config",
+   "user": "owner",
+   "mask": [
+    "updated_at"
+   ]
+  },
+  {
+   "name": "op-ev-anon",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "body": {
+    "date": "2026-11-20"
+   }
+  },
+  {
+   "name": "op-ev-plain",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "plain",
+   "body": {
+    "date": "2026-11-20"
+   }
+  },
+  {
+   "name": "op-ev-empty",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "op-ev-errors",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-13-01",
+    "reason": 5,
+    "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "source": "SEED"
+   }
+  },
+  {
+   "name": "op-ev-date-shapes1",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-11-20T01:00:00"
+   }
+  },
+  {
+   "name": "op-ev-date-shapes2",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026/11/20"
+   }
+  },
+  {
+   "name": "op-ev-date-shapes3",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": true
+   }
+  },
+  {
+   "name": "op-ev-date-shapes4",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "20261120"
+   }
+  },
+  {
+   "name": "op-ev-date-shapes5",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "0000-01-01"
+   }
+  },
+  {
+   "name": "op-ev-bad-reason",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-11-20",
+    "reason": "DIWALI"
+   }
+  },
+  {
+   "name": "op-ev-null-reason",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-11-20",
+    "reason": null
+   }
+  },
+  {
+   "name": "op-ev-add",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-11-20",
+    "note": "muhurat"
+   }
+  },
+  {
+   "name": "op-ev-add-ts",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-11-21T00:00:00Z",
+    "reason": "RBI_POLICY"
+   }
+  },
+  {
+   "name": "op-ev-add-int",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": 1795392000,
+    "reason": "UNION_BUDGET",
+    "note": null
+   }
+  },
+  {
+   "name": "op-ev-dup",
+   "method": "POST",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "body": {
+    "date": "2026-11-20",
+    "reason": "RBI_POLICY"
+   }
+  },
+  {
+   "name": "op-ev-cal",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2026"
+   }
+  },
+  {
+   "name": "op-evd-anon",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "query": {
+    "date": "2026-11-20"
+   }
+  },
+  {
+   "name": "op-evd-missing",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "owner"
+  },
+  {
+   "name": "op-evd-bad",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "query": {
+    "date": "2026-02-30"
+   }
+  },
+  {
+   "name": "op-evd-plain",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "plain",
+   "query": {
+    "date": "2026-11-20"
+   }
+  },
+  {
+   "name": "op-evd-none",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "query": {
+    "date": "2026-11-25"
+   }
+  },
+  {
+   "name": "op-evd-ok",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "query": {
+    "date": "2026-11-20"
+   }
+  },
+  {
+   "name": "op-evd-again",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "query": {
+    "date": "2026-11-20"
+   }
+  },
+  {
+   "name": "op-evd-seed",
+   "method": "DELETE",
+   "path": "/api/v1/options/event-day",
+   "user": "owner",
+   "query": {
+    "date": "2026-12-04"
+   }
+  },
+  {
+   "name": "op-cfg-anon",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "body": {}
+  },
+  {
+   "name": "op-cfg-plain",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "op-cfg-other-underlying",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "underlying": "BANKNIFTY",
+     "account_inr": -1
+    }
+   }
+  },
+  {
+   "name": "op-cfg-underlying-int",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "underlying": 5
+    }
+   }
+  },
+  {
+   "name": "op-cfg-sleeve-underlying",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "account_inr": -1
+    },
+    "sleeves": {
+     "O2": {
+      "underlying": "X"
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-sleeve-nifty",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "O2": {
+      "underlying": "NIFTY"
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-errors",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "account_inr": "x",
+     "margin_pool_inr": -5,
+     "paused_until": "2026-12-01"
+    },
+    "sleeves": {
+     "O9": {
+      "max_lots": 0
+     },
+     "O1M": {
+      "risk_per_trade_pct": 0,
+      "paper_enabled": "maybe",
+      "hard_exit_time": "25:00"
+     }
+    },
+    "extra": 1
+   }
+  },
+  {
+   "name": "op-cfg-errors2",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": 5,
+    "sleeves": []
+   }
+  },
+  {
+   "name": "op-cfg-ceiling-book",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "daily_loss_limit_inr": "30000.01"
+    }
+   }
+  },
+  {
+   "name": "op-cfg-ceiling-lots",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "O1W": {
+      "max_lots": 11
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-ceiling-exit",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "O2": {
+      "hard_exit_time": "15:00:01"
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-ceiling-risk",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "O1M": {
+      "sleeve_capital_inr": "2500000.005",
+      "risk_per_trade_pct": "1.0"
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-ceiling-pct",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "O3": {
+      "risk_per_trade_pct": "1.5"
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-aware",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "O3": {
+      "hard_exit_time": "14:00Z"
+     }
+    }
+   }
+  },
+  {
+   "name": "op-cfg-partial",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "account_inr": "400000"
+    },
+    "sleeves": {
+     "O2": {
+      "max_lots": 2
+     },
+     "O1W": {
+      "max_lots": 11
+     }
+    }
+   },
+   "note": "review: a valid book change and a valid sleeve change before a refused ceiling - the whole request rolls back (no row, no audit)"
+  },
+  {
+   "name": "op-cfg-empty",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {},
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "op-cfg-set",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "underlying": " nifty",
+     "account_inr": "500000.005",
+     "margin_pool_inr": 100000.0,
+     "daily_loss_limit_inr": 0
+    },
+    "sleeves": {
+     "O2": {
+      "sleeve_capital_inr": 100000,
+      "risk_per_trade_pct": 0.5,
+      "max_lots": "3",
+      "paper_enabled": "off",
+      "hard_exit_time": "14:45:30.25"
+     },
+     "O1M": {
+      "paper_enabled": true
+     }
+    }
+   },
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "op-cfg-dup",
+   "method": "PATCH",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "raw_body": "{\"sleeves\":{\"O1W\":{\"max_lots\":3},\"O3\":{\"max_lots\":4},\"O1W\":{\"max_lots\":5}}}",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "op-cfg-read",
+   "method": "GET",
+   "path": "/api/v1/options/config",
+   "user": "owner",
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "fo-cfg-anon",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "body": {}
+  },
+  {
+   "name": "fo-cfg-plain",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "plain",
+   "body": {}
+  },
+  {
+   "name": "fo-cfg-errors",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "monthly_pause_inr": -1,
+     "paused_until": null
+    },
+    "sleeves": {
+     "F9": {},
+     "F1": {
+      "max_lots": 11,
+      "risk_per_trade_pct": "0",
+      "max_open_positions": 0,
+      "paper_enabled": 2
+     }
+    }
+   }
+  },
+  {
+   "name": "fo-cfg-ceiling",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "monthly_pause_inr": 75000.5
+    }
+   }
+  },
+  {
+   "name": "fo-cfg-ceiling-open",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "F2": {
+      "max_open_positions": 11
+     }
+    }
+   }
+  },
+  {
+   "name": "fo-cfg-bound",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "F1": {
+      "max_open_positions": 3
+     }
+    }
+   }
+  },
+  {
+   "name": "fo-cfg-risk",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "F1": {
+      "capital_inr": "2500000.01"
+     }
+    }
+   }
+  },
+  {
+   "name": "fo-cfg-partial",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "monthly_pause_inr": "6000"
+    },
+    "sleeves": {
+     "F1": {
+      "max_lots": 1
+     },
+     "F2": {
+      "max_open_positions": 11
+     }
+    }
+   },
+   "note": "review: valid changes before a refused ceiling roll back with it"
+  },
+  {
+   "name": "fo-cfg-unseeded",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "F3": {
+      "max_lots": 1
+     }
+    }
+   },
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "fo-cfg-set",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "book": {
+     "monthly_pause_inr": "5000.005"
+    },
+    "sleeves": {
+     "F2": {
+      "capital_inr": "100000.5",
+      "risk_per_trade_pct": 0.5,
+      "max_lots": "3",
+      "max_open_positions": 10,
+      "paper_enabled": "no"
+     }
+    }
+   },
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "fo-cfg-set-same",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "F1": {
+      "capital_inr": "2500000.00",
+      "risk_per_trade_pct": "1.0",
+      "paper_enabled": true
+     }
+    }
+   },
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "fo-cfg-two-groups",
+   "method": "PATCH",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "body": {
+    "sleeves": {
+     "F3": {
+      "capital_inr": "10.5"
+     },
+     "F2": {
+      "capital_inr": "200.5"
+     }
+    },
+    "book": {
+     "monthly_pause_inr": "7.5"
+    }
+   },
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "fo-cfg-read",
+   "method": "GET",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "mask": [
+    "changed_at"
+   ]
+  },
+  {
+   "name": "sl-anon",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "body": {
+    "sleeves": []
+   }
+  },
+  {
+   "name": "sl-anon-badjson",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "raw_body": "{",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "sl-badid-badbody",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/x/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": {}
+   }
+  },
+  {
+   "name": "sl-badid",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/1.5/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": []
+   }
+  },
+  {
+   "name": "sl-missing",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "sl-nobody",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner"
+  },
+  {
+   "name": "sl-errors",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "",
+      "kind": "x",
+      "capital": -1,
+      "top_n": 0,
+      "extra": 1
+     },
+     1,
+     {
+      "kind": "manual"
+     }
+    ],
+    "other": 2
+   }
+  },
+  {
+   "name": "sl-too-many",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "s0",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s1",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s2",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s3",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s4",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s5",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s6",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s7",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s8",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s9",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s10",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s11",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "s12",
+      "kind": "manual",
+      "capital": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-dup-names",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "a",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": " a\u001f",
+      "kind": "manual",
+      "capital": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-screen-no-id",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "m",
+      "kind": "manual",
+      "capital": 1
+     },
+     {
+      "name": "a",
+      "kind": "screen",
+      "capital": 1,
+      "screen_public_id": ""
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-basket-with-screen",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "a",
+      "kind": "basket",
+      "capital": 1,
+      "basket_slug": "x",
+      "screen_public_id": "y"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-manual-with-basket",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "a",
+      "kind": "manual",
+      "capital": 1,
+      "basket_slug": "x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-plain",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "plain",
+   "body": {
+    "sleeves": []
+   }
+  },
+  {
+   "name": "sl-not-found-portfolio",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/999999/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": []
+   }
+  },
+  {
+   "name": "sl-unknown-screen",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "a",
+      "kind": "screen",
+      "capital": 1,
+      "screen_public_id": "nosuchscreen"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-unknown-basket",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "a",
+      "kind": "basket",
+      "capital": 1,
+      "basket_slug": "no-such-basket"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-set",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "  Core ",
+      "kind": "manual",
+      "capital": "100000.005",
+      "top_n": "20"
+     },
+     {
+      "name": "Mom",
+      "kind": "screen",
+      "capital": 250000,
+      "screen_public_id": "exmpl0000003"
+     },
+     {
+      "name": "Bask",
+      "kind": "basket",
+      "capital": 100000.0,
+      "basket_slug": "trend-stack",
+      "ignored": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-get",
+   "method": "GET",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner"
+  },
+  {
+   "name": "sl-replace",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": [
+     {
+      "name": "Only",
+      "kind": "screen",
+      "capital": "0",
+      "screen_public_id": "da1dae3992bf"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sl-clear",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/5/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": []
+   }
+  },
+  {
+   "name": "sl-get2",
+   "method": "GET",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner"
+  },
+  {
+   "name": "sl-other-portfolio",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/2/sleeves",
+   "user": "owner",
+   "body": {
+    "sleeves": []
+   },
+   "note": "review: tenant isolation - the owner may not replace (here: wipe) the subscriber's portfolio 2's division; 404, nothing deleted"
+  },
+  {
+   "name": "sl-sub-on-owners",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "subscriber",
+   "body": {
+    "sleeves": [
+     {
+      "name": "x",
+      "kind": "manual",
+      "capital": 1
+     }
+    ]
+   },
+   "note": "review: tenant isolation - the subscriber may not replace the owner's portfolio 4"
+  },
+  {
+   "name": "sl-sub-get-owners",
+   "method": "GET",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "subscriber",
+   "note": "review: tenant isolation - nor read it"
+  },
+  {
+   "name": "sl-sub-own",
+   "method": "PUT",
+   "path": "/api/v1/portfolios/2/sleeves",
+   "user": "subscriber",
+   "body": {
+    "sleeves": [
+     {
+      "name": "Theirs",
+      "kind": "screen",
+      "capital": "5",
+      "screen_public_id": "8eb9259c87e9"
+     },
+     {
+      "name": "Pub",
+      "kind": "basket",
+      "capital": "1.5",
+      "basket_slug": "maulik",
+      "top_n": 3
+     }
+    ]
+   },
+   "note": "review: a second account writes its own portfolio (its own screen, a published basket)"
+  },
+  {
+   "name": "sl-sub-own-get",
+   "method": "GET",
+   "path": "/api/v1/portfolios/2/sleeves",
+   "user": "subscriber"
+  },
+  {
+   "name": "sl-owner-get-after",
+   "method": "GET",
+   "path": "/api/v1/portfolios/4/sleeves",
+   "user": "owner",
+   "note": "review: the owner's division is untouched by the refused writes"
+  },
+  {
+   "name": "ov-tag-anon",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "body": {
+    "headline": "Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the Exchange regarding Receipt of orders worth Rs. 840 crores",
+    "event_type": "order"
+   }
+  },
+  {
+   "name": "ov-tag-plain",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "plain",
+   "body": {
+    "headline": "Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the Exchange regarding Receipt of orders worth Rs. 840 crores",
+    "event_type": "order"
+   }
+  },
+  {
+   "name": "ov-tag-empty",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "ov-tag-errors",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "",
+    "event_type": "news",
+    "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "extra": 1
+   }
+  },
+  {
+   "name": "ov-tag-blank",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "   ",
+    "event_type": "order"
+   }
+  },
+  {
+   "name": "ov-tag-new",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "  Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the Exchange regarding Receipt of orders worth Rs. 840 crores ",
+    "event_type": "order",
+    "note": "  "
+   }
+  },
+  {
+   "name": "ov-tag-new2",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "General Updates — Acme Limited has informed the Exchange about Financial Results for the quarter",
+    "event_type": "routine",
+    "note": "really routine"
+   }
+  },
+  {
+   "name": "ov-tag-new3",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "STRASSE Ltd — Outcome of Board Meeting",
+    "event_type": "governance"
+   }
+  },
+  {
+   "name": "ov-tag-update",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "GENERAL UPDATES — ACME LIMITED HAS INFORMED THE EXCHANGE ABOUT FINANCIAL RESULTS FOR THE QUARTER",
+    "event_type": "earnings"
+   }
+  },
+  {
+   "name": "ov-tag-update-same",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "GENERAL UPDATES — ACME LIMITED HAS INFORMED THE EXCHANGE ABOUT FINANCIAL RESULTS FOR THE QUARTER",
+    "event_type": "earnings"
+   }
+  },
+  {
+   "name": "ov-tag-fold",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "ΣΤΡΑΣΣΕ ᾈϐ ǰ Ltd — Outcome of Board Meeting",
+    "event_type": "governance",
+    "note": "casefold"
+   },
+   "note": "review: the stored headline_key is sha256(strip().casefold()); full folding (iota subscript, symbol variants, decomposed j-caron) must match CPython's"
+  },
+  {
+   "name": "ov-untag-fold",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "query": {
+    "headline": "  στρασσε ἀιβ ǰ ltd — outcome of board meeting"
+   },
+   "note": "review: found by its folded spelling only if the key folds as CPython does"
+  },
+  {
+   "name": "ov-untag-anon",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "query": {
+    "headline": "Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the Exchange regarding Receipt of orders worth Rs. 840 crores"
+   }
+  },
+  {
+   "name": "ov-untag-missing",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner"
+  },
+  {
+   "name": "ov-untag-blank",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "query": {
+    "headline": ""
+   }
+  },
+  {
+   "name": "ov-untag-plain",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "plain",
+   "query": {
+    "headline": "Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the Exchange regarding Receipt of orders worth Rs. 840 crores"
+   }
+  },
+  {
+   "name": "ov-untag-none",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "query": {
+    "headline": "nothing here"
+   }
+  },
+  {
+   "name": "ov-untag-ok",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "query": {
+    "headline": "bagging/receiving of orders/contracts — bharat electronics limited has informed the exchange regarding receipt of orders worth rs. 840 crores"
+   }
+  },
+  {
+   "name": "ov-untag-again",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "query": {
+    "headline": "Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the Exchange regarding Receipt of orders worth Rs. 840 crores"
+   }
+  },
+  {
+   "name": "ov-scan-anon",
+   "method": "POST",
+   "path": "/api/v1/overlap/catalyst-scan"
+  },
+  {
+   "name": "ov-scan-plain",
+   "method": "POST",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "plain"
+  },
+  {
+   "name": "ov-scan-badscope",
+   "method": "POST",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner",
+   "query": {
+    "scope": "some"
+   }
+  },
+  {
+   "name": "ov-scan-ok",
+   "method": "POST",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner",
+   "mask": [
+    "queued_at"
+   ],
+   "query": {
+    "scope": "all"
+   }
+  },
+  {
+   "name": "ov-scan-again",
+   "method": "POST",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner"
+  },
+  {
+   "name": "ov-scan-read",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner",
+   "mask": [
+    "queued_at"
+   ]
+  },
+  {
+   "name": "bt-anon",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    }
+   }
+  },
+  {
+   "name": "bt-anon-badjson",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "raw_body": "{",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "bt-plain",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "plain",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    }
+   }
+  },
+  {
+   "name": "bt-empty",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {}
+  },
+  {
+   "name": "bt-errors",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "x",
+     "initial_capital": 0,
+     "rebalance": {
+      "frequency": "daily",
+      "x": 1
+     },
+     "selection": {
+      "top_n": 0,
+      "hold_buffer": 501
+     },
+     "weighting": "cap",
+     "position_limits": {
+      "max_weight": 2
+     },
+     "costs": {
+      "impact_model": "sqrt",
+      "stt_bps": -1
+     },
+     "risk_overlay": {
+      "enabled": "maybe"
+     },
+     "dividends": 1,
+     "risk_free_rate": 2,
+     "risk_free_curve": [
+      [
+       "2024-01-01"
+      ],
+      [
+       "2024-02-01",
+       "1",
+       "2"
+      ],
+      "x"
+     ],
+     "extra": 1
+    },
+    "data_version": "v",
+    "fragility": [],
+    "more": 1
+   }
+  },
+  {
+   "name": "bt-dates",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2024-01-01",
+     "end": "2024-01-01"
+    }
+   }
+  },
+  {
+   "name": "bt-limits",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "position_limits": {
+      "min_weight": "0.5",
+      "max_weight": 0.2
+     }
+    }
+   }
+  },
+  {
+   "name": "bt-neither",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01"
+    }
+   }
+  },
+  {
+   "name": "bt-stale",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    },
+    "data_version": 1
+   }
+  },
+  {
+   "name": "bt-bad-inline",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_definition": {
+      "index": "nifty-500",
+      "filters": 5,
+      "zz": 1
+     }
+    }
+   }
+  },
+  {
+   "name": "bt-unknown-screen",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "nosuchscreen"
+    }
+   }
+  },
+  {
+   "name": "bt-other-screen",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "da1dae3992bf"
+    }
+   }
+  },
+  {
+   "name": "bt-ok",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003",
+     "initial_capital": 1000000.0,
+     "costs": {
+      "stt_bps": "12.5"
+     },
+     "risk_free_curve": [
+      [
+       "2023-01-01",
+       0.065
+      ]
+     ]
+    },
+    "data_version": 44,
+    "fragility": false
+   },
+   "headers": {
+    "Idempotency-Key": "rs-bt-1"
+   },
+   "mask": [
+    "public_id",
+    "created_at",
+    "events_url"
+   ],
+   "capture": {
+    "bt1": "json:/public_id"
+   }
+  },
+  {
+   "name": "bt-replay",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    }
+   },
+   "headers": {
+    "Idempotency-Key": "rs-bt-1"
+   },
+   "mask": [
+    "public_id",
+    "created_at",
+    "events_url"
+   ]
+  },
+  {
+   "name": "bt-busy",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    }
+   },
+   "headers": {
+    "Idempotency-Key": "rs-bt-2"
+   }
+  },
+  {
+   "name": "bt-busy-again",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    }
+   },
+   "headers": {
+    "Idempotency-Key": "rs-bt-2"
+   }
+  },
+  {
+   "name": "bt-sub-inline",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_definition": {
+      "pe": {
+       "to": null,
+       "from": null,
+       "enabled": false
+      },
+      "index": "nifty-200",
+      "price": {
+       "to": null,
+       "from": null
+      },
+      "series": [
+       "EQ"
+      ],
+      "sort_by": "ret_12m_minus_1m",
+      "circuits": {
+       "m1": 999,
+       "m3": 999,
+       "m6": 999,
+       "m9": 999,
+       "m12": 999
+      },
+      "marketcap": {
+       "to": null,
+       "from": null
+      },
+      "regime_in": null,
+      "factor_two": {
+       "enabled": true,
+       "sort_by": "vol_12m",
+       "sort_direction": "asc"
+      },
+      "factor_three": {
+       "enabled": false,
+       "sort_by": null,
+       "sort_direction": "desc"
+      },
+      "missing_data": "penalize",
+      "ranking_mode": "composite",
+      "factor_ranges": [],
+      "min_return_1y": null,
+      "positive_days": {
+       "m1": 0,
+       "m3": 0,
+       "m6": 0,
+       "m9": 0,
+       "m12": 0
+      },
+      "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "away_from_high": {
+       "ath": 100,
+       "one_year": 100
+      },
+      "custom_filters": [],
+      "family_weights": null,
+      "moving_average": {
+       "enabled": false,
+       "above_20": false,
+       "above_50": false,
+       "below_20": false,
+       "below_50": false,
+       "above_100": false,
+       "above_200": false,
+       "below_100": false,
+       "below_200": false
+      },
+      "sort_direction": "desc",
+      "historical_date": null,
+      "ignore_top_beta": {
+       "count": 0,
+       "enabled": false
+      },
+      "apply_filters_on": "all",
+      "median_volume_1y": 50000000,
+      "ignore_above_beta": 100,
+      "ignore_top_volatility": {
+       "count": 0,
+       "enabled": false
+      }
+     },
+     "weighting": "rank",
+     "selection": {
+      "top_n": "30"
+     }
+    }
+   },
+   "mask": [
+    "public_id",
+    "created_at",
+    "events_url"
+   ],
+   "capture": {
+    "bt2": "json:/public_id"
+   }
+  },
+  {
+   "name": "bt-get",
+   "method": "GET",
+   "path": "/api/v1/backtests/${bt1}",
+   "user": "owner",
+   "mask": [
+    "public_id",
+    "created_at",
+    "instance"
+   ]
+  },
+  {
+   "name": "bt-get-other",
+   "method": "GET",
+   "path": "/api/v1/backtests/${bt1}",
+   "user": "subscriber",
+   "mask": [
+    "instance",
+    "detail"
+   ],
+   "note": "review: tenant isolation - another account cannot read the owner's run"
+  },
+  {
+   "name": "bt-del-anon",
+   "method": "DELETE",
+   "path": "/api/v1/backtests/${bt1}",
+   "mask": [
+    "instance"
+   ]
+  },
+  {
+   "name": "bt-del-plain",
+   "method": "DELETE",
+   "path": "/api/v1/backtests/${bt1}",
+   "user": "plain",
+   "mask": [
+    "instance"
+   ]
+  },
+  {
+   "name": "bt-del-other",
+   "method": "DELETE",
+   "path": "/api/v1/backtests/${bt1}",
+   "user": "subscriber",
+   "mask": [
+    "instance",
+    "detail"
+   ]
+  },
+  {
+   "name": "bt-del",
+   "method": "DELETE",
+   "path": "/api/v1/backtests/${bt1}",
+   "user": "owner",
+   "mask": [
+    "instance"
+   ]
+  },
+  {
+   "name": "bt-del-again",
+   "method": "DELETE",
+   "path": "/api/v1/backtests/${bt1}",
+   "user": "owner",
+   "mask": [
+    "instance",
+    "detail"
+   ]
+  },
+  {
+   "name": "bt-list",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "owner"
+  }
+ ]
+}

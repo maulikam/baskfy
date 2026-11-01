@@ -850,6 +850,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cb/baskets/{slug}/recut": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-run a screen basket's screen; preview, or save it as the next version
+         * @description Re-cut a ``source = 'SCREEN'`` basket from the screen it was saved from (no order path).
+         */
+        post: operations["recutBasketFromScreen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cb/fees": {
         parameters: {
             query?: never;
@@ -1732,8 +1752,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * F1 and F2, read-only
-         * @description ``05`` §2 in one call: the header, the F1 cards, the evidence card and the F2 section.
+         * F1-F3, read-only
+         * @description ``05`` §2 in one call: the header, the F1 cards, the evidence card, the F2 section and
+         *     the F3 section (M.5, F3-7).
          */
         get: operations["getFnoOvernight"];
         put?: never;
@@ -2445,6 +2466,108 @@ export interface paths {
         get: operations["getUniverses"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/agui": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AG-UI run: conversational, read-only scanning */
+        post: operations["postAgui"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Opportunity scanner parameters and provider state */
+        get: operations["getMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/options/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compare listed option structures for an underlying */
+        post: operations["postOptionsAnalyze"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/swing/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan for swing setups on completed daily bars */
+        post: operations["postSwingScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/swing/scan/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan with streamed progress (server-sent events) */
+        post: operations["postSwingScanStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/swing/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Point-in-time historical test of a setup's signals */
+        post: operations["postSwingValidate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7141,6 +7264,28 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * FnoF3Out
+         * @description F3, the directional index credit spread (M.5): what the night's scan read per underlying,
+         *     the open spreads marked at settle, the closed ones, and the evidence it stands on. Read-only
+         *     like the rest of the page: the desk's ``/fno`` holds the plan, the exit and the add.
+         */
+        FnoF3Out: {
+            /** Backtests */
+            backtests: components["schemas"]["FnoBacktestOut"][];
+            /** Closed */
+            closed: components["schemas"]["FnoJournalOut"][];
+            /** Not Tested */
+            not_tested: string[];
+            /** Open */
+            open: components["schemas"]["FnoPositionOut"][];
+            /** Research Line */
+            research_line: string;
+            /** Scan Date */
+            scan_date: string | null;
+            /** Underlyings */
+            underlyings: components["schemas"]["FnoUnderlyingOut"][];
+        };
         /** FnoFamilyOut */
         FnoFamilyOut: {
             latest_retest: components["schemas"]["FnoBacktestOut"] | null;
@@ -7291,6 +7436,7 @@ export interface components {
             empty_reason: string | null;
             evidence: components["schemas"]["FnoEvidenceOut"];
             f2: components["schemas"]["FnoF2Out"];
+            f3: components["schemas"]["FnoF3Out"];
             /** Gates */
             gates: components["schemas"]["FnoGateOut"][];
             /** Hard Exit Tomorrow */
@@ -7476,7 +7622,7 @@ export interface components {
          * @description How flags group the sleeves (``01`` §4): ``F1N`` and ``F1B`` are one flag, ``F1``.
          * @enum {string}
          */
-        FoSleeveGroup: "F1" | "F2";
+        FoSleeveGroup: "F1" | "F2" | "F3";
         /**
          * FragilityRunOut
          * @description docs/10 §"honesty features": one of the five runs in the fragility readout.
@@ -9184,6 +9330,31 @@ export interface components {
             /** Mode */
             mode: string;
         };
+        /** OptionsIn */
+        OptionsIn: {
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "BULLISH" | "BEARISH";
+            /**
+             * Max Dte
+             * @default 60
+             */
+            max_dte: number;
+            /** Max Loss Inr */
+            max_loss_inr?: number | string | null;
+            /**
+             * Min Dte
+             * @default 1
+             */
+            min_dte: number;
+            quote_rules?: components["schemas"]["QuoteRulesIn"];
+            /** Strategies */
+            strategies?: ("LONG_CALL" | "LONG_PUT" | "BULL_CALL_SPREAD" | "BEAR_PUT_SPREAD")[];
+            /** Symbol */
+            symbol: string;
+        };
         /** OptionsIndexOut */
         OptionsIndexOut: {
             /** At */
@@ -10446,6 +10617,29 @@ export interface components {
             /** Visibility */
             visibility: string;
         };
+        /** QuoteRulesIn */
+        QuoteRulesIn: {
+            /**
+             * Max Quote Age S
+             * @default 120
+             */
+            max_quote_age_s: number;
+            /**
+             * Max Spread Pct
+             * @default 10
+             */
+            max_spread_pct: number | string;
+            /**
+             * Min Oi
+             * @default 500
+             */
+            min_oi: number;
+            /**
+             * Min Volume
+             * @default 1
+             */
+            min_volume: number;
+        };
         /**
          * RangeFilter
          * @description An inclusive ``[from, to]`` band; both ``None`` means ignore (docs/06 step 4).
@@ -10946,6 +11140,62 @@ export interface components {
          * @enum {string}
          */
         ReconciliationState: "OPEN" | "RESOLVED" | "DISMISSED";
+        /** RecutHoldingOut */
+        RecutHoldingOut: {
+            /** Previous Weight */
+            previous_weight: string | null;
+            /** Rank */
+            rank: number;
+            /** Symbol */
+            symbol: string;
+            /** Weight */
+            weight: string;
+        };
+        /**
+         * RecutIn
+         * @description ``confirm=false`` is a preview. Nothing else is required: the defaults keep the cut.
+         */
+        RecutIn: {
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+            /** Holdings */
+            holdings?: number | null;
+            method?: components["schemas"]["WeightMethod"] | null;
+        };
+        /** RecutOut */
+        RecutOut: {
+            /** Added */
+            added: string[];
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Changed */
+            changed: boolean;
+            /** Current Version No */
+            current_version_no: number;
+            /** Holdings */
+            holdings: components["schemas"]["RecutHoldingOut"][];
+            /** Kept */
+            kept: string[];
+            method: components["schemas"]["WeightMethod"];
+            /** Method Fell Back */
+            method_fell_back: boolean;
+            /** Removed */
+            removed: string[];
+            /** Screen Public Id */
+            screen_public_id: string;
+            /** Slug */
+            slug: string;
+            /** Version No */
+            version_no: number | null;
+            /** Written */
+            written: boolean;
+        };
         /** RegimeOut */
         RegimeOut: {
             /** Actual Equity Pct */
@@ -12765,6 +13015,58 @@ export interface components {
             data: components["schemas"]["SwingPositionOut"][];
             plan: components["schemas"]["SwingPlanOut"] | null;
         };
+        /** SwingScanIn */
+        SwingScanIn: {
+            /**
+             * Atr Pct Max
+             * @default 8
+             */
+            atr_pct_max: number;
+            /**
+             * Atr Pct Min
+             * @default 1
+             */
+            atr_pct_min: number;
+            /**
+             * Horizon Max
+             * @default 20
+             */
+            horizon_max: number;
+            /**
+             * Horizon Min
+             * @default 5
+             */
+            horizon_min: number;
+            /**
+             * Limit
+             * @default 50
+             */
+            limit: number;
+            /**
+             * Min Price
+             * @default 50
+             */
+            min_price: number;
+            /**
+             * Min Rr
+             * @default 1.5
+             */
+            min_rr: number;
+            /**
+             * Min Turnover Cr
+             * @default 5
+             */
+            min_turnover_cr: number;
+            /** Sectors */
+            sectors?: string[];
+            /** Setups */
+            setups?: ("BREAKOUT" | "PULLBACK" | "RELATIVE_STRENGTH")[];
+            /**
+             * Universe
+             * @default nifty-500
+             */
+            universe: string;
+        };
         /**
          * SwingScanQueuedOut
          * @description What `POST /swing/scan` answers, with a 202: the run to poll.
@@ -13828,6 +14130,39 @@ export interface components {
             source: string;
             /** Title */
             title: string;
+        };
+        /** ValidateIn */
+        ValidateIn: {
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Horizon Max
+             * @default 20
+             */
+            horizon_max: number;
+            /**
+             * Setup
+             * @enum {string}
+             */
+            setup: "BREAKOUT" | "PULLBACK" | "RELATIVE_STRENGTH";
+            /**
+             * Slippage Bps
+             * @default 10
+             */
+            slippage_bps: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Universe
+             * @default nifty-500
+             */
+            universe: string;
         };
         /**
          * ValidationStatus
@@ -19087,6 +19422,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FromScreenOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    recutBasketFromScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecutIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecutOut"];
                 };
             };
             /** @description Bad request */
@@ -27677,6 +28119,628 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UniverseOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postAgui: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getMeta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postOptionsAnalyze: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postSwingScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwingScanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postSwingScanStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwingScanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postSwingValidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Bad request */

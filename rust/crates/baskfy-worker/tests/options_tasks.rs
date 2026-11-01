@@ -79,7 +79,10 @@ fn every_flag_defaults_off() {
     let w = WorkerSettings::default();
     assert!(!w.options_scan_enabled && !w.options_collect_enabled && !w.options_monitor_enabled);
     assert!(!w.options_o1m_execution_enabled && !w.options_o3_execution_enabled);
-    assert_eq!(w.options_desk_dry_run, "true");
+    assert_eq!(
+        w.options_desk_dry_run, "false",
+        "DRY_RUN defaults false (DECISIONS-MERGE DRY-LIVE)"
+    );
 }
 
 #[test]

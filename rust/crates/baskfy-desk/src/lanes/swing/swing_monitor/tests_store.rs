@@ -402,7 +402,7 @@ impl LiveLevel for Counting {
 }
 
 pub(super) fn flags(dry_run: bool, execution: bool) -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = dry_run;
     s.swing_execution_enabled = execution;
     s

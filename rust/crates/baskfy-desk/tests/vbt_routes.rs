@@ -133,7 +133,7 @@ impl Client {
             conn.execute(stmt, &[]).await.unwrap();
         }
         drop(conn);
-        let mut settings = Settings::defaults().unwrap();
+        let mut settings = Settings::dry_defaults().unwrap();
         settings.dry_run = !live;
         settings.vbt_execution_enabled = live;
         settings.sole_user_id = 1;

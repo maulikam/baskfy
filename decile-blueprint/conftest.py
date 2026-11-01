@@ -9,10 +9,14 @@ The implementation is in ``network_guard`` so tests can import and assert it; se
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 
 import pytest
 from network_guard import blocked_network
+
+# The code default is live (DECISIONS-MERGE DRY-LIVE); tests always run dry.
+os.environ["DRY_RUN"] = "true"
 
 
 @pytest.fixture(autouse=True, scope="session")

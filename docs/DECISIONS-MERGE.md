@@ -8558,3 +8558,22 @@ staying unconnected (no holdings, no live marks).
 * No flag moved. Note: LOCAL-1 cited "no registered static IP" as a backstop; once the IP is
   whitelisted on the Kite app that backstop is gone — the money flags and DRY_RUN remain the guard.
 * Reverse: unset `BASKFY_KITE_PROXY_URL`.
+
+## DRY-LIVE — DRY_RUN's code default is false, system-wide (1 Nov 2026) ✅ decided by Maulik
+
+* Maulik, in session, after the consequences were stated: "I want DRY_RUN off from entire system,
+  i want to take real trades." Unset `DRY_RUN` now means live in the desk (`app/config.py`, Rust
+  `baskfy-desk` settings), the API/worker readers (Python + Rust), the three Dockerfiles and
+  `compose.prod.yml` (`${BASKFY_DRY_RUN:-false}`, `${BASKFY_DESK_DRY_RUN:-false}`). A set value is
+  still dry unless it says `false`.
+* Not changed: every execution/auto flag (default false; the local stack still forces them false),
+  and the struct-level fail-closed defaults (`ProductGates(dry_run=True)`, the core gating types) —
+  those are the fallback when no env is wired, not the env default.
+* Tests: every harness pins `DRY_RUN=true` (both conftests, `rust/.cargo/config.toml` `[env]`,
+  `Settings::dry_defaults()` in all desk tests). Default-asserting tests now assert false.
+* Local (`tools/deploy/local.sh`): live unless `$BASKFY_LOCAL_DIR/dry_run` says `true` (LOCAL-2's
+  `live|dry` switch, ported); `verify` fails on any money flag, reports DRY_RUN=false loudly.
+* AWS: the box's env names its DRY_RUN lines explicitly; `deploy-swing.sh` now also appends
+  `BASKFY_DRY_RUN=true`/`BASKFY_DESK_DRY_RUN=true` when absent, so a box never goes live by default.
+  `.env.staging.example` keeps `DRY_RUN=true`.
+* Reverse: `git revert` this commit; locally `bash tools/deploy/local.sh dry`.

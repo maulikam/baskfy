@@ -264,7 +264,7 @@
    "name": "options_desk_dry_run",
    "env": "DRY_RUN",
    "default": {
-    "str": "true"
+    "str": "false"
    }
   },
   {

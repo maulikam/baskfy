@@ -64,10 +64,9 @@ ENV PATH="/venv/bin:$PATH" \
     # tzdata below makes this real; without it the schedule would be UTC and every IST time in
     # the desk (09:14 monitor, 18:30 collection) would be five and a half hours late.
     TZ=Asia/Kolkata \
-    # Root CLAUDE.md safety rail, baked in as in Dockerfile.python: forgetting it in an env file
-    # cannot arm anything. Every swing flag is off by construction (app/config.py defaults) and
-    # is stated again in compose.prod.yml so the file that describes the box tells the truth.
-    DRY_RUN=true \
+    # Live by default (Maulik, 1 Nov 2026; DECISIONS-MERGE DRY-LIVE). Every execution/auto flag
+    # stays off by construction (app/config.py defaults) and is stated again in compose.prod.yml.
+    DRY_RUN=false \
     # The desk's paths are relative to its tree (`app/templates`, `data/uploads`), so the working
     # directory is the tree and `data/` is a volume.
     DESK_DB_BACKEND=postgres

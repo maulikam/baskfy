@@ -417,7 +417,7 @@ impl World {
         std::fs::write(kdir.join("kite.json"), FIXTURE).unwrap();
         std::fs::create_dir(kdir.join("instruments")).unwrap();
         let kite = Arc::new(ReplayKite::load(&kdir, None, "test-api-key").unwrap());
-        let settings = Arc::new(RwLock::new(Settings::defaults().unwrap()));
+        let settings = Arc::new(RwLock::new(Settings::dry_defaults().unwrap()));
         let gateways: Arc<Mutex<BTreeMap<FoSleeve, Arc<dyn Gateway>>>> = Arc::default();
         for sleeve in FoSleeve::ALL {
             let g = Self::build_gateway(

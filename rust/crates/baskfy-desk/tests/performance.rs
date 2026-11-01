@@ -274,7 +274,7 @@ fn desk_root() -> PathBuf {
 
 async fn app(dir: &Path, kite_json: &str) -> axum::Router {
     let db_path = dir.join("p.db");
-    let mut settings = Settings::defaults().unwrap();
+    let mut settings = Settings::dry_defaults().unwrap();
     settings.dry_run = true;
     settings.kite_api_key = "replay-test-key".to_owned();
     settings.db_backend = "sqlite".to_owned();

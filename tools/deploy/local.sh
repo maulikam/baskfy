@@ -4,12 +4,14 @@
 #     bash tools/deploy/local.sh restore   # once: volumes + Postgres from the bundle, row counts checked
 #     bash tools/deploy/local.sh up        # start (on demand — Maulik, 29 Oct 2026: not always on)
 #     bash tools/deploy/local.sh down      # stop; data stays in the named volumes
-#     bash tools/deploy/local.sh verify    # every container's money flags read false / DRY_RUN true
+#     bash tools/deploy/local.sh verify    # every money flag false; reports DRY_RUN per service
+#     bash tools/deploy/local.sh live|dry  # DRY_RUN false|true on every service ($HOME_DIR/dry_run)
 #
-# READ-ONLY, and not by preference: Kite accepts API orders only from the registered static IP
-# (docs/07 §4a), which was the AWS EIP. A home connection is not that IP, so every execution and
-# auto-execute flag is forced false here and `up` refuses to finish if any container reads true.
-# Screens, bars, the nightly catch-up, holdings and live quotes need no registered IP and work.
+# LIVE BY DEFAULT since 1 Nov 2026 (Maulik: "I want DRY_RUN off from entire system, i want to
+# take real trades"; DECISIONS-MERGE DRY-LIVE): a confirmed /execute reaches Zerodha. Orders go
+# out via the static IP 82.118.26.6 (BASKFY_KITE_PROXY_URL) registered on the Kite app (LOCAL-2).
+# Every execution and auto-execute flag is still forced false here and `up` refuses to finish if
+# any container reads true; flipping one is a separate decision of Maulik's.
 #
 # Same compose.prod.yml as the box, unmodified, with one override: Docker Desktop cannot bind
 # /opt, so the SSH bind comes from the bundle; Caddy serves the app on :8480 with the desk at
@@ -31,6 +33,7 @@ SIGNIN_ID="${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-$(cat "$HOME_DIR/signin.public_id" 2
 # once, so a plain `up` keeps using it; BASKFY_LOCAL_URL still overrides for one run.
 URL="${BASKFY_LOCAL_URL:-$(cat "$HOME_DIR/public.url" 2>/dev/null || echo http://localhost:8480)}"
 P="${BASKFY_LOCAL_PROJECT:-baskfy-local}"
+DRY="$(cat "$HOME_DIR/dry_run" 2>/dev/null || echo false)"; [ "$DRY" = true ] || DRY=false
 SVC="caddy web api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
 RS_TAG="${BASKFY_LOCAL_RS_TAG:-$(cat "$HOME_DIR/rs.tag" 2>/dev/null || echo local)}"
 RS_SVC="api worker ingest-worker beat desk desk-daily session-supervisor swing-monitor twt-auto fno-monitor options-monitor"
@@ -49,16 +52,16 @@ stage() {
   [ -f "$HOME_DIR/box/.env.staging" ] || tar -C "$HOME_DIR/box" -xzf "$BUNDLE/config.tgz"
   chmod -R go-rwx "$HOME_DIR/box"
   cp "$DOCK/compose.prod.yml" "$DOCK/Caddyfile" "$HOME_DIR/"
-  # The box's env, with every money flag forced off and DRY_RUN forced on. Appended last so it
+  # The box's env, with every money flag forced off and DRY_RUN set to $DRY. Appended last so it
   # wins over the box's own lines (compose and env_file both take the last assignment).
   for f in .env.staging .env.staging.compose; do
     { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK|RS)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_DESK_HOST|BASKFY_LOCAL_SIGNIN_PUBLIC_ID|DESK_PATH_PREFIX|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
       grep -oE "^[A-Z0-9_]+($MONEY)" "$HOME_DIR/box/$f" | sed 's/=$/=false/' || true
       cat <<EOF
-# --- local.sh: read-only on this Mac (no registered static IP) ---
-DRY_RUN=true
-BASKFY_DRY_RUN=true
-BASKFY_DESK_DRY_RUN=true
+# --- local.sh: DRY_RUN=$DRY (DRY-LIVE); every execution/auto flag forced false ---
+DRY_RUN=$DRY
+BASKFY_DRY_RUN=$DRY
+BASKFY_DESK_DRY_RUN=$DRY
 BASKFY_SWING_EXECUTION_ENABLED=false
 BASKFY_SWING_AUTO_EXECUTE=false
 BASKFY_TWT_EXECUTION_ENABLED=false
@@ -96,9 +99,8 @@ services:
   caddy: {ports: !override ["127.0.0.1:8480:80"]}
   # The web service takes no env_file, so the local sign-in account is named here, for it alone.
   web:           {environment: {BASKFY_LOCAL_SIGNIN_PUBLIC_ID: "\${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-}"}}
-  # Maulik, 30 Oct 2026: DRY_RUN off for the API alone, so the Kite login exchange and the holdings/
-  # trades reads work. The API has no order path; every other service keeps DRY_RUN=true and every
-  # execute/auto flag stays false; with no registered static IP Kite refuses API orders anyway.
+  # LOCAL-1 (30 Oct 2026): the API is always DRY_RUN=false, so the Kite login exchange and the
+  # holdings/trades reads work. The API has no order path.
   api:           {environment: {DRY_RUN: "false"}, volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   worker:        {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   ingest-worker: {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
@@ -173,16 +175,27 @@ rowcounts() {
     compose exec -T postgres psql -U baskfy -d baskfy -At | sed 's/|/\t/'
 }
 
+# Fails on any execution/auto flag not false, or on a container live while dry_run says true.
+# DRY_RUN=false is the chosen state (DRY-LIVE), so it is reported loudly, not failed.
 verify() {
-  local bad=0 c
+  local bad=0 c svc d live=""
   for c in $(docker ps -q --filter "label=com.docker.compose.project=$P"); do
+    svc="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")"
     if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$'; then
-      echo "  ^ in $(docker inspect -f '{{.Name}}' "$c")"; bad=1; fi
-    # LOCAL-1: the API alone runs with DRY_RUN=false (it has no order path); every other container must read true.
-    [ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")" = api ] && continue
-    if docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | grep -viE '=true$'; then bad=1; fi
+      echo "  ^ in $svc"; bad=1; fi
+    d="$(docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | tail -1 | cut -d= -f2-)"
+    [ -n "$d" ] || continue
+    [ "$svc" = api ] && continue   # LOCAL-1: always false, no order path
+    if [ "$(echo "$d" | tr 'A-Z' 'a-z')" = false ]; then
+      live="$live $svc"
+      [ "$DRY" = true ] && { echo "  ^ DRY_RUN=false in $svc but dry_run says true"; bad=1; }
+    fi
   done
-  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true (api: false, LOCAL-1)"
+  [ "$bad" = 0 ] || { echo "✗ a money flag is not false, or a service is live while dry_run=true" >&2; return 1; }
+  echo "✓ every execution/auto flag false"
+  if [ -n "$live" ]; then
+    printf '\033[1;31m⚠ LIVE: DRY_RUN=false in%s — a confirmed /execute places REAL orders on Zerodha\033[0m\n' "$live"
+  else echo "✓ DRY_RUN=true on every order-capable service (api: false, LOCAL-1)"; fi
 }
 
 case "${1:-}" in
@@ -240,10 +253,18 @@ tailscale)
 stage)   stage ;;
 down)    compose stop ;;
 verify)  verify ;;
+live|dry)
+  # Recreates every service so all read the new DRY_RUN; execution/auto flags stay false.
+  [ "$1" = live ] && DRY=false || DRY=true
+  echo "$DRY" > "$HOME_DIR/dry_run"
+  stage
+  compose up -d $SVC
+  verify
+  ;;
 status)  compose ps --format '{{.Service}}\t{{.Status}}' ;;
 rowcounts) rowcounts ;;
 rust)    shift; switch rust "$@" ;;
 python)  shift; switch python "$@" ;;
 rust-check) rust_check ;;
-*) echo "usage: $0 restore|up|down|verify|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
+*) echo "usage: $0 restore|up|down|verify|live|dry|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
 esac

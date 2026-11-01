@@ -84,7 +84,7 @@ impl Desk {
         edit: impl FnOnce(&mut Settings),
     ) -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let mut settings = Settings::defaults().unwrap();
+        let mut settings = Settings::dry_defaults().unwrap();
         settings.dry_run = true;
         settings.swing_execution_enabled = false;
         settings.swing_monitor_enabled = false;

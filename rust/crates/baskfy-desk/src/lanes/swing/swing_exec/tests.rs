@@ -911,14 +911,14 @@ impl OrderSource for ScriptedOrders {
 
 /// The defaults this run ships with: `DRY_RUN` true, the swing execution flag false.
 fn paper() -> Settings {
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     assert!(s.dry_run && !s.swing_execution_enabled);
     s
 }
 
 /// The gates a real session would run under. Only the fake gateway ever sees them.
 fn live() -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = false;
     s.swing_execution_enabled = true;
     assert!(!x::swing_gates(&s).dry_run);
@@ -1002,7 +1002,7 @@ fn http_status(result: Result<ExecOutcome, ExecError>) -> u16 {
 
 #[test]
 fn swing_gates_dry_run_unless_both_flags_allow() {
-    let mut st = Settings::defaults().unwrap();
+    let mut st = Settings::dry_defaults().unwrap();
     for (dry, enabled, expect) in [
         (true, false, true),
         (true, true, true),
@@ -1026,7 +1026,7 @@ fn swing_gates_never_allow_intraday_or_options() {
 
 #[test]
 fn the_auto_execute_flag_defaults_false_and_execution_is_off_by_default() {
-    let st = Settings::defaults().unwrap();
+    let st = Settings::dry_defaults().unwrap();
     assert!(
         !st.swing_auto_execute,
         "SW25: BASKFY_SWING_AUTO_EXECUTE defaults false"
@@ -2196,7 +2196,7 @@ fn the_gate_index_quote_symbols_are_the_workers_table() {
 
 #[test]
 fn the_gate_index_follows_the_setting_sw29() {
-    let st = Settings::defaults().unwrap();
+    let st = Settings::dry_defaults().unwrap();
     assert_eq!(st.swing_index_slug, "nifty-smallcap-250");
 }
 

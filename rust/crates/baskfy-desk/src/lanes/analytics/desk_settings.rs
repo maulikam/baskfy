@@ -1635,7 +1635,7 @@ mod tests {
 
     #[test]
     fn validate_cross_field() {
-        let s = Settings::defaults().unwrap();
+        let s = Settings::dry_defaults().unwrap();
         let mut c: BTreeMap<String, SVal> = SPECS
             .iter()
             .map(|sp| (sp.key.to_owned(), code_default(&s, sp.key).unwrap()))

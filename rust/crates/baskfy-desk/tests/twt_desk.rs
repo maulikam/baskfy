@@ -473,7 +473,7 @@ async fn exits_come_before_entries_in_the_view() {
         Some("80.00"),
     )
     .await;
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     let view = w::build_view(&mut f.store, &s, now()).await.unwrap();
     assert_eq!(kinds(&view.val("lines"))[0], "RAISE_GTT_STOP");
     assert_eq!(kinds(&view.val("exits")), vec!["RAISE_GTT_STOP".to_owned()]);
@@ -508,7 +508,7 @@ async fn an_expired_plan_has_no_confirmable_line() {
         None,
     )
     .await;
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     let view = w::build_view(&mut f.store, &s, now()).await.unwrap();
     assert_eq!(view.val("expired"), Val::Bool(true));
     assert_eq!(confirmables(&view), vec![false]);
@@ -530,7 +530,7 @@ async fn a_live_plan_says_how_long_it_has_left() {
         None,
     )
     .await;
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     let view = w::build_view(&mut f.store, &s, now()).await.unwrap();
     assert_eq!(view.val("expired"), Val::Bool(false));
     assert!(view.s("countdown").contains("min"));
@@ -541,7 +541,7 @@ async fn a_live_plan_says_how_long_it_has_left() {
 async fn a_naked_line_is_named_on_the_view() {
     let mut f = store().await;
     a_position(&mut f.store, 1_000, None).await;
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     let view = w::build_view(&mut f.store, &s, now()).await.unwrap();
     assert_eq!(
         view.val("naked"),
@@ -553,7 +553,7 @@ async fn a_naked_line_is_named_on_the_view() {
 async fn the_view_carries_the_gate_the_flags_and_the_half_size_counter() {
     let mut f = store().await;
     a_plan(&mut f.store, 25, 1).await;
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     let view = w::build_view(&mut f.store, &s, now()).await.unwrap();
     match view.val("breadth") {
         Val::Map(b) => assert_eq!(b.s("gate"), "OPEN"),
@@ -572,7 +572,7 @@ async fn a_desk_with_no_tw_tables_says_so_instead_of_five_hundreding() {
         .await
         .unwrap();
     let mut empty = PgTwtStore::new(conn, 1, "", None);
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     assert!(w::build_view(&mut empty, &s, now()).await.is_err());
     let view = w::unavailable_view("no such table: tw_plan", &s, now());
     assert_eq!(view.val("available"), Val::Bool(false));
@@ -874,7 +874,7 @@ mod routes {
             gw: Gw,
             gtts: Option<serde_json::Value>,
         ) -> Self {
-            let mut settings = Settings::defaults().unwrap();
+            let mut settings = Settings::dry_defaults().unwrap();
             settings.dry_run = true;
             settings.twt_execution_enabled = false;
             settings.twt_auto_execute = false;
@@ -1910,7 +1910,7 @@ async fn on_postgres_the_lock_is_one_transaction_and_a_held_row_is_busy() {
     assert!(!b.session_locked());
 
     // The same refusal through the confirm: 409, before the gateway, nothing written.
-    let settings = Settings::defaults().unwrap();
+    let settings = Settings::dry_defaults().unwrap();
     let refused = execute_line(
         &mut b,
         &NeverGateway,

@@ -102,8 +102,8 @@ _pending: dict[str, OauthPending] = {}
 
 
 def dry_run_enabled() -> bool:
-    """Agents and tests default to dry-run; only an explicit false opts into live exchange."""
-    raw = os.environ.get("DRY_RUN", "true").strip().lower()
+    """Unset is live (Maulik, 1 Nov 2026; DECISIONS-MERGE DRY-LIVE); tests pin DRY_RUN=true."""
+    raw = os.environ.get("DRY_RUN", "false").strip().lower()
     return raw in ("", "1", "true", "yes", "on")
 
 

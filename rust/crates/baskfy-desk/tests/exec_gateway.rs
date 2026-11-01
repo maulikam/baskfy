@@ -895,8 +895,8 @@ mod shim {
     }
 
     fn settings() -> SharedSettings {
-        let s = Settings::defaults().unwrap();
-        assert!(s.dry_run, "DRY_RUN defaults true");
+        let s = Settings::dry_defaults().unwrap();
+        assert!(s.dry_run, "the harness pins DRY_RUN on");
         Arc::new(std::sync::RwLock::new(s))
     }
 

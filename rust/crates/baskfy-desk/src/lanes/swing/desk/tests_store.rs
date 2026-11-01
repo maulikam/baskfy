@@ -521,7 +521,7 @@ async fn test_store_schema_prefix_qualifies_every_table() {
         schema: "public".to_owned(),
         broker_account_id: Some(1),
         live_level: None,
-        settings: crate::settings::Settings::defaults().unwrap(),
+        settings: crate::settings::Settings::dry_defaults().unwrap(),
         clock: Arc::new(crate::clock::FixedClock::new(now())),
     };
     let day = today();

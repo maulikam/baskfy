@@ -46,7 +46,8 @@ history; D3 is no longer the engineering blocker.
 
 1. **Never auto-execute — with two named, flagged exceptions (5 Sep and 21 Sep 2026).** Orders fire only
    from `POST /execute` with `confirm=true` and the `plan_id` issued by `/analyze`; plans expire
-   in 30 minutes. `DRY_RUN=true` must simulate end to end.
+   in 30 minutes. `DRY_RUN=true` must simulate end to end (the code default is `false` since
+   1 Nov 2026, Maulik — DECISIONS-MERGE DRY-LIVE; `true` remains a full rehearsal).
    ⚠️ **The exception, and it is Maulik's, not an agent's:** the swing sleeve's monitor confirms
    its own triggers when `BASKFY_SWING_AUTO_EXECUTE=true` (`docs/swing/DECISIONS-SW.md` SW25),
    and since SW26 it may do so **any time between 09:15 and 15:30**, not just the opening 90
@@ -234,8 +235,12 @@ hit; add vocabulary to the script's `ALLOWED` list with a reason, and record it 
 
 ## Safety rails for agent work in this repo
 
-- **`DRY_RUN=true` is the default in every environment an agent creates.** An agent never places
-  a live order, and never runs execution tests against live credentials.
+- **`DRY_RUN`'s code default is `false` — Maulik's decision, 1 Nov 2026 ("I want DRY_RUN off from
+  entire system, i want to take real trades"; `docs/DECISIONS-MERGE.md` DRY-LIVE).** Every test
+  harness pins `DRY_RUN=true` (`tests/conftest.py`, `decile-blueprint/conftest.py`,
+  `rust/.cargo/config.toml`, `Settings::dry_defaults()`); a new harness must too. An agent still
+  never places a live order, never calls `/execute`/order/GTT endpoints, and never runs execution
+  tests against live credentials. AWS stays pinned dry by `deploy-swing.sh`.
 - **`kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence** (trades, fills,
   decisions — the strategy's track record). Before any step that can touch it: a verified backup
   (`python -m scripts.backup` must say `ok`) plus a dated copy outside the repo. Migrations run

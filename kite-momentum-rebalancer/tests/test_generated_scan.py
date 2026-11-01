@@ -252,3 +252,29 @@ def test_the_whole_route_survives_a_scan_with_nothing_tradeable(desk, generated,
     response = desk.post("/analyze", data={"generate_for": str(generated.as_of)})
     assert response.status_code == 200, response.text
     assert response.json()["orders"] == []
+
+
+def test_a_generated_scan_builds_under_the_parity_harness_clock() -> None:
+    import os  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    repo = Path(__file__).resolve().parents[2]
+    script = (
+        "import datetime as dt, sys\n"
+        f"sys.path[:0] = [{str(repo / 'tools' / 'parity')!r}, {str(FIXTURE_DIR)!r}]\n"
+        "import numpy, pandas, polars, psycopg, desk_harness\n"
+        "desk_harness.install_clock_seams('2026-10-30T09:16:00+05:30')\n"
+        "import _scan_fixture as fixture\n"
+        "from app import config as C\n"
+        "from baskfy_core import momentum_scan as ms\n"
+        "real = [d for d in fixture.trading_days()]\n"
+        "bars = polars.DataFrame(fixture.bars().to_dicts())\n"
+        "assert bars.schema['date'] == polars.Date, bars.schema['date']\n"
+        "scan = ms.build(bars, real[-1], real, cfg=C, carried=fixture.carried())\n"
+        "assert scan.frame.height > 0\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script], cwd=repo / "kite-momentum-rebalancer",
+        env={**os.environ, "DRY_RUN": "true"}, capture_output=True, text=True, timeout=300,
+    )
+    assert done.returncode == 0, done.stderr[-2000:]

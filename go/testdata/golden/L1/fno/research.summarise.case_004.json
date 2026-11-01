@@ -1,0 +1,58 @@
+{
+ "fn": "baskfy_core.fno.research.summarise",
+ "inputs": {
+  "date_column": "entry",
+  "r_column": "R_spread",
+  "trades": {
+   "columns": [
+    "entry",
+    "R_spread"
+   ],
+   "dtypes": {
+    "R_spread": "Float64",
+    "entry": "Date"
+   },
+   "rows": [
+    [
+     "2024-03-01",
+     0.3
+    ],
+    [
+     "2024-04-01",
+     -0.1
+    ],
+    [
+     "2025-01-02",
+     0.0
+    ]
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "another R column name. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cost_r": null,
+  "exp_r": 0.06666666666666667,
+  "gross_r": null,
+  "n": 3,
+  "per_year": {
+   "2024": [
+    2,
+    0.09999999999999999
+   ],
+   "2025": [
+    1,
+    0.0
+   ]
+  },
+  "t_stat": 0.554700196225229,
+  "win": 0.3333333333333333,
+  "worst": -0.1
+ }
+}

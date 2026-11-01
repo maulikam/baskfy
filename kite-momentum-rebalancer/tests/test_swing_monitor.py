@@ -108,8 +108,12 @@ class FakeConn:
         self.market: dict | None = {
             "gate": gate, "exposure_level": rung, "max_open_positions": count,
             "max_exposure_pct": pct, "new_entries_allowed": gate != "RED",
-            "drawdown_locked": False,
+            "drawdown_locked": False, "constituent_count": 500, "pct_up_strong_1m": 10.09,
+            "pct_new_52w_high": 3.0, "pct_above_ma_slow": 40.0,
         }
+        #: SW30: the benchmark's published levels before today, oldest first.
+        self.index_levels: list[float] = [100.0] * 249
+        self.index_reads = 0
         self.capital = capital
         self.held: list[dict] = []
         self.taken: list[dict] = []
@@ -140,6 +144,9 @@ class FakeConn:
         elif "FROM public.sw_watch w" in flat and "adr_pct" in flat:
             many = [{"symbol": k, "adr_pct": v[0], "score": v[1]}
                     for k, v in conn.watch_stats.items()]
+        elif "FROM public.index_snapshot_daily s" in flat:
+            conn.index_reads += 1
+            many = [{"level": v} for v in reversed(conn.index_levels)][: int(params[2])]
         elif flat.startswith("UPDATE public.sw_plan_line SET state = 'SKIPPED'"):
             many = [{"id": i} for i in conn.releasable]
             conn.releasable = []
@@ -1452,4 +1459,153 @@ class TestLateLogin:
                 raise value
             return value
 
-        assert swing_monitor.wait_for_session(authed, sleep=lambda s: None)
+        in_session = dt.datetime(2026, 8, 19, 10, 0, tzinfo=swing_monitor.IST)
+        assert swing_monitor.wait_for_session(
+            authed, now=lambda: in_session, sleep=lambda s: None,
+        )
+
+
+#: 10:30 on DAY (a Wednesday), inside the session; 08:59 and 15:31 are outside it.
+IN_SESSION = dt.datetime(2026, 8, 19, 10, 30, tzinfo=swing_monitor.IST)
+
+
+class TestTheGateIsReReadLive:
+    """SW30 (Maulik, 29 Sep 2026): "if the 10-day moving average is crossing the 20-day, the
+    gate should automatically open" — both ways, the index live and breadth at the last close.
+    Published closes at 100: today at 101 puts EMA(10) (100 + 2/11) over EMA(20) (100 + 2/21,
+    SW31); at 99 under it; at 100 they are equal, which is neither."""
+
+    def _ctx(self, conn: FakeConn, level: float | None, *, now: dt.datetime = IN_SESSION):
+        asked: list[bool] = []
+
+        def live() -> float | None:
+            asked.append(True)
+            return level
+
+        ctx = swing_monitor.load_context(conn, user_id=1, day=DAY, live_level=live, now=now)
+        return ctx, asked
+
+    def test_a_cross_up_opens_a_red_close_at_the_bottom_rung(self):
+        ctx, _ = self._ctx(FakeConn(gate="RED", rung=0), 101.0)
+        assert ctx.gate.value == "GREEN"
+        assert ctx.tier.new_entries_allowed is True and ctx.tier.level == 0
+        assert ctx.tier.max_open_positions == 2 and ctx.tier.max_exposure_pct == 25.0
+        assert ctx.live is not None and ctx.live.index_slug == "nifty-smallcap-250"
+        assert ctx.live.reading.ma_fast == pytest.approx(100 + 2 / 11)  # EMA(10), SW31
+        assert ctx.live.reading.ma_slow == pytest.approx(100 + 2 / 21)  # EMA(20)
+
+    def test_a_cross_down_closes_a_green_close(self):
+        ctx, _ = self._ctx(FakeConn(gate="GREEN", rung=2), 99.0)
+        assert ctx.gate.value == "RED" and ctx.tier.new_entries_allowed is False
+
+    def test_level_averages_are_amber_not_green(self):
+        ctx, _ = self._ctx(FakeConn(gate="RED", rung=0), 100.0)
+        assert ctx.gate.value == "AMBER" and ctx.tier.new_entries_allowed is True
+
+    def test_the_green_close_keeps_its_rung_while_the_live_tape_agrees(self):
+        ctx, _ = self._ctx(FakeConn(gate="GREEN", rung=2), 101.0)
+        assert ctx.gate.value == "GREEN" and ctx.tier.level == 2
+
+    def test_thin_breadth_at_the_close_is_still_red_whatever_the_index_does(self):
+        conn = FakeConn(gate="RED", rung=0)
+        conn.market["pct_up_strong_1m"] = 1.5
+        ctx, _ = self._ctx(conn, 101.0)
+        assert ctx.gate.value == "RED"
+
+    def test_a_drawdown_lock_holds(self):
+        conn = FakeConn(gate="RED", rung=0)
+        conn.market["drawdown_locked"] = True
+        ctx, _ = self._ctx(conn, 101.0)
+        assert ctx.tier.new_entries_allowed is False
+
+    @pytest.mark.parametrize("hhmm", [(8, 59), (15, 31)])
+    def test_outside_the_session_the_close_stands_and_kite_is_not_asked(self, hhmm):
+        now = IN_SESSION.replace(hour=hhmm[0], minute=hhmm[1])
+        conn = FakeConn(gate="RED", rung=0)
+        ctx, asked = self._ctx(conn, 101.0, now=now)
+        assert ctx.gate.value == "RED" and ctx.live is None
+        assert asked == [] and conn.index_reads == 0
+
+    def test_no_live_level_keeps_the_close(self):
+        ctx, asked = self._ctx(FakeConn(gate="RED", rung=0), None)
+        assert asked == [True] and ctx.gate.value == "RED" and ctx.live is None
+
+    def test_too_few_published_closes_keep_the_close(self):
+        conn = FakeConn(gate="RED", rung=0)
+        conn.index_levels = [100.0] * 10
+        ctx, _ = self._ctx(conn, 101.0)
+        assert ctx.gate.value == "RED" and ctx.live is None
+
+    def test_without_a_live_level_nothing_changes_from_before_sw30(self):
+        conn = FakeConn(gate="RED", rung=0)
+        ctx = swing_monitor.load_context(conn, user_id=1, day=DAY)
+        assert ctx.gate.value == "RED" and ctx.live is None and conn.index_reads == 0
+
+    def test_the_index_read_asks_for_the_gate_slug_before_today(self):
+        conn = FakeConn(gate="RED", rung=0)
+        self._ctx(conn, 101.0)
+        (sql, params), = [(s_, p_) for s_, p_ in conn.statements if "index_snapshot_daily" in s_]
+        assert params == ("nifty-smallcap-250", DAY.isoformat(), 249), "the EMAs' warm-up"
+        assert "s.date < ?" in sql
+
+    def test_a_trigger_after_the_cross_is_lined_where_before_it_was_refused(self, monkeypatch):
+        conn = FakeConn(gate="RED", rung=0)
+        level = {"now": 99.0}
+        store = swing_monitor.PgSignalStore(
+            conn, user_id=1, day=DAY, config=DEFAULT_SWING_CONFIG,
+            live_level=lambda: level["now"],
+        )
+        monkeypatch.setattr(swing_monitor.dt, "datetime", _FrozenAt(IN_SESSION))
+        assert store.read_context().tier.new_entries_allowed is False
+        level["now"] = 101.0
+        ctx = store.read_context()
+        assert ctx.gate.value == "GREEN" and ctx.tier.new_entries_allowed is True
+
+    def test_the_heartbeat_names_the_gate_in_force_and_rereads_it_once_a_minute(self):
+        conn = FakeConn(gate="RED", rung=0)
+        store = swing_monitor.PgSignalStore(conn, user_id=1, day=DAY, config=DEFAULT_SWING_CONFIG)
+        lines: list[str] = []
+        ticks = iter([0.0, 30.0, 61.0, 61.0])
+        beat = swing_monitor.gated_heartbeat(lines.append, store, clock=lambda: next(ticks))
+        reads = conn.context_reads
+        beat("watching 3")
+        beat("watching 3")
+        beat("watching 3")
+        assert conn.context_reads == reads + 2
+        assert lines[0] == "watching 3 · gate RED (last close)"
+
+
+class _FrozenAt:
+    """`dt.datetime` with `now()` pinned, for the store's own clock."""
+
+    def __init__(self, at: dt.datetime) -> None:
+        self._at = at
+
+    def now(self, tz=None):  # noqa: ANN001, ANN201 - mirrors datetime.now
+        return self._at
+
+    def __getattr__(self, name):  # noqa: ANN001, ANN204 - everything else is the real class
+        return getattr(dt.datetime, name)
+
+
+class TestTheKiteLevel:
+    def test_the_quote_is_the_gate_index_kite_symbol(self):
+        from app.swing_live_gate import kite_level
+
+        class Kite:
+            def ltp(self, symbols):
+                assert symbols == ["NIFTY SMLCAP 250"]
+                return {"NIFTY SMLCAP 250": 17747.25}
+
+        assert kite_level(Kite(), "nifty-smallcap-250")() == 17747.25
+
+    def test_an_unmapped_index_or_a_failing_quote_is_no_level(self):
+        from app.swing_live_gate import kite_level
+
+        class Down:
+            def ltp(self, symbols):
+                raise RuntimeError("no session")
+
+        assert kite_level(Down(), "nifty-smallcap-250")() is None
+        assert kite_level(Down(), "nifty-unknown")() is None
+

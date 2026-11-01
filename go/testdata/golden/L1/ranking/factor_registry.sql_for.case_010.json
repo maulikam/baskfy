@@ -1,0 +1,20 @@
+{
+ "fn": "baskfy_core.factor_registry.sql_for",
+ "inputs": {
+  "key": ""
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "sql_for(''). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "unknown factor ''; it is not in the registry, so no SQL will be built for it",
+   "type": "KeyError"
+  }
+ }
+}

@@ -1,0 +1,75 @@
+{
+ "fn": "baskfy_core.fno.research.constants",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "the research's rate, cost, universe and named parameter sets. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "B4": {
+   "defend": false,
+   "exit_n": 1,
+   "k_short": 1.0,
+   "k_wing": 0.5,
+   "loss_mult": 0.0,
+   "mode": "condor",
+   "n_before": 15,
+   "profit_take": 0.5,
+   "slip_min": 0.05,
+   "slip_pct": 0.005,
+   "symbols": [
+    "BANKNIFTY",
+    "NIFTY"
+   ],
+   "top_n": 0
+  },
+  "B4_LOSS_CLOSE": {
+   "defend": false,
+   "exit_n": 1,
+   "k_short": 1.0,
+   "k_wing": 0.5,
+   "loss_mult": 1.5,
+   "mode": "condor",
+   "n_before": 15,
+   "profit_take": 0.5,
+   "slip_min": 0.05,
+   "slip_pct": 0.005,
+   "symbols": [
+    "BANKNIFTY",
+    "NIFTY"
+   ],
+   "top_n": 0
+  },
+  "CondorParams()": {
+   "defend": false,
+   "exit_n": 1,
+   "k_short": 1.0,
+   "k_wing": 0.5,
+   "loss_mult": 0.0,
+   "mode": "condor",
+   "n_before": 15,
+   "profit_take": 0.5,
+   "slip_min": 0.05,
+   "slip_pct": 0.03,
+   "symbols": null,
+   "top_n": 0
+  },
+  "F2_SPEC": {
+   "charge_rolls": true,
+   "cost": 0.0012,
+   "horizon": 40,
+   "k_atr": 3.0,
+   "trail": true
+  },
+  "FUTURES_ROUND_TRIP_COST": 0.0012,
+  "INDEX_UNDERLYINGS": [
+   "BANKNIFTY",
+   "NIFTY"
+  ],
+  "RESEARCH_RATE": 0.065
+ }
+}

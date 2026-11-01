@@ -420,3 +420,255 @@ class TestTheLaw:
     def test_no_auto_execute_flag_is_referenced(self) -> None:
         source = pathlib.Path(W.__file__).read_text(encoding="utf-8").upper()
         assert "AUTO_EXECUTE" not in source
+
+
+# =========================================================================================
+# R8.VB1 — the session lock is one transaction per confirm, and never waits
+# =========================================================================================
+class _LockBusy(Exception):
+    """What psycopg raises for ``FOR UPDATE NOWAIT`` on a held row (``lock_not_available``)."""
+
+    sqlstate = "55P03"
+
+
+class _RecordingConn:
+    """A Postgres-shaped connection that records every statement and can refuse the locks."""
+
+    def __init__(self, *, row_busy: bool = False, advisory: bool = True) -> None:
+        self.sql: list[str] = []
+        self.row_busy = row_busy
+        self.advisory = advisory
+
+    def execute(self, sql: str, params: object = ()) -> _RecordingConn:  # noqa: ARG002
+        self.sql.append(" ".join(sql.split()))
+        if self.row_busy and "NOWAIT" in sql:
+            raise _LockBusy('could not obtain lock on row in relation "vb_session"')
+        return self
+
+    def fetchone(self) -> dict:
+        return {"got": self.advisory}
+
+
+def _verbs(conn: _RecordingConn) -> list[str]:
+    return [s.split()[0] if not s.startswith("SELECT") else s for s in conn.sql]
+
+
+ADVISORY = "SELECT pg_try_advisory_xact_lock(hashtext(?)) AS got"
+ROW_LOCK = (
+    "SELECT 1 FROM public.vb_session WHERE user_id = ? AND session_date = ? FOR UPDATE NOWAIT"
+)
+
+
+class TestTheSessionLock:
+    """``lock_session_for_update`` used to hold its ``FOR UPDATE`` for one autocommit statement,
+    which serialised nothing. These pin R8.VB1: one ``BEGIN`` … ``COMMIT`` around the whole
+    confirm, the sleeve's per-user lock beside the plan's session row (the cap is the IST day's,
+    the row is the plan's), ``NOWAIT`` so a held lock is a 409 and not a hung event loop, and a
+    ``COMMIT`` on an exception too, so a row written after the broker answered is kept."""
+
+    def test_postgres_opens_locks_both_nowait_and_commits(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgVbtStore(conn, user_id=1, schema="public")
+        with store.lock_session_for_update(SESSION):
+            conn.execute("UPDATE public.vb_plan_line SET state = 'SENT'")
+        assert _verbs(conn) == ["INSERT", "BEGIN", ADVISORY, ROW_LOCK, "UPDATE", "COMMIT"]
+
+    def test_a_nested_lock_opens_one_transaction(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgVbtStore(conn, user_id=1, schema="public")
+        with store.lock_session_for_update(SESSION), store.lock_session_for_update(SESSION):
+            pass
+        verbs = _verbs(conn)
+        assert verbs.count("BEGIN") == 1 and verbs.count("COMMIT") == 1
+        assert verbs[-1] == "COMMIT"
+
+    @pytest.mark.parametrize(
+        ("row_busy", "advisory"), [(True, True), (False, False)], ids=["row", "per-user"]
+    )
+    def test_a_held_lock_is_a_409_rolled_back_before_anything_runs(
+        self, row_busy: bool, advisory: bool  # noqa: FBT001
+    ) -> None:
+        conn = _RecordingConn(row_busy=row_busy, advisory=advisory)
+        store = W.PgVbtStore(conn, user_id=1, schema="public")
+        ran = []
+        with pytest.raises(W.HTTPException) as refused, store.lock_session_for_update(SESSION):
+            ran.append(True)
+        assert refused.value.status_code == 409
+        assert str(refused.value.detail).startswith("SESSION_BUSY")
+        assert ran == []
+        assert _verbs(conn)[-1] == "ROLLBACK"
+        assert "COMMIT" not in _verbs(conn)
+        assert store._lock_depth == 0  # noqa: SLF001 - the lock's own bookkeeping
+
+    def test_an_exception_inside_still_commits_what_was_written(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgVbtStore(conn, user_id=1, schema="public")
+        with pytest.raises(RuntimeError), store.lock_session_for_update(SESSION):
+            conn.execute("INSERT INTO public.vb_order (state) VALUES ('SENT')")
+            raise RuntimeError("after the broker answered")
+        assert _verbs(conn)[-2:] == ["INSERT", "COMMIT"]
+
+    def test_sqlite_commits_on_the_way_out(self, store, tmp_path) -> None:  # noqa: ANN001
+        with store.lock_session_for_update(SESSION):
+            store.bump_session(SESSION, mode="DRY_RUN", confirms=1)
+        other = sqlite3.connect(tmp_path / "vbt.db")
+        try:
+            row = other.execute(
+                "SELECT confirms FROM vb_session WHERE user_id = 1 AND session_date = ?",
+                (SESSION.isoformat(),),
+            ).fetchone()
+        finally:
+            other.close()
+        assert row == (1,)
+        assert store.conn.in_transaction is False
+
+
+class TestOneOrderPerSignal:
+    """R8.VB2's read: the order already written for a name on a signal, in any state."""
+
+    def test_it_finds_an_order_in_any_state_and_only_on_its_signal(self, store) -> None:  # noqa: ANN001
+        order_id = store.create_order(
+            {
+                "instrument_id": 42,
+                "signal_date": SESSION,
+                "limit_price": "96.00",
+                "stop_price": "84.45",
+                "quantity": 10,
+                "state": "CANCELLED",
+            }
+        )
+        assert store.order_for_signal(42, SESSION) == order_id
+        assert store.order_for_signal(42, SESSION - dt.timedelta(days=1)) is None
+        assert store.order_for_signal(43, SESSION) is None
+
+
+# =========================================================================================
+# R8.VB1 on a real Postgres: two confirms at once cannot pass the cap
+# =========================================================================================
+def _pg_url() -> str | None:
+    import os  # noqa: PLC0415 - only this block reads the environment
+
+    url = os.environ.get("BASKFY_TEST_DATABASE_URL")
+    return None if not url else url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+requires_db = pytest.mark.skipif(_pg_url() is None, reason="BASKFY_TEST_DATABASE_URL is not set")
+
+
+class _SlowGateway:
+    """A gateway whose send takes long enough for the other confirm to arrive mid-flight."""
+
+    def __init__(self) -> None:
+        self.places: list[str] = []
+
+    async def place(self, **kwargs: object) -> dict:
+        import asyncio  # noqa: PLC0415
+
+        self.places.append(str(kwargs["symbol"]))
+        await asyncio.sleep(0.4)
+        return {"status": "DRY_RUN", "order_id": f"dry-{kwargs['symbol']}"}
+
+    async def place_gtt_stop(self, **_: object) -> dict:
+        return {"status": "DRY_RUN_GTT", "trigger_id": "g"}
+
+
+@requires_db
+class TestTwoConfirmsCannotPassTheCap:
+    """`04` §5.3/§9.4 on the deployment's database (a bed clone). Two entries are already taken
+    today; a MORNING plan's line (locking **yesterday's** session row) and a LIVE plan's line
+    (locking **today's**) are confirmed at the same moment. Before R8.VB1 each read two taken and
+    each sent a third — four entries. Now one is sent and the other is a 409 with nothing sent."""
+
+    def test_two_tabs_at_once_take_one_entry_between_them(self) -> None:
+        import asyncio  # noqa: PLC0415
+
+        from app import vbt_execute as X  # noqa: PLC0415
+        from app.analytics.pg import Connection  # noqa: PLC0415 - psycopg only with a database
+
+        url = _pg_url()
+        assert url is not None
+        now = dt.datetime(2026, 10, 30, 10, 0, tzinfo=IST)
+        today, yesterday = now.date(), dt.date(2026, 10, 29)
+        setup = Connection(url)
+        tag = uuid.uuid4().hex[:8]
+        uid = int(setup.execute(
+            "INSERT INTO app_user (public_id, email) VALUES (?, ?) RETURNING id",
+            (f"vbcap-{tag}", f"vbcap-{tag}@x.test"),
+        ).fetchone()["id"])  # fmt: skip
+        try:
+            instruments = [
+                (int(r["id"]), str(r["symbol"]))
+                for r in setup.execute(
+                    "SELECT id, symbol FROM instrument WHERE symbol IS NOT NULL "
+                    "AND symbol NOT LIKE 'SGB%' AND symbol ~ '^[A-Z]+$' ORDER BY id LIMIT 4"
+                ).fetchall()
+            ]
+            for iid, _sym in instruments[:2]:
+                setup.execute(
+                    "INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, "
+                    "stop_price, quantity, state, simulated, created_at) "
+                    "VALUES (?, ?, ?, 100, 90, 1, 'SENT', true, ?)",
+                    (uid, iid, yesterday, now),
+                )
+            lines: list[tuple[str, int]] = []
+            for (iid, sym), (source, day, kind) in zip(
+                instruments[2:],
+                [("MORNING", yesterday, "PLACE_LIMIT"), ("LIVE", today, "BUY_AT_MARKET")],
+                strict=True,
+            ):
+                plan_id = str(uuid.uuid4())
+                pk = int(setup.execute(
+                    "INSERT INTO vb_plan (plan_id, user_id, session_date, source, built_at, "
+                    "expires_at, plan_hash, gate, sleeve_equity_inr) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'h', 'OPEN', 1000000) RETURNING id",
+                    (plan_id, uid, day, source, now - dt.timedelta(minutes=1),
+                     now + dt.timedelta(minutes=29)),
+                ).fetchone()["id"])  # fmt: skip
+                line_id = int(setup.execute(
+                    "INSERT INTO vb_plan_line (plan_id, user_id, instrument_id, kind, state, "
+                    "quantity, limit_price, stop_price, value_inr, client_id) "
+                    "VALUES (?, ?, ?, ?, 'PROPOSED', 10, 100, 88, 1000, ?) RETURNING id",
+                    (pk, uid, iid, kind, f"{plan_id}:{sym}:{kind}"),
+                ).fetchone()["id"])  # fmt: skip
+                lines.append((plan_id, line_id))
+
+            conns = [Connection(url), Connection(url)]
+            stores = [W.PgVbtStore(c, user_id=uid, schema="public") for c in conns]
+            gw = _SlowGateway()
+
+            async def both() -> list[object]:
+                return await asyncio.gather(
+                    *(
+                        X.execute_line(
+                            store, gw, plan_id=plan_id, line_id=line_id, confirm="true", now=now
+                        )
+                        for store, (plan_id, line_id) in zip(stores, lines, strict=True)
+                    ),
+                    return_exceptions=True,
+                )
+
+            try:
+                outcomes = asyncio.run(both())
+            finally:
+                for c in conns:
+                    c.close()
+            sent = [o for o in outcomes if isinstance(o, X.ExecOutcome)]
+            busy = [o for o in outcomes if isinstance(o, W.HTTPException)]
+            assert len(sent) == 1 and sent[0].status == "SIMULATED", outcomes
+            assert len(busy) == 1 and busy[0].status_code == 409, outcomes
+            assert str(busy[0].detail).startswith("SESSION_BUSY")
+            assert len(gw.places) == 1, "the refused confirm sent nothing"
+            taken = W.PgVbtStore(setup, user_id=uid, schema="public").entries_taken(today)
+            assert taken == 3, "the cap is three; it was four before R8.VB1"
+            states = sorted(
+                str(r["state"])
+                for r in setup.execute(
+                    "SELECT state FROM vb_plan_line WHERE user_id = ?", (uid,)
+                ).fetchall()
+            )
+            # The sent line's dry-run fill is complete at once (FILLED); the refused one is
+            # still PROPOSED and can be confirmed again.
+            assert states == ["FILLED", "PROPOSED"], states
+        finally:
+            setup.execute("DELETE FROM app_user WHERE id = ?", (uid,))
+            setup.close()

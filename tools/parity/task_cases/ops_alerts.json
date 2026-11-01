@@ -1,0 +1,389 @@
+{
+  "lane": "ops_alerts",
+  "note": "Wave-6 lane ops_alerts: the six tasks at their clocks (a published and an unpublished session, a Saturday, an NSE holiday, beyond the calendar), with their refusals. Redis index 5 is pre-seeded for backlog-over-threshold only.",
+  "cases": [
+    {
+      "name": "reap-nothing-running",
+      "task": "baskfy.ops.reap_abandoned_runs",
+      "now": "2026-10-29T21:00:00",
+      "note": "the bed has no running run: nothing to reap"
+    },
+    {
+      "name": "reap-two-stale-one-healthy",
+      "task": "baskfy.ops.reap_abandoned_runs",
+      "now": "2026-10-30T20:00:00",
+      "seed_sql": "\nINSERT INTO pipeline_run (trade_date, status, started_at) VALUES\n ('2026-10-30', 'running', '2026-10-30 12:00:00.123456+00'),\n ('2026-10-27', 'running', '2026-10-27 13:15:00+00'),\n ('2026-10-30', 'running', '2026-10-30 14:00:00+00');\n",
+      "payload_mask": [
+        "/alerts/0/raised_at",
+        "/alerts/1/raised_at"
+      ],
+      "note": "two runs past the 90-minute window (oldest trade date first, one with microseconds) become failed at the task clock and alert by mail; a 30-minute-old run is left running"
+    },
+    {
+      "name": "reap-stale-window-from-env",
+      "task": "baskfy.ops.reap_abandoned_runs",
+      "now": "2026-10-30T20:00:00",
+      "seed_sql": "\nINSERT INTO pipeline_run (trade_date, status, started_at) VALUES\n ('2026-10-30', 'running', '2026-10-30 12:00:00.123456+00'),\n ('2026-10-27', 'running', '2026-10-27 13:15:00+00'),\n ('2026-10-30', 'running', '2026-10-30 14:00:00+00');\n",
+      "env": {
+        "BASKFY_PIPELINE_STALE_AFTER_MINUTES": "20"
+      },
+      "payload_mask": [
+        "/alerts/0/raised_at",
+        "/alerts/1/raised_at",
+        "/alerts/2/raised_at"
+      ],
+      "note": "a 20-minute window reaps the healthy run too"
+    },
+    {
+      "name": "deadline-published-day",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2026-10-29T20:15:00",
+      "note": "run 103 published 2026-10-29: silent"
+    },
+    {
+      "name": "deadline-unpublished-session",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2026-10-30T20:15:00",
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "a Friday session with nothing published: publish_late, mailed"
+    },
+    {
+      "name": "deadline-saturday",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2026-10-31T20:15:00"
+    },
+    {
+      "name": "deadline-holiday",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2026-11-10T20:15:00",
+      "note": "2026-11-10 is an NSE holiday (Tuesday)"
+    },
+    {
+      "name": "deadline-bad-setting-falls-back",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2026-10-30T21:00:00",
+      "env": {
+        "BASKFY_PUBLISH_DEADLINE_IST": "20:15:00"
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "a deadline that is not HH:MM reads as 20:15"
+    },
+    {
+      "name": "deadline-custom-setting",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2026-10-30T21:00:00",
+      "env": {
+        "BASKFY_PUBLISH_DEADLINE_IST": " 21 : 0_0"
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "Python's int() accepts spaces and underscores"
+    },
+    {
+      "name": "deadline-beyond-calendar",
+      "task": "baskfy.ops.check_publish_deadline",
+      "now": "2027-03-03T20:15:00",
+      "note": "a date the calendar does not carry is not a trading day"
+    },
+    {
+      "name": "token-no-store-configured",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-30T10:00:00",
+      "note": "no encryption key: local development, not an incident"
+    },
+    {
+      "name": "token-saturday-skipped",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-31T10:00:00",
+      "kite": true
+    },
+    {
+      "name": "token-holiday-skipped",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-11-10T10:00:00",
+      "kite": true
+    },
+    {
+      "name": "token-fresh-morning",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-30T10:00:00",
+      "kite": true
+    },
+    {
+      "name": "token-expires-within-warning",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-30T20:00:00",
+      "kite": true,
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "issued at 20:00, dead at midnight IST: a WARNING mailed, and the once-a-day marker set in Redis"
+    },
+    {
+      "name": "token-absent-critical",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-30T10:00:00",
+      "kite": true,
+      "env": {
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/nowhere/kite-token.enc"
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ]
+    },
+    {
+      "name": "token-unreadable-critical",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-30T10:00:00",
+      "kite": true,
+      "env": {
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/nse/fo-ban-list/2026-10-29.csv"
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "the token path is a file that is not a Fernet blob (a recorded ban list): 'could not be read', error CredentialsMissing, keyed 'unreadable'",
+      "bundle": "session"
+    },
+    {
+      "name": "token-redis-down-fails-open",
+      "task": "baskfy.ops.check_kite_token",
+      "now": "2026-10-30T20:00:00",
+      "kite": true,
+      "env": {
+        "BASKFY_REDIS_URL": "redis://127.0.0.1:1/0"
+      },
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "no marker can be claimed: delivered anyway"
+    },
+    {
+      "name": "backlog-empty-queues",
+      "task": "baskfy.ops.check_queue_backlog",
+      "now": "2026-10-30T12:00:00"
+    },
+    {
+      "name": "backlog-broker-unreachable",
+      "task": "baskfy.ops.check_queue_backlog",
+      "now": "2026-10-30T12:00:00",
+      "env": {
+        "BASKFY_REDIS_URL": "redis://127.0.0.1:1/0"
+      }
+    },
+    {
+      "name": "backlog-unbuildable-client",
+      "task": "baskfy.ops.check_queue_backlog",
+      "now": "2026-10-30T12:00:00",
+      "env": {
+        "BASKFY_REDIS_URL": "ftp://127.0.0.1/0"
+      }
+    },
+    {
+      "name": "backlog-over-threshold",
+      "task": "baskfy.ops.check_queue_backlog",
+      "now": "2026-10-30T12:00:00",
+      "env": {
+        "BASKFY_REDIS_URL": "redis://127.0.0.1:56379/5",
+        "BASKFY_QUEUE_BACKLOG_THRESHOLD": "2"
+      },
+      "payload_mask": [
+        "/alerts/0/raised_at",
+        "/alerts/1/raised_at"
+      ],
+      "note": "PRE-SEED Redis index 5 (read only by the case): RPUSH default x x x; RPUSH compute x x; RPUSH ingest x (see the lane's STATUS row)"
+    },
+    {
+      "name": "sweep-nothing-due",
+      "task": "baskfy.alerts.sweep_webhooks",
+      "now": "2026-10-30T15:00:00"
+    },
+    {
+      "name": "sweep-ssrf-refusals",
+      "task": "baskfy.alerts.sweep_webhooks",
+      "now": "2026-10-30T15:00:00",
+      "seed_sql": "\nINSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events, consecutive_failures) VALUES\n ('opsal0000001', 1, 1, 'https://hooks.example.com/baskfy', '[\"screen.entries\"]', 0),\n ('opsal0000002', 1, 1, 'http://localhost:9000/hook', '[\"screen.entries\"]', 2),\n ('opsal0000003', 1, 1, 'http://10.0.0.5/hook', '[\"screen.exits\"]', 0),\n ('opsal0000004', 1, 1, 'https://inactive.example.com/x', '[\"screen.entries\"]', 0);\nUPDATE webhook_endpoint SET is_active = false WHERE public_id = 'opsal0000004';\nINSERT INTO webhook_delivery (endpoint_id, event, idempotency_key, payload, status, attempts, next_attempt_at)\nSELECT e.id, v.event, v.key, v.payload::jsonb, v.status, v.attempts, v.next_at::timestamptz\nFROM (VALUES\n ('opsal0000001', 'screen.entries', 'k1', '{\"b\": 1, \"a\": [1, 2.5]}', 'pending', 0, '2026-10-30 09:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k2', '{\"x\": \"y\"}', 'pending', 2, '2026-10-30 09:10:00+00'),\n ('opsal0000002', 'screen.entries', 'k3', '{}', 'pending', 0, '2026-10-30 09:05:00+00'),\n ('opsal0000003', 'screen.exits', 'k4', '{\"n\": null}', 'pending', 1, '2026-10-30 09:20:00+00'),\n ('opsal0000004', 'screen.entries', 'k5', '{}', 'pending', 0, '2026-10-30 09:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k6', '{}', 'pending', 0, '2026-10-30 23:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k7', '{}', 'delivered', 1, NULL)\n) AS v(pub, event, key, payload, status, attempts, next_at)\nJOIN webhook_endpoint e ON e.public_id = v.pub;\n",
+      "mask": {
+        "webhook_endpoint": {
+          "updated_at": "stamp",
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "four due deliveries on three active endpoints: a public name (does not resolve under the guard), localhost, a private literal; inactive, not-yet-due and delivered rows untouched"
+    },
+    {
+      "name": "sweep-limit-two",
+      "task": "baskfy.alerts.sweep_webhooks",
+      "now": "2026-10-30T15:00:00",
+      "args": {
+        "limit": 2
+      },
+      "seed_sql": "\nINSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events, consecutive_failures) VALUES\n ('opsal0000001', 1, 1, 'https://hooks.example.com/baskfy', '[\"screen.entries\"]', 0),\n ('opsal0000002', 1, 1, 'http://localhost:9000/hook', '[\"screen.entries\"]', 2),\n ('opsal0000003', 1, 1, 'http://10.0.0.5/hook', '[\"screen.exits\"]', 0),\n ('opsal0000004', 1, 1, 'https://inactive.example.com/x', '[\"screen.entries\"]', 0);\nUPDATE webhook_endpoint SET is_active = false WHERE public_id = 'opsal0000004';\nINSERT INTO webhook_delivery (endpoint_id, event, idempotency_key, payload, status, attempts, next_attempt_at)\nSELECT e.id, v.event, v.key, v.payload::jsonb, v.status, v.attempts, v.next_at::timestamptz\nFROM (VALUES\n ('opsal0000001', 'screen.entries', 'k1', '{\"b\": 1, \"a\": [1, 2.5]}', 'pending', 0, '2026-10-30 09:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k2', '{\"x\": \"y\"}', 'pending', 2, '2026-10-30 09:10:00+00'),\n ('opsal0000002', 'screen.entries', 'k3', '{}', 'pending', 0, '2026-10-30 09:05:00+00'),\n ('opsal0000003', 'screen.exits', 'k4', '{\"n\": null}', 'pending', 1, '2026-10-30 09:20:00+00'),\n ('opsal0000004', 'screen.entries', 'k5', '{}', 'pending', 0, '2026-10-30 09:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k6', '{}', 'pending', 0, '2026-10-30 23:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k7', '{}', 'delivered', 1, NULL)\n) AS v(pub, event, key, payload, status, attempts, next_at)\nJOIN webhook_endpoint e ON e.public_id = v.pub;\n",
+      "mask": {
+        "webhook_endpoint": {
+          "updated_at": "stamp",
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sweep-limit-positional-zero",
+      "task": "baskfy.alerts.sweep_webhooks",
+      "now": "2026-10-30T15:00:00",
+      "args": [
+        0
+      ],
+      "seed_sql": "\nINSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events, consecutive_failures) VALUES\n ('opsal0000001', 1, 1, 'https://hooks.example.com/baskfy', '[\"screen.entries\"]', 0),\n ('opsal0000002', 1, 1, 'http://localhost:9000/hook', '[\"screen.entries\"]', 2),\n ('opsal0000003', 1, 1, 'http://10.0.0.5/hook', '[\"screen.exits\"]', 0),\n ('opsal0000004', 1, 1, 'https://inactive.example.com/x', '[\"screen.entries\"]', 0);\nUPDATE webhook_endpoint SET is_active = false WHERE public_id = 'opsal0000004';\nINSERT INTO webhook_delivery (endpoint_id, event, idempotency_key, payload, status, attempts, next_attempt_at)\nSELECT e.id, v.event, v.key, v.payload::jsonb, v.status, v.attempts, v.next_at::timestamptz\nFROM (VALUES\n ('opsal0000001', 'screen.entries', 'k1', '{\"b\": 1, \"a\": [1, 2.5]}', 'pending', 0, '2026-10-30 09:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k2', '{\"x\": \"y\"}', 'pending', 2, '2026-10-30 09:10:00+00'),\n ('opsal0000002', 'screen.entries', 'k3', '{}', 'pending', 0, '2026-10-30 09:05:00+00'),\n ('opsal0000003', 'screen.exits', 'k4', '{\"n\": null}', 'pending', 1, '2026-10-30 09:20:00+00'),\n ('opsal0000004', 'screen.entries', 'k5', '{}', 'pending', 0, '2026-10-30 09:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k6', '{}', 'pending', 0, '2026-10-30 23:00:00+00'),\n ('opsal0000001', 'screen.entries', 'k7', '{}', 'delivered', 1, NULL)\n) AS v(pub, event, key, payload, status, attempts, next_at)\nJOIN webhook_endpoint e ON e.public_id = v.pub;\n",
+      "mask": {
+        "webhook_endpoint": {
+          "updated_at": "stamp",
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sweep-bad-keyword",
+      "task": "baskfy.alerts.sweep_webhooks",
+      "now": "2026-10-30T15:00:00",
+      "args": {
+        "batch": 5
+      }
+    },
+    {
+      "name": "nudge-disabled",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00"
+    },
+    {
+      "name": "nudge-no-state-file",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00",
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true"
+      }
+    },
+    {
+      "name": "nudge-no-sole-user",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00",
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key",
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "nudge-bad-window",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00",
+      "args": {
+        "window": "third"
+      },
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key"
+      }
+    },
+    {
+      "name": "nudge-sends-first",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00",
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key",
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/kite/kite-token.enc"
+      },
+      "mail_mask": [
+        "state%3D[A-Za-z0-9_-]+"
+      ],
+      "note": "no token stored: the marker is claimed in the side's archive (compared) and one login link mailed; the one-time state is random (masked)"
+    },
+    {
+      "name": "nudge-sends-second-positional",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T09:05:00",
+      "args": [
+        "second"
+      ],
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key",
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/kite/kite-token.enc"
+      },
+      "mail_mask": [
+        "state%3D[A-Za-z0-9_-]+"
+      ]
+    },
+    {
+      "name": "nudge-no-recipient",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00",
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "  ",
+        "BASKFY_KITE_API_KEY": "replay-api-key",
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/kite/kite-token.enc"
+      }
+    },
+    {
+      "name": "nudge-saturday",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-31T08:45:00",
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key",
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/kite/kite-token.enc"
+      }
+    },
+    {
+      "name": "nudge-holiday",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-11-10T08:45:00",
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key",
+        "BASKFY_KITE_TOKEN_PATH": "{archive}/kite/kite-token.enc"
+      }
+    },
+    {
+      "name": "nudge-fresh-token",
+      "task": "baskfy.kite.login_nudge",
+      "now": "2026-10-30T08:45:00",
+      "kite": true,
+      "env": {
+        "BASKFY_KITE_LOGIN_NUDGE_ENABLED": "true",
+        "BASKFY_BROKER_OAUTH_STATE_PATH": "{archive}.oauth-state.json",
+        "BASKFY_KITE_LOGIN_NUDGE_TO": "maulik@nudge.test",
+        "BASKFY_KITE_API_KEY": "replay-api-key"
+      },
+      "note": "a token issued today is stored: nothing sent, no marker"
+    }
+  ]
+}

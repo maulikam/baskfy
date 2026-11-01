@@ -167,6 +167,15 @@ def _jsonable(value: Any) -> Any:  # noqa: ANN401 - the whole point is "any valu
     return value
 
 
+#: Postgres's SQLSTATE for ``FOR UPDATE NOWAIT`` finding the row held (``lock_not_available``).
+LOCK_NOT_AVAILABLE: Final = "55P03"
+#: What a confirm that finds the session row held answers (409, R8.TD1).
+SESSION_BUSY: Final = (
+    "SESSION_BUSY: another confirm of this session is in flight; nothing was sent — "
+    "confirm again"
+)
+
+
 class PgTwtStore:
     """One user's ``tw_`` rows, through a sqlite3-shaped connection (the ``TwtStore`` protocol).
 
@@ -187,6 +196,9 @@ class PgTwtStore:
         self.user_id = int(user_id)
         self.schema = schema
         self.broker_account_id = broker_account_id
+        #: How many ``lock_session_for_update`` blocks are open on this store; only the
+        #: outermost opens and closes the transaction (R8.TD1).
+        self._lock_depth = 0
 
     def t(self, table: str) -> str:
         return f"{self.schema}.{table}" if self.schema else table
@@ -654,24 +666,56 @@ class PgTwtStore:
 
         The row is inserted first if absent: ``SELECT … FOR UPDATE`` locks nothing when there is
         nothing to lock, which is precisely the first confirm of a session.
+
+        **One transaction per confirm (R8.TD1, 30 Oct 2026).** The desk's connections are
+        autocommit (``analytics.pg.Connection``), so a ``FOR UPDATE`` on its own held its lock
+        for one statement and serialised nothing: a click racing ``twt-auto``'s drain could each
+        read two entries taken and each send a third. The outermost block now opens ``BEGIN``,
+        locks the row ``NOWAIT``, and ``COMMIT``s on the way out — on an exception too, so what
+        was written before it (an order row after the broker answered) stays written, exactly as
+        autocommit kept it. ``NOWAIT`` because the routes are ``async`` over a synchronous
+        driver: a waiting ``FOR UPDATE`` would block the event loop the lock's holder needs to
+        finish its broker call, and the desk would hang. A confirm that finds the row held is
+        refused 409 before anything is read or sent, and can be confirmed again.
         """
+        # NOT EXISTS first: a bare ON CONFLICT waits on a row another confirm's open
+        # transaction has updated, which would block the event loop (R8.TD1/R8.VB1).
         self.conn.execute(
-            f"INSERT INTO {self.t('tw_session')} (user_id, session_date) VALUES (?, ?) "
-            "ON CONFLICT (user_id, session_date) DO NOTHING",
-            (self.user_id, day),
+            f"INSERT INTO {self.t('tw_session')} (user_id, session_date) SELECT ?, ? "
+            f"WHERE NOT EXISTS (SELECT 1 FROM {self.t('tw_session')} WHERE user_id = ? "
+            "AND session_date = ?) ON CONFLICT (user_id, session_date) DO NOTHING",
+            (self.user_id, day, self.user_id, day),
         )
+        opened = False
         if self.schema:
-            self.conn.execute(
-                f"SELECT 1 FROM {self.t('tw_session')} WHERE user_id = ? AND session_date = ? "
-                "FOR UPDATE",
-                (self.user_id, day),
-            )
+            if self._lock_depth == 0:
+                self.conn.execute("BEGIN")
+                opened = True
+            try:
+                self.conn.execute(
+                    f"SELECT 1 FROM {self.t('tw_session')} WHERE user_id = ? "
+                    "AND session_date = ? FOR UPDATE NOWAIT",
+                    (self.user_id, day),
+                )
+            except Exception as exc:
+                if opened:
+                    self.conn.execute("ROLLBACK")
+                if getattr(exc, "sqlstate", None) == LOCK_NOT_AVAILABLE:
+                    raise HTTPException(409, SESSION_BUSY) from exc
+                raise
         elif _in_transaction(self.conn) is False:
             # sqlite has no row locks and no `FOR UPDATE`. A test file has one writer, so the
             # lock has nothing to protect against; saying so here is better than a statement
             # that would be a syntax error on the backend the tests actually run on.
             self.conn.execute("BEGIN IMMEDIATE")
-        yield
+            opened = True
+        self._lock_depth += 1
+        try:
+            yield
+        finally:
+            self._lock_depth -= 1
+            if opened:
+                self.conn.execute("COMMIT")
 
     def session(self, day: dt.date) -> dict | None:
         row = self.conn.execute(

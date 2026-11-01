@@ -1,0 +1,223 @@
+{
+  "note": "Wave D lane vbt (lanes/vbt.rs, lanes/vbt/{store,execute}.rs): the /vbt page and its JSON on the bed's real vb_ rows at clocks on the Friday, on the unexpired MORNING plan 69 (Wed 21 Oct 09:10, built 09:00, expires 09:30) and after it lapsed; every refusal of POST /vbt/execute (422/400/404/410/409); three PLACE_LIMIT confirms of plan 69 through the sleeve's own gateway in DRY_RUN (VBT_EXECUTION_ENABLED=false), each a LIMIT at the signal close, a simulated fill, a position and its GTT stop; the scan contract (202, 409, the older /vbt/rescan's accepted=false, status by id, 404). VBT has no auto-execute flag. The replay Kite must record no order or GTT call.",
+  "db_mask": {
+    "public.risk_ledger": [
+      "updated_at"
+    ],
+    "public.vb_fill": [
+      "created_at"
+    ],
+    "public.vb_order": [
+      "updated_at"
+    ],
+    "public.vb_position": [
+      "created_at",
+      "updated_at"
+    ],
+    "public.vb_scan_run": [
+      "created_at"
+    ]
+  },
+  "cases": [
+    {
+      "name": "vbt data before the open (Fri)",
+      "method": "GET",
+      "path": "/vbt/data",
+      "clock": "pre_open"
+    },
+    {
+      "name": "vbt data mid-session (Fri)",
+      "method": "GET",
+      "path": "/vbt/data",
+      "clock": "mid"
+    },
+    {
+      "name": "vbt data Thursday 21:30 (EVENING plan 82)",
+      "method": "GET",
+      "path": "/vbt/data",
+      "clock": "2026-10-29T21:30:00+05:30"
+    },
+    {
+      "name": "vbt data Wed 21 Oct 09:10 (MORNING plan 69 unexpired)",
+      "method": "GET",
+      "path": "/vbt/data",
+      "clock": "2026-10-21T09:10:00+05:30"
+    },
+    {
+      "name": "vbt page before the open (Fri)",
+      "method": "GET",
+      "path": "/vbt",
+      "clock": "pre_open"
+    },
+    {
+      "name": "vbt page Wed 21 Oct 09:10 (confirmable lines)",
+      "method": "GET",
+      "path": "/vbt",
+      "clock": "2026-10-21T09:10:00+05:30"
+    },
+    {
+      "name": "execute without fields is FastAPI's 422",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {}
+    },
+    {
+      "name": "execute with a non-integer line_id is 422",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "x",
+        "line_id": "abc",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "execute without confirm is 400",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "132",
+        "confirm": "false"
+      }
+    },
+    {
+      "name": "execute of a malformed plan id is 404",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "not-a-uuid",
+        "line_id": "132",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "execute of an unknown plan is 404",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-000000000000",
+        "line_id": "132",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "execute of a line not on the plan is 404",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "122",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "execute of an expired plan is 410 (Fri)",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "132",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "confirm PLACE_LIMIT MVGJL (simulated fill + GTT)",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "132",
+        "confirm": "true"
+      },
+      "clock": "2026-10-21T09:10:00+05:30"
+    },
+    {
+      "name": "the same line again is 409",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "132",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm PLACE_LIMIT PARACABLES",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "133",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "confirm PLACE_LIMIT PLATIND",
+      "method": "POST",
+      "path": "/vbt/execute",
+      "form": {
+        "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+        "line_id": "134",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "vbt data after the confirms (book, working, session)",
+      "method": "GET",
+      "path": "/vbt/data"
+    },
+    {
+      "name": "vbt page after the confirms",
+      "method": "GET",
+      "path": "/vbt"
+    },
+    {
+      "name": "scan status of an existing run",
+      "method": "GET",
+      "path": "/vbt/scan/114",
+      "clock": "mid"
+    },
+    {
+      "name": "scan status of a non-integer id is 422",
+      "method": "GET",
+      "path": "/vbt/scan/abc"
+    },
+    {
+      "name": "scan status of an unknown run is 404",
+      "method": "GET",
+      "path": "/vbt/scan/999999"
+    },
+    {
+      "name": "scan now is 202",
+      "method": "POST",
+      "path": "/vbt/scan",
+      "capture": {
+        "run_id": "json:/run_id"
+      }
+    },
+    {
+      "name": "scan status of the new run",
+      "method": "GET",
+      "path": "/vbt/scan/${run_id}"
+    },
+    {
+      "name": "scan again is 409 (in flight)",
+      "method": "POST",
+      "path": "/vbt/scan",
+      "advance": 5
+    },
+    {
+      "name": "the older rescan answers accepted=false",
+      "method": "POST",
+      "path": "/vbt/rescan",
+      "advance": 5
+    },
+    {
+      "name": "vbt data with a queued scan",
+      "method": "GET",
+      "path": "/vbt/data"
+    }
+  ]
+}

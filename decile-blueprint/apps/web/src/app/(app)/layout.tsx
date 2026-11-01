@@ -102,8 +102,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <Providers nonce={nonce}>
       <AppShell
         user={{
-          email: session?.user?.email ?? null,
-          name: session?.user?.name ?? null,
+          signedIn: Boolean(session?.user?.publicId),
+          email: session?.user?.email ?? me?.email ?? null,
+          name: session?.user?.name ?? me?.name ?? session?.user?.publicId ?? null,
           // Server truth, from `GET /me` — the same place the entitlement gates read from. A
           // signed-out visitor gets `null` and no extra request (`fetchMe` short-circuits).
           isStaff: me?.is_staff ?? false,

@@ -1,0 +1,63 @@
+{
+ "fn": "baskfy_core.fno.research.summarise",
+ "inputs": {
+  "date_column": "entry",
+  "r_column": "R",
+  "trades": {
+   "columns": [
+    "entry",
+    "R",
+    "cost_R"
+   ],
+   "dtypes": {
+    "R": "Float64",
+    "cost_R": "Float64",
+    "entry": "Date"
+   },
+   "rows": [
+    [
+     "2022-01-03",
+     0.5,
+     0.01
+    ],
+    [
+     "2022-02-01",
+     -1.0,
+     0.02
+    ],
+    [
+     "2023-01-02",
+     0.2,
+     0.03
+    ]
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "n, mean, t, win rate, worst, gross and cost, per year. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cost_r": 0.02,
+  "exp_r": -0.09999999999999999,
+  "gross_r": -0.07999999999999999,
+  "n": 3,
+  "per_year": {
+   "2022": [
+    2,
+    -0.25
+   ],
+   "2023": [
+    1,
+    0.2
+   ]
+  },
+  "t_stat": -0.21821789023599233,
+  "win": 0.6666666666666666,
+  "worst": -1.0
+ }
+}

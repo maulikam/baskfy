@@ -103,7 +103,9 @@ def _new_public_id() -> str:
     return secrets.token_hex(PUBLIC_ID_BYTES)
 
 
-def _is_visible(screen: Screen, principal: Principal) -> bool:
+def is_visible(screen: Screen, principal: Principal) -> bool:
+    """The visibility rule above, as one predicate. ``/instruments/{symbol}/rank-history`` uses it
+    too, so a private screen's history is its owner's only (DECISIONS-RS R5.28)."""
     return screen.user_id is None or screen.user_id == principal.user_id
 
 
@@ -128,7 +130,7 @@ async def _load_visible(session: AsyncSession, public_id: str, principal: Princi
     screen = (
         await session.execute(select(Screen).where(Screen.public_id == public_id))
     ).scalar_one_or_none()
-    if screen is None or not _is_visible(screen, principal):
+    if screen is None or not is_visible(screen, principal):
         raise not_found("screen", public_id)
     return screen
 
@@ -223,7 +225,7 @@ async def _replayed_screen(
     screen = (
         await session.execute(select(Screen).where(Screen.public_id == remembered))
     ).scalar_one_or_none()
-    if screen is None or not _is_visible(screen, principal):
+    if screen is None or not is_visible(screen, principal):
         return None
     return _to_out(screen, principal)
 

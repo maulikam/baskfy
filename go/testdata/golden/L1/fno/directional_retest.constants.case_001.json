@@ -1,0 +1,38 @@
+{
+ "fn": "baskfy_core.fno.directional_retest.constants",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "the proxy's costs, fallback lots and the rules it cannot test. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "FALLBACK_LOT": {
+   "BANKNIFTY": 15,
+   "NIFTY": 50
+  },
+  "INDEX_COSTS": {
+   "defend": false,
+   "exit_n": 1,
+   "k_short": 1.0,
+   "k_wing": 0.5,
+   "loss_mult": 0.0,
+   "mode": "condor",
+   "n_before": 15,
+   "profit_take": 0.5,
+   "slip_min": 0.05,
+   "slip_pct": 0.005,
+   "symbols": null,
+   "top_n": 0
+  },
+  "NOT_TESTED": [
+   "the 75-minute confirm",
+   "the intraday alignment with the session's open",
+   "the intraday cut at the moment the level breaks (the proxy exits at that session's settle)",
+   "the loss cut read from a live mark (the proxy reads the settle)"
+  ]
+ }
+}

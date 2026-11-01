@@ -346,7 +346,7 @@ class Settings(BaseSettings):
     swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2). Falls back to ``nifty-50``
     #: when the named index has no snapshot; a missing benchmark is not a bear market.
-    swing_index_slug: str = "nifty-mid-small-400"
+    swing_index_slug: str = "nifty-smallcap-250"
     #: SW15 "Scan now": the least time between two requests from the one tenant, in seconds.
     #: A scan is a few minutes of Polars over the liquid universe and, during the session, one
     #: Kite quote call per 500 names under the shared limiter (STANDING-ANSWERS B10) — a
@@ -484,6 +484,8 @@ class Settings(BaseSettings):
     # be added (``02`` Track B).
     fno_f1_execution_enabled: bool = False
     fno_f2_execution_enabled: bool = False
+    #: F3 (M.5). Reported only. Its exit flag is the desk's and is not read here.
+    fno_f3_execution_enabled: bool = False
     fno_carry_enabled: bool = False
     fno_scan_enabled: bool = False
     fno_monitor_enabled: bool = False

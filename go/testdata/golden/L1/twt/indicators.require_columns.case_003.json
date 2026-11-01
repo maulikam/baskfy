@@ -1,0 +1,83 @@
+{
+ "fn": "baskfy_core.twt.indicators.require_columns",
+ "inputs": {
+  "bars": {
+   "columns": [
+    "instrument_id",
+    "symbol",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "adj_factor",
+    "is_etf"
+   ],
+   "dtypes": {
+    "adj_factor": "Float64",
+    "close": "Float64",
+    "date": "Date",
+    "high": "Float64",
+    "instrument_id": "Int64",
+    "is_etf": "Boolean",
+    "low": "Float64",
+    "open": "Float64",
+    "symbol": "String",
+    "volume": "Float64"
+   },
+   "rows": [
+    [
+     1,
+     "A",
+     "2024-01-01",
+     9.95,
+     10.1,
+     9.9,
+     10.0,
+     100000.0,
+     1.0,
+     false
+    ],
+    [
+     1,
+     "A",
+     "2024-01-02",
+     10.95,
+     11.11,
+     10.89,
+     11.0,
+     100000.0,
+     1.0,
+     false
+    ],
+    [
+     1,
+     "A",
+     "2024-01-03",
+     11.94,
+     12.12,
+     11.88,
+     12.0,
+     100000.0,
+     1.0,
+     false
+    ]
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "close_raw missing: ValueError naming it. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "bars are missing required columns ['close_raw']; got ['instrument_id', 'symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'adj_factor', 'is_etf']",
+   "type": "ValueError"
+  }
+ }
+}

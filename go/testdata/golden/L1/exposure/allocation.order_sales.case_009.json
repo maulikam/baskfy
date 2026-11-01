@@ -1,0 +1,142 @@
+{
+ "fn": "baskfy_core.exposure.allocation.order_sales",
+ "inputs": {
+  "nearby_band": 0,
+  "positions": [
+   {
+    "average_price": 125.83,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 41.75,
+    "quantity": 168,
+    "rank": 15,
+    "symbol": "P00"
+   },
+   {
+    "average_price": 50.27,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 328.32,
+    "quantity": 119,
+    "rank": 29,
+    "symbol": "P01"
+   },
+   {
+    "average_price": 441.41,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 12.2,
+    "quantity": 53,
+    "rank": 14,
+    "symbol": "P02"
+   },
+   {
+    "average_price": 438.44,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 193.2,
+    "quantity": 469,
+    "rank": 14,
+    "symbol": "P03"
+   },
+   {
+    "average_price": 413.96,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 304.24,
+    "quantity": 98,
+    "rank": 12,
+    "symbol": "P04"
+   },
+   {
+    "average_price": 88.88,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 261.21,
+    "quantity": 191,
+    "rank": 38,
+    "symbol": "P05"
+   }
+  ],
+  "tax_flagged": [
+   "P00",
+   "P05"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "positions in sale order. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "average_price": 88.88,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 261.21,
+   "quantity": 191,
+   "rank": 38,
+   "symbol": "P05"
+  },
+  {
+   "average_price": 50.27,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 328.32,
+   "quantity": 119,
+   "rank": 29,
+   "symbol": "P01"
+  },
+  {
+   "average_price": 125.83,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 41.75,
+   "quantity": 168,
+   "rank": 15,
+   "symbol": "P00"
+  },
+  {
+   "average_price": 441.41,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 12.2,
+   "quantity": 53,
+   "rank": 14,
+   "symbol": "P02"
+  },
+  {
+   "average_price": 438.44,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 193.2,
+   "quantity": 469,
+   "rank": 14,
+   "symbol": "P03"
+  },
+  {
+   "average_price": 413.96,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 304.24,
+   "quantity": 98,
+   "rank": 12,
+   "symbol": "P04"
+  }
+ ]
+}

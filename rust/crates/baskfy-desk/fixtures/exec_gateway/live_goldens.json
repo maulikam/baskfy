@@ -1,0 +1,3230 @@
+{
+ "note": "Written by tools/parity/exec_gateway_live_goldens.py: the Python gateway, dry_run=False, over the replay Kite. Do not edit by hand.",
+ "nse_csv": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n738561,2885,RELIANCE,RELIANCE,0,,0,0.05,1,EQ,NSE,NSE\n2748929,10738,OFSS,OFSS,0,,0,1.0,1,EQ,NSE,NSE\n1,1,SONACOMS,SONACOMS,0,,0,0.1,1,EQ,NSE,NSE\n2,2,NOTICK,NOTICK,0,,0,0,1,EQ,NSE,NSE\n",
+ "nfo_csv": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n11,11,RELIANCE26NOVFUT,RELIANCE,0,2026-11-24,0,0.1,250,FUT,NFO-FUT,NFO\n",
+ "scenarios": [
+  {
+   "name": "the weekly book's live day: buy, replay, sell, arm, re-size, cancel, remove",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {},
+   "ops": [
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "PLAN1:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "PLAN1:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "OFSS",
+      "qty": 3,
+      "side": "SELL",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 2749.95,
+      "exchange": "NSE",
+      "client_id": "PLAN1:OFSS",
+      "gross_exposure": 8249.85,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "SONACOMS",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 612.37,
+      "exchange": "NSE",
+      "client_id": "PLAN1:SONACOMS",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "tick_size": 0.1
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "PLAN1:RELIANCE"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "PLAN1:RELIANCE"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "OFSS",
+      "qty": 3,
+      "trigger": 2515.1,
+      "last_price": 2750.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "PLAN1:OFSS",
+      "limit_fraction": 0.97
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "NOTICK",
+      "qty": 10,
+      "trigger": 89.03,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "PLAN1:NOTICK"
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "qty": 7,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "qty": 7,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "cancel",
+     "args": {
+      "order_id": "REPLAY000001",
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 900001,
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "PLAN1:RELIANCE"
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE",
+     "status": "PLACED",
+     "order_id": "REPLAY000001"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "DUPLICATE",
+     "order_id": "REPLAY000001"
+    },
+    {
+     "symbol": "OFSS",
+     "status": "PLACED",
+     "order_id": "REPLAY000002"
+    },
+    {
+     "symbol": "SONACOMS",
+     "status": "PLACED",
+     "order_id": "REPLAY000003"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900001,
+     "trigger": 89.0,
+     "limit": 88.55
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "DUPLICATE",
+     "gtt_id": 900001
+    },
+    {
+     "symbol": "OFSS",
+     "status": "GTT_PLACED",
+     "gtt_id": 900002,
+     "trigger": 2515.0,
+     "limit": 2440.0
+    },
+    {
+     "symbol": "NOTICK",
+     "status": "GTT_PLACED",
+     "gtt_id": 900003,
+     "trigger": 89.05,
+     "limit": 88.6
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "GTT_MODIFIED",
+     "trigger": 89.0,
+     "limit": 88.55,
+     "qty": 7
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "GTT_MODIFIED",
+     "trigger": 89.0,
+     "limit": 88.55,
+     "qty": 7
+    },
+    {
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "status": "ORDER_CANCELLED"
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "status": "GTT_DELETED"
+    }
+   ],
+   "journal": [
+    {
+     "event": "placed",
+     "order_id": "REPLAY000001",
+     "variety": "regular",
+     "exchange": "NSE",
+     "tradingsymbol": "RELIANCE",
+     "quantity": 10,
+     "transaction_type": "BUY",
+     "product": "CNC",
+     "order_type": "LIMIT",
+     "validity": "DAY",
+     "price": 100.0,
+     "client_id": "PLAN1:RELIANCE"
+    },
+    {
+     "event": "placed",
+     "order_id": "REPLAY000002",
+     "variety": "regular",
+     "exchange": "NSE",
+     "tradingsymbol": "OFSS",
+     "quantity": 3,
+     "transaction_type": "SELL",
+     "product": "CNC",
+     "order_type": "LIMIT",
+     "validity": "DAY",
+     "price": 2749.9,
+     "client_id": "PLAN1:OFSS"
+    },
+    {
+     "event": "placed",
+     "order_id": "REPLAY000003",
+     "variety": "regular",
+     "exchange": "NSE",
+     "tradingsymbol": "SONACOMS",
+     "quantity": 10,
+     "transaction_type": "BUY",
+     "product": "CNC",
+     "order_type": "LIMIT",
+     "validity": "DAY",
+     "price": 612.4,
+     "client_id": "PLAN1:SONACOMS"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "qty": 10,
+     "trigger": 89.0,
+     "limit": 88.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 11.0,
+     "client_id": "PLAN1:RELIANCE"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "OFSS",
+     "gtt_id": 900002,
+     "qty": 3,
+     "trigger": 2515.0,
+     "limit": 2440.0,
+     "limit_fraction": 0.97,
+     "last_price": 2750.0,
+     "exchange": "NSE",
+     "drop_pct": 8.55,
+     "client_id": "PLAN1:OFSS"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "NOTICK",
+     "gtt_id": 900003,
+     "qty": 10,
+     "trigger": 89.05,
+     "limit": 88.6,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 10.95,
+     "client_id": "PLAN1:NOTICK"
+    },
+    {
+     "event": "gtt_modified",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "qty": 7,
+     "trigger": 89.0,
+     "limit": 88.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "gtt_modified",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "qty": 7,
+     "trigger": 89.0,
+     "limit": 88.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "order_cancelled",
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "variety": "regular",
+     "client_id": null
+    },
+    {
+     "event": "gtt_deleted",
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "exchange": "NSE",
+     "client_id": "PLAN1:RELIANCE"
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "RELIANCE",
+      "transaction_type": "BUY",
+      "quantity": 10,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "OFSS",
+      "transaction_type": "SELL",
+      "quantity": 3,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 2749.9,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "SONACOMS",
+      "transaction_type": "BUY",
+      "quantity": 10,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 612.4,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 4,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NSE"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 5,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 6,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"OFSS\", \"trigger_values\": [2515.0], \"last_price\": 2750.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"OFSS\", \"transaction_type\": \"SELL\", \"quantity\": 3, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 2440.0}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 7,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"NOTICK\", \"trigger_values\": [89.05], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"NOTICK\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.6}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 8,
+     "route": "gtt.modify",
+     "method": "PUT",
+     "url_args": {
+      "trigger_id": 4242
+     },
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 7, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 9,
+     "route": "gtt.modify",
+     "method": "PUT",
+     "url_args": {
+      "trigger_id": 4242
+     },
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 7, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 10,
+     "route": "order.cancel",
+     "method": "DELETE",
+     "url_args": {
+      "variety": "regular",
+      "order_id": "REPLAY000001"
+     },
+     "params": {
+      "parent_order_id": null
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 11,
+     "route": "gtt.delete",
+     "method": "DELETE",
+     "url_args": {
+      "trigger_id": 900001
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "the band, the snap and a stop that is not a stop",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {},
+   "ops": [
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 99.5,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "close"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 80.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "far"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 92.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "min"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 88.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "max"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 101.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "above"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "OFSS",
+      "qty": 1,
+      "trigger": 2749.6,
+      "last_price": 2750.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "snaps-up"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 0,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "zero"
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "qty": 7,
+      "trigger": 100.5,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900001,
+     "trigger": 99.5,
+     "limit": 99.0
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900002,
+     "trigger": 80.0,
+     "limit": 79.6
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900003,
+     "trigger": 92.0,
+     "limit": 91.55
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900004,
+     "trigger": 88.0,
+     "limit": 87.55
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "RELIANCE: trigger 101.0 is at or above the last price 100.0 -- that is not a stop, it would fire immediately and sell the position"
+    },
+    {
+     "symbol": "OFSS",
+     "status": "BLOCKED",
+     "error": "OFSS: trigger 2750.0 is at or above the last price 2750.0 -- that is not a stop, it would fire immediately and sell the position"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "RELIANCE: GTT quantity must be positive, got 0"
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "BLOCKED",
+     "error": "RELIANCE: trigger 100.5 is at or above the last price 100.0 -- that is not a stop, it would fire immediately and sell the position"
+    }
+   ],
+   "journal": [
+    {
+     "event": "gtt_band_warning",
+     "symbol": "RELIANCE",
+     "finding": "too_close",
+     "drop_pct": 0.5,
+     "band": [
+      0.08,
+      0.12
+     ],
+     "client_id": "close"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "qty": 10,
+     "trigger": 99.5,
+     "limit": 99.0,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 0.5,
+     "client_id": "close"
+    },
+    {
+     "event": "gtt_band_warning",
+     "symbol": "RELIANCE",
+     "finding": "too_far",
+     "drop_pct": 20.0,
+     "band": [
+      0.08,
+      0.12
+     ],
+     "client_id": "far"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900002,
+     "qty": 10,
+     "trigger": 80.0,
+     "limit": 79.6,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 20.0,
+     "client_id": "far"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900003,
+     "qty": 10,
+     "trigger": 92.0,
+     "limit": 91.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 8.0,
+     "client_id": "min"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900004,
+     "qty": 10,
+     "trigger": 88.0,
+     "limit": 87.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 12.0,
+     "client_id": "max"
+    },
+    {
+     "event": "gtt_block",
+     "symbol": "RELIANCE",
+     "qty": 10,
+     "trigger": 101.0,
+     "last_price": 100.0,
+     "why": "RELIANCE: trigger 101.0 is at or above the last price 100.0 -- that is not a stop, it would fire immediately and sell the position",
+     "client_id": "above"
+    },
+    {
+     "event": "gtt_band_warning",
+     "symbol": "OFSS",
+     "finding": "too_close",
+     "drop_pct": 0.01,
+     "band": [
+      0.08,
+      0.12
+     ],
+     "client_id": "snaps-up"
+    },
+    {
+     "event": "gtt_block",
+     "symbol": "OFSS",
+     "qty": 1,
+     "trigger": 2750.0,
+     "requested_trigger": 2749.6,
+     "tick": 1.0,
+     "last_price": 2750.0,
+     "stage": "after_tick_snap",
+     "why": "OFSS: trigger 2750.0 is at or above the last price 2750.0 -- that is not a stop, it would fire immediately and sell the position",
+     "client_id": "snaps-up"
+    },
+    {
+     "event": "gtt_block",
+     "symbol": "RELIANCE",
+     "qty": 0,
+     "trigger": 89.0,
+     "last_price": 100.0,
+     "why": "RELIANCE: GTT quantity must be positive, got 0",
+     "client_id": "zero"
+    },
+    {
+     "event": "gtt_modify_block",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "qty": 7,
+     "trigger": 100.5,
+     "last_price": 100.0,
+     "why": "RELIANCE: trigger 100.5 is at or above the last price 100.0 -- that is not a stop, it would fire immediately and sell the position",
+     "client_id": "RESIZE:RELIANCE"
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NSE"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [99.5], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 99.0}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [80.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 79.6}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 4,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [92.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 91.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 5,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [88.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 87.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "a swing book's band, injected",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {},
+   "stop_band": [
+    0.005,
+    0.1
+   ],
+   "ops": [
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 98.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "tight"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 85.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "wide"
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900001,
+     "trigger": 98.0,
+     "limit": 97.5
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900002,
+     "trigger": 85.0,
+     "limit": 84.6
+    }
+   ],
+   "journal": [
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "qty": 10,
+     "trigger": 98.0,
+     "limit": 97.5,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 2.0,
+     "client_id": "tight"
+    },
+    {
+     "event": "gtt_band_warning",
+     "symbol": "RELIANCE",
+     "finding": "too_far",
+     "drop_pct": 15.0,
+     "band": [
+      0.005,
+      0.1
+     ],
+     "client_id": "wide"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900002,
+     "qty": 10,
+     "trigger": 85.0,
+     "limit": 84.6,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 15.0,
+     "client_id": "wide"
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NSE"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [98.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 97.5}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [85.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 84.6}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "the broker refuses every write, definitively",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {
+    "order.place": {
+     "error": {
+      "type": "InputException",
+      "message": "broker refused order.place",
+      "code": 400
+     }
+    },
+    "gtt.place": {
+     "error": {
+      "type": "InputException",
+      "message": "broker refused gtt.place",
+      "code": 400
+     }
+    },
+    "gtt.modify": {
+     "error": {
+      "type": "InputException",
+      "message": "broker refused gtt.modify",
+      "code": 400
+     }
+    },
+    "gtt.delete": {
+     "error": {
+      "type": "InputException",
+      "message": "broker refused gtt.delete",
+      "code": 400
+     }
+    },
+    "order.cancel": {
+     "error": {
+      "type": "OrderException",
+      "message": "broker refused order.cancel",
+      "code": 400
+     }
+    }
+   },
+   "ops": [
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "PLAN1:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "PLAN1:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "A"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "A"
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "qty": 7,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "cancel",
+     "args": {
+      "order_id": "REPLAY000001",
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE",
+     "status": "REJECTED",
+     "error": "broker refused order.place",
+     "exception": "InputException",
+     "reached_exchange": false
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "REJECTED",
+     "error": "broker refused order.place",
+     "exception": "InputException",
+     "reached_exchange": false
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_ERROR",
+     "error": "broker refused gtt.place",
+     "exception": "InputException",
+     "reached_exchange": null
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "DUPLICATE",
+     "gtt_id": "PENDING-A"
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "GTT_MODIFY_ERROR",
+     "error": "broker refused gtt.modify",
+     "exception": "InputException",
+     "reached_exchange": null
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "GTT_DELETE_ERROR",
+     "error": "broker refused gtt.delete"
+    },
+    {
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "status": "ORDER_CANCEL_ERROR",
+     "error": "broker refused order.cancel"
+    }
+   ],
+   "journal": [
+    {
+     "event": "rejected",
+     "symbol": "RELIANCE",
+     "error": "broker refused order.place",
+     "exception": "InputException",
+     "client_id": "PLAN1:RELIANCE"
+    },
+    {
+     "event": "rejected",
+     "symbol": "RELIANCE",
+     "error": "broker refused order.place",
+     "exception": "InputException",
+     "client_id": "PLAN1:RELIANCE"
+    },
+    {
+     "event": "gtt_error",
+     "symbol": "RELIANCE",
+     "stage": "place_gtt",
+     "error": "broker refused gtt.place",
+     "exception": "InputException",
+     "trigger": 89.0,
+     "qty": 10,
+     "client_id": "A"
+    },
+    {
+     "event": "gtt_modify_error",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "stage": "modify_gtt",
+     "error": "broker refused gtt.modify",
+     "exception": "InputException",
+     "trigger": 89.0,
+     "qty": 7,
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "gtt_delete_error",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "error": "broker refused gtt.delete",
+     "exception": "InputException",
+     "client_id": null
+    },
+    {
+     "event": "order_cancel_error",
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "error": "broker refused order.cancel",
+     "exception": "OrderException",
+     "client_id": null
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "RELIANCE",
+      "transaction_type": "BUY",
+      "quantity": 10,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "RELIANCE",
+      "transaction_type": "BUY",
+      "quantity": 10,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NSE"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 4,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 5,
+     "route": "gtt.modify",
+     "method": "PUT",
+     "url_args": {
+      "trigger_id": 4242
+     },
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 7, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 6,
+     "route": "gtt.delete",
+     "method": "DELETE",
+     "url_args": {
+      "trigger_id": 4242
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 7,
+     "route": "order.cancel",
+     "method": "DELETE",
+     "url_args": {
+      "variety": "regular",
+      "order_id": "REPLAY000001"
+     },
+     "params": {
+      "parent_order_id": null
+     },
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "the broker fails in a way that says nothing about the exchange",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {
+    "order.place": {
+     "error": {
+      "type": "NetworkException",
+      "message": "broker refused order.place",
+      "code": 400
+     }
+    },
+    "market.instruments": {
+     "error": {
+      "type": "DataException",
+      "message": "broker refused market.instruments",
+      "code": 400
+     }
+    }
+   },
+   "ops": [
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "PLAN1:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "PLAN1:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "B"
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE",
+     "status": "ERROR",
+     "error": "broker refused order.place",
+     "exception": "NetworkException",
+     "reached_exchange": null
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "DUPLICATE",
+     "order_id": "PENDING-PLAN1:RELIANCE"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900001,
+     "trigger": 89.0,
+     "limit": 88.55
+    }
+   ],
+   "journal": [
+    {
+     "event": "error",
+     "symbol": "RELIANCE",
+     "error": "broker refused order.place",
+     "exception": "NetworkException",
+     "client_id": "PLAN1:RELIANCE"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "qty": 10,
+     "trigger": 89.0,
+     "limit": 88.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 11.0,
+     "client_id": "B"
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "RELIANCE",
+      "transaction_type": "BUY",
+      "quantity": 10,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NSE"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "risk: a market order valued by its reference, an unpriced one, a big one, the kill switch",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {},
+   "ops": [
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "MARKET",
+      "price": null,
+      "exchange": "NSE",
+      "client_id": "M:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "reference_price": 100.0,
+      "market_protection": 2.0
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "MARKET",
+      "price": null,
+      "exchange": "NSE",
+      "client_id": "M2:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 100000,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 5000.0,
+      "exchange": "NSE",
+      "client_id": "BIG:RELIANCE",
+      "gross_exposure": 500000000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "kill"
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "K:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "K"
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "qty": 7,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "cancel",
+     "args": {
+      "order_id": "REPLAY000001",
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE",
+     "status": "PLACED",
+     "order_id": "REPLAY000001"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "MARKET order for RELIANCE carries no finite positive price and no finite reference_price; the risk check cannot value it"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "RISK_BLOCKED",
+     "error": "RELIANCE position value 500,001,000 > cap"
+    },
+    {
+     "killed": true
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "RISK_BLOCKED",
+     "error": "KILL SWITCH: daily loss cap hit (-500,000)"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "GTT_PLACED",
+     "gtt_id": 900001,
+     "trigger": 89.0,
+     "limit": 88.55
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "GTT_MODIFIED",
+     "trigger": 89.0,
+     "limit": 88.55,
+     "qty": 7
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "RISK_BLOCKED",
+     "error": "KILL SWITCH: daily loss cap hit (-500,000) — a stop is not removed while the kill switch is live"
+    },
+    {
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "status": "ORDER_CANCELLED"
+    }
+   ],
+   "journal": [
+    {
+     "event": "placed",
+     "order_id": "REPLAY000001",
+     "variety": "regular",
+     "exchange": "NSE",
+     "tradingsymbol": "RELIANCE",
+     "quantity": 10,
+     "transaction_type": "BUY",
+     "product": "CNC",
+     "order_type": "MARKET",
+     "validity": "DAY",
+     "market_protection": 2.0,
+     "client_id": "M:RELIANCE"
+    },
+    {
+     "event": "unpriced_order_block",
+     "symbol": "RELIANCE",
+     "side": "BUY",
+     "qty": 10,
+     "order_type": "MARKET",
+     "valuation": null,
+     "client_id": "M2:RELIANCE"
+    },
+    {
+     "event": "risk_block",
+     "symbol": "RELIANCE",
+     "why": "RELIANCE position value 500,001,000 > cap",
+     "client_id": "BIG:RELIANCE"
+    },
+    {
+     "event": "risk_block",
+     "symbol": "RELIANCE",
+     "why": "KILL SWITCH: daily loss cap hit (-500,000)",
+     "client_id": "K:RELIANCE"
+    },
+    {
+     "event": "gtt_risk_note",
+     "symbol": "RELIANCE",
+     "qty": 10,
+     "trigger": 89.0,
+     "why": "KILL SWITCH: daily loss cap hit (-500,000)",
+     "note": "kill switch is live; a protective stop is still armed",
+     "client_id": "K"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE",
+     "gtt_id": 900001,
+     "qty": 10,
+     "trigger": 89.0,
+     "limit": 88.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "drop_pct": 11.0,
+     "client_id": "K"
+    },
+    {
+     "event": "gtt_risk_note",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "qty": 7,
+     "trigger": 89.0,
+     "why": "KILL SWITCH: daily loss cap hit (-500,000)",
+     "note": "kill switch is live; a protective stop is still re-sized",
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "gtt_modified",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "qty": 7,
+     "trigger": 89.0,
+     "limit": 88.55,
+     "limit_fraction": 0.995,
+     "last_price": 100.0,
+     "exchange": "NSE",
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "gtt_delete_risk_block",
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "why": "KILL SWITCH: daily loss cap hit (-500,000) — a stop is not removed while the kill switch is live",
+     "client_id": null
+    },
+    {
+     "event": "order_cancelled",
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "variety": "regular",
+     "client_id": null
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NSE",
+      "tradingsymbol": "RELIANCE",
+      "transaction_type": "BUY",
+      "quantity": 10,
+      "product": "CNC",
+      "order_type": "MARKET",
+      "validity": "DAY",
+      "market_protection": 2.0
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NSE"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 10, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 4,
+     "route": "gtt.modify",
+     "method": "PUT",
+     "url_args": {
+      "trigger_id": 4242
+     },
+     "params": {
+      "condition": "{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"trigger_values\": [89.0], \"last_price\": 100.0}",
+      "orders": "[{\"exchange\": \"NSE\", \"tradingsymbol\": \"RELIANCE\", \"transaction_type\": \"SELL\", \"quantity\": 7, \"order_type\": \"LIMIT\", \"product\": \"CNC\", \"price\": 88.55}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 5,
+     "route": "order.cancel",
+     "method": "DELETE",
+     "url_args": {
+      "variety": "regular",
+      "order_id": "REPLAY000001"
+     },
+     "params": {
+      "parent_order_id": null
+     },
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "untouchables, tenancy and the product gates, with the broker watching",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {},
+   "ops": [
+    {
+     "op": "place",
+     "args": {
+      "symbol": "SGBJUN29",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "P:SGBJUN29",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "SOMEBOND",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "P:SOMEBOND",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "series": "GB"
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "X:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       2,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "MIS",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NSE",
+      "client_id": "MIS:RELIANCE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "NIFTY25SEPFUT",
+      "qty": 10,
+      "side": "BUY",
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NFO",
+      "client_id": "F:NIFTY25SEPFUT",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "NIFTY2692223700CE",
+      "qty": 10,
+      "side": "BUY",
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 100.0,
+      "exchange": "NFO",
+      "client_id": "O:CE",
+      "gross_exposure": 1000.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "SGBDE31III-GB",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "client_id": "S"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "series": "GS",
+      "client_id": "GS"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       2,
+       1
+      ],
+      "client_id": "T"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "NIFTY25SEPFUT",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "exchange": "NFO",
+      "client_id": "NF"
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "NIFTY25SEP24000CE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "exchange": "NFO",
+      "client_id": "NO"
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "SGBJUN29",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 0,
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "delete",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       2,
+       1
+      ]
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "SGBJUN29",
+      "qty": 7,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "cancel",
+     "args": {
+      "order_id": "REPLAY000001",
+      "symbol": "SGBJUN29",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ]
+     }
+    },
+    {
+     "op": "cancel",
+     "args": {
+      "order_id": "REPLAY000001",
+      "symbol": "RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       2,
+       1
+      ]
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "SGBJUN29",
+     "status": "BLOCKED",
+     "error": "SGBJUN29: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "SOMEBOND",
+     "status": "BLOCKED",
+     "error": "SOMEBOND: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "tenant mismatch: caller (1,1) != plan (2,1)"
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "MIS/intraday disabled (config.INTRADAY_ENABLED)"
+    },
+    {
+     "symbol": "NIFTY25SEPFUT",
+     "status": "BLOCKED",
+     "error": "F&O/derivatives disabled (config.OPTIONS_ENABLED)"
+    },
+    {
+     "symbol": "NIFTY2692223700CE",
+     "status": "BLOCKED",
+     "error": "NIFTY2692223700CE: NRML would carry this option past the close. This system never holds an option overnight — option orders are MIS only."
+    },
+    {
+     "symbol": "SGBDE31III-GB",
+     "status": "BLOCKED",
+     "error": "SGBDE31III-GB: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "RELIANCE: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "RELIANCE",
+     "status": "BLOCKED",
+     "error": "tenant mismatch: caller (1,1) != plan (2,1)"
+    },
+    {
+     "symbol": "NIFTY25SEPFUT",
+     "status": "BLOCKED",
+     "error": "F&O/derivatives disabled (config.OPTIONS_ENABLED)"
+    },
+    {
+     "symbol": "NIFTY25SEP24000CE",
+     "status": "BLOCKED",
+     "error": "NIFTY25SEP24000CE: CNC would carry this option past the close. This system never holds an option overnight — option orders are MIS only."
+    },
+    {
+     "symbol": "",
+     "gtt_id": 4242,
+     "status": "BLOCKED",
+     "error": "a GTT cannot be cancelled without naming its instrument: the untouchable guard has nothing to check"
+    },
+    {
+     "symbol": "SGBJUN29",
+     "gtt_id": 4242,
+     "status": "BLOCKED",
+     "error": "SGBJUN29: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 0,
+     "status": "BLOCKED",
+     "error": "RELIANCE: 0 is not a GTT trigger id"
+    },
+    {
+     "symbol": "RELIANCE",
+     "gtt_id": 4242,
+     "status": "BLOCKED",
+     "error": "tenant mismatch: caller (1,1) != plan (2,1)"
+    },
+    {
+     "symbol": "SGBJUN29",
+     "gtt_id": 4242,
+     "status": "BLOCKED",
+     "error": "SGBJUN29: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "SGBJUN29",
+     "order_id": "REPLAY000001",
+     "status": "BLOCKED",
+     "error": "SGBJUN29: protected instrument (SGB/G-sec). This system will never trade it."
+    },
+    {
+     "symbol": "RELIANCE",
+     "order_id": "REPLAY000001",
+     "status": "BLOCKED",
+     "error": "tenant mismatch: caller (1,1) != plan (2,1)"
+    }
+   ],
+   "journal": [
+    {
+     "event": "untouchable_block",
+     "symbol": "SGBJUN29",
+     "series": null,
+     "side": "BUY",
+     "client_id": "P:SGBJUN29"
+    },
+    {
+     "event": "untouchable_block",
+     "symbol": "SOMEBOND",
+     "series": "GB",
+     "side": "BUY",
+     "client_id": "P:SOMEBOND"
+    },
+    {
+     "event": "overnight_option_block",
+     "symbol": "NIFTY2692223700CE",
+     "product": "NRML",
+     "side": "BUY",
+     "exchange": "NFO",
+     "client_id": "O:CE"
+    },
+    {
+     "event": "gtt_untouchable_block",
+     "symbol": "SGBDE31III-GB",
+     "series": null,
+     "qty": 10,
+     "trigger": 89.0,
+     "client_id": "S"
+    },
+    {
+     "event": "gtt_untouchable_block",
+     "symbol": "RELIANCE",
+     "series": "GS",
+     "qty": 10,
+     "trigger": 89.0,
+     "client_id": "GS"
+    },
+    {
+     "event": "gtt_overnight_option_block",
+     "symbol": "NIFTY25SEP24000CE",
+     "exchange": "NFO",
+     "qty": 10,
+     "trigger": 89.0,
+     "client_id": "NO"
+    },
+    {
+     "event": "gtt_delete_block",
+     "gtt_id": 4242,
+     "why": "a GTT cannot be cancelled without naming its instrument: the untouchable guard has nothing to check",
+     "client_id": null
+    },
+    {
+     "event": "gtt_delete_untouchable_block",
+     "symbol": "SGBJUN29",
+     "gtt_id": 4242,
+     "client_id": null
+    },
+    {
+     "event": "gtt_delete_block",
+     "symbol": "RELIANCE",
+     "gtt_id": 0,
+     "why": "RELIANCE: 0 is not a GTT trigger id",
+     "client_id": null
+    },
+    {
+     "event": "gtt_modify_untouchable_block",
+     "symbol": "SGBJUN29",
+     "gtt_id": 4242,
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "order_cancel_untouchable_block",
+     "symbol": "SGBJUN29",
+     "order_id": "REPLAY000001",
+     "client_id": null
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "F&O with every switch on: the F2 future, its trail, a covered condor and a naked short",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": true,
+    "options_enabled": true,
+    "fno_carry_enabled": true
+   },
+   "fail": {},
+   "coverage": true,
+   "ops": [
+    {
+     "op": "place",
+     "args": {
+      "symbol": "RELIANCE26NOVFUT",
+      "qty": 250,
+      "side": "BUY",
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 1100.0,
+      "exchange": "NFO",
+      "client_id": "F2-1:RELIANCE26NOVFUT",
+      "gross_exposure": 0.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "fo_plan": {
+       "plan_id": "F2-1",
+       "sleeve": "F2"
+      }
+     }
+    },
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE26NOVFUT",
+      "qty": 250,
+      "trigger": 1000.0,
+      "last_price": 1100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "exchange": "NFO",
+      "client_id": "F2-1:RELIANCE26NOVFUT",
+      "fo_plan": {
+       "plan_id": "F2-1",
+       "sleeve": "F2"
+      }
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 900001,
+      "symbol": "RELIANCE26NOVFUT",
+      "qty": 250,
+      "trigger": 1040.0,
+      "last_price": 1100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "exchange": "NFO",
+      "floor_trigger": 1000.0,
+      "fo_plan": {
+       "plan_id": "F2-1",
+       "sleeve": "F2"
+      }
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 900001,
+      "symbol": "RELIANCE26NOVFUT",
+      "qty": 250,
+      "trigger": 990.0,
+      "last_price": 1100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "exchange": "NFO",
+      "floor_trigger": 1040.0,
+      "fo_plan": {
+       "plan_id": "F2-1",
+       "sleeve": "F2"
+      }
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "NIFTY26NOV23500PE",
+      "qty": 75,
+      "side": "BUY",
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 10.0,
+      "exchange": "NFO",
+      "client_id": "FOPLAN-1:NIFTY26NOV23500PE",
+      "gross_exposure": 0.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "fo_plan": {
+       "plan_id": "FOPLAN-1",
+       "sleeve": "F1N",
+       "step": {
+        "underlying": "NIFTY",
+        "expiry": "2026-11-24",
+        "option_type": "PE",
+        "strike": "23500",
+        "quantity": 75
+       }
+      }
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "NIFTY26NOV24000PE",
+      "qty": 75,
+      "side": "SELL",
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 10.0,
+      "exchange": "NFO",
+      "client_id": "FOPLAN-1:NIFTY26NOV24000PE",
+      "gross_exposure": 0.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "fo_plan": {
+       "plan_id": "FOPLAN-1",
+       "sleeve": "F1N",
+       "step": {
+        "underlying": "NIFTY",
+        "expiry": "2026-11-24",
+        "option_type": "PE",
+        "strike": "24000",
+        "quantity": -75
+       },
+       "plan_filled": [
+        {
+         "underlying": "NIFTY",
+         "expiry": "2026-11-24",
+         "option_type": "PE",
+         "strike": "23500",
+         "quantity": 75
+        }
+       ]
+      }
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "NIFTY26NOV26000CE",
+      "qty": 75,
+      "side": "SELL",
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 10.0,
+      "exchange": "NFO",
+      "client_id": "FOPLAN-1:NIFTY26NOV26000CE",
+      "gross_exposure": 0.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "fo_plan": {
+       "plan_id": "FOPLAN-1",
+       "sleeve": "F1N",
+       "step": {
+        "underlying": "NIFTY",
+        "expiry": "2026-11-24",
+        "option_type": "CE",
+        "strike": "26000",
+        "quantity": -75
+       }
+      }
+     }
+    },
+    {
+     "op": "place",
+     "args": {
+      "symbol": "NIFTY26NOV25000CE",
+      "qty": 150,
+      "side": "SELL",
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 10.0,
+      "exchange": "NFO",
+      "client_id": "FOPLAN-2:NIFTY26NOV25000CE",
+      "gross_exposure": 0.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "fo_plan": {
+       "plan_id": "FOPLAN-2",
+       "sleeve": "F1N",
+       "step": {
+        "underlying": "NIFTY",
+        "expiry": "2026-11-24",
+        "option_type": "CE",
+        "strike": "25000",
+        "quantity": -75
+       },
+       "broker_positions": [
+        {
+         "underlying": "NIFTY",
+         "expiry": "2026-11-24",
+         "option_type": "CE",
+         "strike": "25500",
+         "quantity": 75
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "results": [
+    {
+     "symbol": "RELIANCE26NOVFUT",
+     "status": "PLACED",
+     "order_id": "REPLAY000001"
+    },
+    {
+     "symbol": "RELIANCE26NOVFUT",
+     "status": "GTT_PLACED",
+     "gtt_id": 900001,
+     "trigger": 1000.0,
+     "limit": 995.0
+    },
+    {
+     "symbol": "RELIANCE26NOVFUT",
+     "gtt_id": 900001,
+     "status": "GTT_MODIFIED",
+     "trigger": 1040.0,
+     "limit": 1034.8,
+     "qty": 250
+    },
+    {
+     "symbol": "RELIANCE26NOVFUT",
+     "gtt_id": 900001,
+     "status": "BLOCKED",
+     "error": "RELIANCE26NOVFUT: trigger 990.0 is below the resting 1040.0; a trail is never lowered (docs/fno/04 §10)"
+    },
+    {
+     "symbol": "NIFTY26NOV23500PE",
+     "status": "PLACED",
+     "order_id": "REPLAY000002"
+    },
+    {
+     "symbol": "NIFTY26NOV24000PE",
+     "status": "PLACED",
+     "order_id": "REPLAY000003"
+    },
+    {
+     "symbol": "NIFTY26NOV26000CE",
+     "status": "BLOCKED",
+     "error": "NIFTY26NOV26000CE: the book after this order would hold an uncovered short option — NIFTY 2026-11-24 26000 CE: short 75 with only 0 long further out"
+    },
+    {
+     "symbol": "NIFTY26NOV25000CE",
+     "status": "BLOCKED",
+     "error": "fo_plan FOPLAN-2: NIFTY26NOV25000CE: the order is SELL 150 but the plan step is -75"
+    }
+   ],
+   "journal": [
+    {
+     "event": "placed",
+     "order_id": "REPLAY000001",
+     "variety": "regular",
+     "exchange": "NFO",
+     "tradingsymbol": "RELIANCE26NOVFUT",
+     "quantity": 250,
+     "transaction_type": "BUY",
+     "product": "NRML",
+     "order_type": "LIMIT",
+     "validity": "DAY",
+     "price": 1100.0,
+     "client_id": "F2-1:RELIANCE26NOVFUT"
+    },
+    {
+     "event": "gtt_placed",
+     "symbol": "RELIANCE26NOVFUT",
+     "gtt_id": 900001,
+     "qty": 250,
+     "trigger": 1000.0,
+     "limit": 995.0,
+     "limit_fraction": 0.995,
+     "last_price": 1100.0,
+     "exchange": "NFO",
+     "drop_pct": 9.09,
+     "client_id": "F2-1:RELIANCE26NOVFUT"
+    },
+    {
+     "event": "gtt_modified",
+     "symbol": "RELIANCE26NOVFUT",
+     "gtt_id": 900001,
+     "qty": 250,
+     "trigger": 1040.0,
+     "limit": 1034.8,
+     "limit_fraction": 0.995,
+     "last_price": 1100.0,
+     "exchange": "NFO",
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "gtt_modify_fo_block",
+     "symbol": "RELIANCE26NOVFUT",
+     "gtt_id": 900001,
+     "exchange": "NFO",
+     "qty": 250,
+     "trigger": 990.0,
+     "floor_trigger": 1040.0,
+     "fo_plan": "F2-1",
+     "why": "RELIANCE26NOVFUT: trigger 990.0 is below the resting 1040.0; a trail is never lowered (docs/fno/04 §10)",
+     "client_id": "RESIZE:RELIANCE"
+    },
+    {
+     "event": "placed",
+     "order_id": "REPLAY000002",
+     "variety": "regular",
+     "exchange": "NFO",
+     "tradingsymbol": "NIFTY26NOV23500PE",
+     "quantity": 75,
+     "transaction_type": "BUY",
+     "product": "NRML",
+     "order_type": "LIMIT",
+     "validity": "DAY",
+     "price": 10.0,
+     "client_id": "FOPLAN-1:NIFTY26NOV23500PE"
+    },
+    {
+     "event": "placed",
+     "order_id": "REPLAY000003",
+     "variety": "regular",
+     "exchange": "NFO",
+     "tradingsymbol": "NIFTY26NOV24000PE",
+     "quantity": 75,
+     "transaction_type": "SELL",
+     "product": "NRML",
+     "order_type": "LIMIT",
+     "validity": "DAY",
+     "price": 10.0,
+     "client_id": "FOPLAN-1:NIFTY26NOV24000PE"
+    },
+    {
+     "event": "fo_uncovered_block",
+     "symbol": "NIFTY26NOV26000CE",
+     "product": "NRML",
+     "side": "SELL",
+     "qty": 75,
+     "exchange": "NFO",
+     "fo_plan": "FOPLAN-1",
+     "why": "NIFTY26NOV26000CE: the book after this order would hold an uncovered short option — NIFTY 2026-11-24 26000 CE: short 75 with only 0 long further out",
+     "client_id": "FOPLAN-1:NIFTY26NOV26000CE"
+    },
+    {
+     "event": "fo_uncovered_block",
+     "symbol": "NIFTY26NOV25000CE",
+     "product": "NRML",
+     "side": "SELL",
+     "qty": 150,
+     "exchange": "NFO",
+     "fo_plan": "FOPLAN-2",
+     "why": "fo_plan FOPLAN-2: NIFTY26NOV25000CE: the order is SELL 150 but the plan step is -75",
+     "client_id": "FOPLAN-2:NIFTY26NOV25000CE"
+    }
+   ],
+   "calls": [
+    {
+     "seq": 1,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NFO",
+      "tradingsymbol": "RELIANCE26NOVFUT",
+      "transaction_type": "BUY",
+      "quantity": 250,
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 1100.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 2,
+     "route": "market.instruments",
+     "method": "GET",
+     "url_args": {
+      "exchange": "NFO"
+     },
+     "params": null,
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 3,
+     "route": "gtt.place",
+     "method": "POST",
+     "url_args": null,
+     "params": {
+      "condition": "{\"exchange\": \"NFO\", \"tradingsymbol\": \"RELIANCE26NOVFUT\", \"trigger_values\": [1000.0], \"last_price\": 1100.0}",
+      "orders": "[{\"exchange\": \"NFO\", \"tradingsymbol\": \"RELIANCE26NOVFUT\", \"transaction_type\": \"SELL\", \"quantity\": 250, \"order_type\": \"LIMIT\", \"product\": \"NRML\", \"price\": 995.0}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 4,
+     "route": "gtt.modify",
+     "method": "PUT",
+     "url_args": {
+      "trigger_id": 900001
+     },
+     "params": {
+      "condition": "{\"exchange\": \"NFO\", \"tradingsymbol\": \"RELIANCE26NOVFUT\", \"trigger_values\": [1040.0], \"last_price\": 1100.0}",
+      "orders": "[{\"exchange\": \"NFO\", \"tradingsymbol\": \"RELIANCE26NOVFUT\", \"transaction_type\": \"SELL\", \"quantity\": 250, \"order_type\": \"LIMIT\", \"product\": \"NRML\", \"price\": 1034.8}]",
+      "type": "single"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 5,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NFO",
+      "tradingsymbol": "NIFTY26NOV23500PE",
+      "transaction_type": "BUY",
+      "quantity": 75,
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 10.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    },
+    {
+     "seq": 6,
+     "route": "order.place",
+     "method": "POST",
+     "url_args": {
+      "variety": "regular"
+     },
+     "params": {
+      "variety": "regular",
+      "exchange": "NFO",
+      "tradingsymbol": "NIFTY26NOV24000PE",
+      "transaction_type": "SELL",
+      "quantity": 75,
+      "product": "NRML",
+      "order_type": "LIMIT",
+      "price": 10.0,
+      "validity": "DAY"
+     },
+     "is_json": false,
+     "query_params": null
+    }
+   ]
+  },
+  {
+   "name": "a caller bug raises instead of answering",
+   "gates": {
+    "dry_run": false,
+    "intraday_enabled": false,
+    "options_enabled": false,
+    "fno_carry_enabled": false
+   },
+   "fail": {},
+   "ops": [
+    {
+     "op": "gtt",
+     "args": {
+      "symbol": "RELIANCE",
+      "qty": 10,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "limit_fraction": 1.03,
+      "client_id": "bad"
+     }
+    },
+    {
+     "op": "modify",
+     "args": {
+      "gtt_id": 4242,
+      "symbol": "RELIANCE",
+      "qty": 7,
+      "trigger": 89.0,
+      "last_price": 100.0,
+      "client_id": "RESIZE:RELIANCE",
+      "tenant": [
+       1,
+       1
+      ],
+      "plan_tenant": [
+       1,
+       1
+      ],
+      "limit_fraction": 0.0
+     }
+    }
+   ],
+   "results": [
+    {
+     "raised": [
+      "ValueError",
+      "limit_fraction must be in (0, 1], got 1.03: a GTT sell limit rests at or under its trigger, never above it"
+     ]
+    },
+    {
+     "raised": [
+      "ValueError",
+      "limit_fraction must be in (0, 1], got 0.0: a GTT sell limit rests at or under its trigger, never above it"
+     ]
+    }
+   ],
+   "journal": [],
+   "calls": []
+  }
+ ]
+}

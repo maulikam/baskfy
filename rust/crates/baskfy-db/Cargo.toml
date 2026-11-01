@@ -1,0 +1,27 @@
+[package]
+name = "baskfy-db"
+version = "0.1.0"
+description = "Baskfy's Postgres access: one read-only sqlx pool and typed row helpers, against the schema Alembic (Python) owns."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+# float_repr: a jsonb float is written back as Python's repr (json.rs).
+baskfy-core = { workspace = true }
+# Secret (a URL carries a password and must never print).
+baskfy-providers = { workspace = true }
+sqlx = { workspace = true }
+rust_decimal = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

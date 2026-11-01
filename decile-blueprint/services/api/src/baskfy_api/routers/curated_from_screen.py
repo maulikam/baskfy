@@ -24,6 +24,7 @@ gate is decided and this route is inside it.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, status
@@ -172,8 +173,14 @@ async def _sized(
     session: SessionDep,
     definition: ScreenDefinition,
     body: FromScreenIn,
+    *,
+    default_holdings: int | None = None,
 ) -> tuple[SizedBasket, dt.date]:
-    """Run the screen and size the result. Raises a 400 for an unfillable request."""
+    """Run the screen and size the result. Raises a 400 for an unfillable request.
+
+    ``default_holdings`` is a count the *caller* did not type (a re-cut keeping the current
+    version's size), so it is trimmed to what the screen returned rather than refused.
+    """
     resolution = await resolve_as_of(session, definition.historical_date)
     data_version = await current_data_version(session)
     columns = list(resolve_columns())
@@ -207,7 +214,9 @@ async def _sized(
             candidates,
             amount=body.amount,
             profile=body.profile,
-            holdings=body.holdings,
+            holdings=body.holdings
+            if body.holdings is not None or default_holdings is None
+            else max(MIN_HOLDINGS, min(default_holdings, len(candidates))),
             cash_pct=resolved_cash,
             method=body.method,
             custom_weights=_custom_map(body.custom_weights),
@@ -215,6 +224,28 @@ async def _sized(
     except ValueError as exc:
         raise Problem(ProblemType.INVALID_SCREEN_DEFINITION, str(exc)) from exc
     return sized, result.as_of
+
+
+async def _instruments_for(session: SessionDep, symbols: list[str]) -> dict[str, Instrument]:
+    """Upper-case symbol → active instrument row, for every name the screen ranked."""
+    instruments = (
+        await session.scalars(
+            select(Instrument).where(
+                func.upper(Instrument.symbol).in_(symbols),
+                Instrument.is_active.is_(True),
+            )
+        )
+    ).all()
+    by_symbol = {str(row.symbol).upper(): row for row in instruments}
+    missing = [symbol for symbol in symbols if symbol not in by_symbol]
+    if missing:
+        # The screen ranked a name this table cannot resolve, which is a data problem on our side
+        # rather than a bad request: the caller chose a screen, not a symbol list.
+        raise Problem(
+            ProblemType.INTERNAL_ERROR,
+            f"the screen ranked symbols with no active instrument row: {', '.join(missing)}",
+        )
+    return by_symbol
 
 
 @router.post(
@@ -247,23 +278,7 @@ async def create_basket_from_screen(
     sized, as_of = await _sized(session, definition, body)
 
     symbols = [holding.symbol for holding in sized.holdings]
-    instruments = (
-        await session.scalars(
-            select(Instrument).where(
-                func.upper(Instrument.symbol).in_(symbols),
-                Instrument.is_active.is_(True),
-            )
-        )
-    ).all()
-    by_symbol = {str(row.symbol).upper(): row for row in instruments}
-    missing = [symbol for symbol in symbols if symbol not in by_symbol]
-    if missing:
-        # The screen ranked a name this table cannot resolve, which is a data problem on our side
-        # rather than a bad request: the caller chose a screen, not a symbol list.
-        raise Problem(
-            ProblemType.INTERNAL_ERROR,
-            f"the screen ranked symbols with no active instrument row: {', '.join(missing)}",
-        )
+    by_symbol = await _instruments_for(session, symbols)
 
     manager_id = await session.scalar(
         select(CbManager.id).where(CbManager.slug == MANAGER_SLUG_MAULIK)
@@ -360,4 +375,197 @@ async def create_basket_from_screen(
         fundable=sized.is_fundable,
         method=sized.method,
         holdings=out,
+    )
+
+
+# --- Re-cut on demand ----------------------------------------------------------------------------
+#
+# Maulik, in session, 14 Oct 2026: a basket saved from a screen is a snapshot of the day it was
+# saved, and nothing ever re-ran the screen — ``source_screen_id`` was stored "to make the re-cut
+# possible" (migration 0017) and then never read. His choice among the two ways to close that:
+# **on demand**, not on a schedule — "re-run the screen, see what was added and removed, and decide
+# when to rebalance". So this is one route with two steps: ``confirm=false`` previews and writes
+# nothing; ``confirm=true`` writes the next immutable version. Same server-side rule as the create
+# route above: the body names no holding; the constituents are whatever the screen returns now.
+
+#: Weights do not depend on the amount (``SizedHolding.weight`` is a share of the deployed money),
+#: but ``size_basket`` needs one to run. A re-cut stores weights only, so any positive figure works.
+_RECUT_NOMINAL_AMOUNT = Decimal(1_000_000)
+
+#: The create route writes ``"..., {method} weights."`` into the GENESIS notes and the re-cut writes
+#: the same tail, so the method a basket was cut with can be carried forward without a new column.
+_METHOD_IN_NOTES = re.compile(r"\b(" + "|".join(m.value for m in WeightMethod) + r") weights\.")
+
+
+class RecutIn(BaseModel):
+    """``confirm=false`` is a preview. Nothing else is required: the defaults keep the cut."""
+
+    confirm: bool = False
+    #: Defaults to the current version's name count.
+    holdings: int | None = Field(default=None, ge=MIN_HOLDINGS, le=MAX_HOLDINGS)
+    #: Defaults to the method the current version was cut with (``CUSTOM`` falls back to ``EQUAL``:
+    #: custom weights were typed for names the screen may no longer return).
+    method: WeightMethod | None = None
+
+
+class RecutHoldingOut(BaseModel):
+    rank: int
+    symbol: str
+    weight: Decimal
+    #: The weight this name has in the current version, or ``None`` when it is new.
+    previous_weight: Decimal | None
+
+
+class RecutOut(BaseModel):
+    slug: str
+    screen_public_id: str
+    as_of: dt.date
+    method: WeightMethod
+    #: The method was CUSTOM and could not be carried over; the preview says so instead of guessing.
+    method_fell_back: bool
+    current_version_no: int
+    added: list[str]
+    removed: list[str]
+    kept: list[str]
+    #: Names or weights differ from the current version. ``False``: a re-cut would change nothing.
+    changed: bool
+    #: ``True`` only when ``confirm`` was sent **and** something changed — an unchanged cut is never
+    #: written, so a double click cannot stack identical versions.
+    written: bool
+    #: The version this call wrote, or ``None``.
+    version_no: int | None
+    holdings: list[RecutHoldingOut]
+
+
+def _method_from_notes(notes: str | None) -> WeightMethod | None:
+    match = _METHOD_IN_NOTES.search(notes or "")
+    return WeightMethod(match.group(1)) if match else None
+
+
+@router.post(
+    "/cb/baskets/{slug}/recut",
+    response_model=RecutOut,
+    summary="Re-run a screen basket's screen; preview, or save it as the next version",
+)
+async def recut_basket_from_screen(
+    slug: str,
+    body: RecutIn,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    entitlements: EntitlementsDep,
+) -> RecutOut:
+    """Re-cut a ``source = 'SCREEN'`` basket from the screen it was saved from (no order path)."""
+    await scoped_sole_user_id(session, principal.user_id)
+
+    basket = (
+        await session.execute(
+            select(CbBasket).where(CbBasket.slug == slug, CbBasket.archived_at.is_(None))
+        )
+    ).scalar_one_or_none()
+    if basket is None:
+        raise not_found("basket", slug)
+    if basket.source != "SCREEN" or basket.source_screen_id is None:
+        raise Problem(
+            ProblemType.INVALID_SCREEN_DEFINITION,
+            "only a basket saved from a screen can be re-cut, and this one's screen is not "
+            "recorded (or was deleted)",
+        )
+
+    screen = await session.get(Screen, basket.source_screen_id)
+    if screen is None or not (screen.user_id is None or screen.user_id == principal.user_id):
+        raise not_found("screen", str(basket.source_screen_id))
+    definition = ScreenDefinition.model_validate(screen.definition)
+    entitlements.require_universe(definition.index)
+
+    current = (
+        await session.execute(
+            select(CbBasketVersion)
+            .where(CbBasketVersion.basket_id == basket.id)
+            .order_by(CbBasketVersion.version_no.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    previous: dict[str, Decimal] = {}
+    if current is not None:
+        rows = (
+            await session.execute(
+                select(Instrument.symbol, CbConstituent.weight)
+                .join(Instrument, Instrument.id == CbConstituent.instrument_id)
+                .where(CbConstituent.version_id == current.id)
+            )
+        ).all()
+        previous = {str(symbol).upper(): Decimal(weight) for symbol, weight in rows}
+
+    carried = body.method or _method_from_notes(current.notes_md if current else None)
+    fell_back = body.method is None and carried is WeightMethod.CUSTOM
+    method = WeightMethod.EQUAL if carried in {None, WeightMethod.CUSTOM} else carried
+    sized, as_of = await _sized(
+        session,
+        definition,
+        FromScreenIn(
+            screen_public_id=screen.public_id,
+            amount=_RECUT_NOMINAL_AMOUNT,
+            holdings=body.holdings,
+            method=method,
+        ),
+        default_holdings=min(len(previous), MAX_HOLDINGS) if previous else None,
+    )
+    new_weights = {holding.symbol.upper(): holding.weight for holding in sized.holdings}
+    added = [symbol for symbol in new_weights if symbol not in previous]
+    removed = sorted(symbol for symbol in previous if symbol not in new_weights)
+    kept = [symbol for symbol in new_weights if symbol in previous]
+    changed = new_weights != previous
+
+    version_no: int | None = None
+    if body.confirm and changed:
+        by_symbol = await _instruments_for(session, list(new_weights))
+        version = CbBasketVersion(
+            basket_id=basket.id,
+            version_no=(current.version_no if current else 0) + 1,
+            effective_date=as_of,
+            label="CHANGED",
+            added_count=len(added),
+            removed_count=len(removed),
+            notes_md=(
+                f"Re-cut from screen {screen.public_id!r} as of {as_of.isoformat()}, "
+                f"{method} weights."
+            ),
+            source_scan_run_id=None,
+        )
+        session.add(version)
+        await session.flush()
+        for holding in sized.holdings:
+            session.add(
+                CbConstituent(
+                    version_id=version.id,
+                    instrument_id=by_symbol[holding.symbol.upper()].id,
+                    segment="Equity",
+                    weight=holding.weight,
+                )
+            )
+        await session.commit()
+        version_no = int(version.version_no)
+
+    return RecutOut(
+        slug=basket.slug,
+        screen_public_id=screen.public_id,
+        as_of=as_of,
+        method=method,
+        method_fell_back=fell_back,
+        current_version_no=int(current.version_no) if current else 0,
+        added=added,
+        removed=removed,
+        kept=kept,
+        changed=changed,
+        written=version_no is not None,
+        version_no=version_no,
+        holdings=[
+            RecutHoldingOut(
+                rank=holding.rank,
+                symbol=holding.symbol,
+                weight=holding.weight,
+                previous_weight=previous.get(holding.symbol.upper()),
+            )
+            for holding in sized.holdings
+        ],
     )

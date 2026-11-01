@@ -1,0 +1,31 @@
+{
+ "fn": "baskfy_core.factor_registry.get",
+ "inputs": {
+  "key": "desk_score"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "get('desk_score'). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "components": [],
+  "definition": "The momentum book's own 0-100 SCORE for the name, from desk_score_daily (docs/ranking/PLAN.md C2).",
+  "family": "non_momentum",
+  "higher_is_better": true,
+  "is_computed": true,
+  "is_stored": false,
+  "key": "desk_score",
+  "label": "DESK MOMENTUM QUALITY SCORE",
+  "null_policy": "insufficient_history",
+  "preference": "higher",
+  "rankable": true,
+  "sql_expr": "__computed_not_sql__",
+  "unit": "ratio",
+  "validation_status": "legacy",
+  "weight_family": "momentum"
+ }
+}

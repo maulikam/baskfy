@@ -81,6 +81,7 @@ from baskfy_core.swing.config import (
 from baskfy_core.swing.indicators import liquid_expr, with_swing_indicators
 from baskfy_core.swing.journal import ClosedTrade
 from baskfy_core.swing.market import (
+    INDEX_HISTORY_SESSIONS,
     BreadthSnapshot,
     ExposureTier,
     IndexReading,
@@ -88,6 +89,7 @@ from baskfy_core.swing.market import (
     breadth_snapshot,
     drawdown_pct,
     exposure_tier,
+    index_reading,
     market_gate,
 )
 from baskfy_core.swing.setups import CANDIDATE_COLUMNS, detect_setups
@@ -593,7 +595,7 @@ async def load_index_reading(  # noqa: PLR0913 - one keyword per input the readi
     we cannot read is not a bear market.
     """
     for candidate in (slug, fallback):
-        levels = await _index_levels(session, on, candidate, config.market.index_ma_slow)
+        levels = await _index_levels(session, on, candidate, INDEX_HISTORY_SESSIONS)
         # TODAY'S LEVEL, WHEN THE CALLER HAS ONE (9 Sep 2026).
         #
         # Maulik: "tomorrow it might get green on live market data ... once a user logs in and
@@ -612,11 +614,11 @@ async def load_index_reading(  # noqa: PLR0913 - one keyword per input the readi
         # level belongs to the benchmark the caller quoted, and silently applying it to the
         # fallback would put one index's price in another index's average.
         if live_level is not None and candidate == slug:
-            levels = [*levels, float(live_level)][-config.market.index_ma_slow :]
-        if len(levels) >= config.market.index_ma_slow:
-            fast = sum(levels[-config.market.index_ma_fast :]) / config.market.index_ma_fast
-            slow = sum(levels[-config.market.index_ma_slow :]) / config.market.index_ma_slow
-            return IndexReading(close=levels[-1], ma_fast=fast, ma_slow=slow), candidate
+            levels = [*levels, float(live_level)][-INDEX_HISTORY_SESSIONS:]
+        # SW31 (Maulik, 30 Sep 2026): exponential averages — his chart's EMA(10) and EMA(20).
+        reading = index_reading(levels, config.market)
+        if reading is not None:
+            return reading, candidate
     return None, None
 
 
@@ -828,7 +830,7 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     trade_date: dt.date,
     *,
     user_id: int,
-    index_slug: str = "nifty-mid-small-400",
+    index_slug: str = "nifty-smallcap-250",
     execution_enabled: bool = False,
     pipeline_run_id: int | None = None,
     extra_bars: pl.DataFrame | None = None,

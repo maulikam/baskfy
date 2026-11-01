@@ -4,6 +4,7 @@
   "account": {
    "cash_available": "1000000",
    "equity": "1000000",
+   "open_entry_counts": {},
    "open_exposure_inr": "0",
    "open_symbols": []
   },
@@ -79,6 +80,7 @@
     "default_window_minutes": 5,
     "entry_limit_buffer_pct": 0.5,
     "entry_limit_max_adr": 0.25,
+    "entry_order_type": "MARKET",
     "fill_poll_interval_seconds": 0.5,
     "fill_poll_seconds": 10.0,
     "gtt_sweep_at": [
@@ -87,7 +89,13 @@
     ],
     "live_min_gap_pct": 10.0,
     "live_min_volume_pace": 3.0,
+    "market_protection_floor_pct": 0.05,
+    "market_protection_max_pct": 3.0,
     "monitor_close": [
+     15,
+     30
+    ],
+    "pending_cutoff_at": [
      10,
      45
     ],
@@ -111,11 +119,13 @@
    },
    "sizing": {
     "first_live_sessions": 5,
+    "max_entries_per_name": 2,
     "max_new_entries_per_session": 3,
     "max_open_positions": 10,
     "max_position_pct": 20.0,
     "max_position_vs_turnover": 0.01,
-    "min_trade_value_inr": 10000.0,
+    "min_trade_value_inr": "10000",
+    "pyramiding": true,
     "risk_multiplier_first_live": 0.5,
     "risk_per_trade_pct": 0.5
    },
@@ -173,6 +183,7 @@
    {
     "kind": "BUY_ON_TRIGGER",
     "note": "EP score 88; stop 4.26% below; size by RISK; trail MA20",
+    "position_id": null,
     "position_value": "117201.50",
     "quantity": 950,
     "risk_inr": "4997.00",

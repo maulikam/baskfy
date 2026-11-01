@@ -1,0 +1,41 @@
+{
+ "fn": "baskfy_core.backtest.CostSpec.charge",
+ "inputs": {
+  "costs": {
+   "brokerage_bps": "3",
+   "impact_model": "fixed",
+   "slippage_bps": "15",
+   "stt_bps": "10"
+  },
+  "notionals": [
+   "0",
+   "100000.00",
+   "-100000.00",
+   "12345.67",
+   "0.33",
+   "1",
+   "99999999.99"
+  ],
+  "scale": null
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "docs/10 defaults (28 bps); sign ignored; half-up to the paisa. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "charges": [
+   "0.00",
+   "280.00",
+   "280.00",
+   "34.57",
+   "0.00",
+   "0.00",
+   "280000.00"
+  ],
+  "total_bps": "28"
+ }
+}

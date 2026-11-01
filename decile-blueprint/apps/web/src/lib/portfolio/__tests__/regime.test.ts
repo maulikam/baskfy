@@ -377,8 +377,8 @@ describe("figures RegimeOut does not carry", () => {
   });
 
   it("names the desk's three structural indices rather than the swing book's gate index", () => {
-    /* CLAUDE.md, "When the code and a doc disagree": the SWING gate reads NIFTY MidSmallcap 400
-       (SW17, 67df9b4). This is the WEEKLY desk's regime, whose `RegimeConfig.structural_indices`
+    /* CLAUDE.md, "When the code and a doc disagree": the SWING gate reads NIFTY Smallcap 250
+       (SW29, 29 Sep 2026; SW17 had set MidSmallcap 400). This is the WEEKLY desk's regime, whose `RegimeConfig.structural_indices`
        are NIFTY 50, NIFTY MIDCAP 150 and NIFTY SMLCAP 250. Two books, two questions. */
     const r = ready();
     const dma = r.unavailable.find((u) => u.id === "index-dma");

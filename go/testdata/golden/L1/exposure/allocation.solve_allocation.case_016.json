@@ -1,0 +1,166 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "c0",
+    "liquidity": 100000000.0,
+    "price": 100.0,
+    "rank": 1,
+    "score": 80.0,
+    "symbol": "S00"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999999.0,
+    "price": 100.0,
+    "rank": 2,
+    "score": 79.0,
+    "symbol": "S01"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999998.0,
+    "price": 100.0,
+    "rank": 3,
+    "score": 78.0,
+    "symbol": "S02"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999997.0,
+    "price": 100.0,
+    "rank": 4,
+    "score": 77.0,
+    "symbol": "S03"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 99999996.0,
+    "price": 100.0,
+    "rank": 5,
+    "score": 76.0,
+    "symbol": "S04"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999995.0,
+    "price": 100.0,
+    "rank": 6,
+    "score": 75.0,
+    "symbol": "S05"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999994.0,
+    "price": 100.0,
+    "rank": 7,
+    "score": 74.0,
+    "symbol": "S06"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999993.0,
+    "price": 100.0,
+    "rank": 8,
+    "score": 73.0,
+    "symbol": "S07"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 99999992.0,
+    "price": 100.0,
+    "rank": 9,
+    "score": 72.0,
+    "symbol": "S08"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999991.0,
+    "price": 100.0,
+    "rank": 10,
+    "score": 71.0,
+    "symbol": "S09"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999990.0,
+    "price": 100.0,
+    "rank": 11,
+    "score": 70.0,
+    "symbol": "S10"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999989.0,
+    "price": 100.0,
+    "rank": 12,
+    "score": 69.0,
+    "symbol": "S11"
+   }
+  ],
+  "cluster_cap": 25.0,
+  "half_factor": 0.3,
+  "half_sized": [
+   "S00",
+   "S01"
+  ],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 100.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "c0": 21.867474,
+   "c1": 21.85,
+   "c2": 25.0,
+   "c3": 24.999999
+  },
+  "half_sized": [
+   "S00",
+   "S01"
+  ],
+  "notes": [
+   "cluster cap applied: c2, c3",
+   "cluster cap applied: c0",
+   "sleeve utilisation 93.7%"
+  ],
+  "sleeve_pct": 100.0,
+  "weights_nav": {
+   "S00": 1.342511,
+   "S01": 1.35,
+   "S02": 8.783784,
+   "S03": 8.789954,
+   "S04": 10.539846,
+   "S05": 10.530822,
+   "S06": 8.333333,
+   "S07": 8.333333,
+   "S08": 9.985117,
+   "S09": 9.969178,
+   "S10": 7.882883,
+   "S11": 7.876712
+  },
+  "weights_sleeve": {
+   "S00": 1.342511,
+   "S01": 1.35,
+   "S02": 8.783784,
+   "S03": 8.789954,
+   "S04": 10.539846,
+   "S05": 10.530822,
+   "S06": 8.333333,
+   "S07": 8.333333,
+   "S08": 9.985117,
+   "S09": 9.969178,
+   "S10": 7.882883,
+   "S11": 7.876712
+  }
+ }
+}

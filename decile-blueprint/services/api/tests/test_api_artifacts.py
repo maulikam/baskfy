@@ -276,6 +276,9 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # because it is served: the route runs the named screen server-side and stores what that
     # screen returned, so `source = 'SCREEN'` is a fact rather than a caller's claim.
     "/cb/baskets/from-screen": {"post"},
+    # Re-cut on demand (Maulik, 14 Oct 2026): re-runs a screen basket's own screen; previews, or
+    # writes the next version on confirm. Same catalog write, same order gate.
+    "/cb/baskets/{slug}/recut": {"post"},
     # T8.1: mark-as-invested records a broker book the user already traded. GET list/detail
     # and the accrued fee ledger. No execute — batch status on mark is always PLANNED.
     "/cb/investments": {"get"},
@@ -401,6 +404,12 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/options/config": {"get", "patch"},
     # FO5 (docs/fno/06): the FO run's read surface and its one money-free write. No execute
     # route (docs/fno/02 Track C §4); `test_fno_readonly.py` pins it.
+    "/opportunities/meta": {"get"},
+    "/opportunities/swing/scan": {"post"},
+    "/opportunities/swing/scan/stream": {"post"},
+    "/opportunities/swing/validate": {"post"},
+    "/opportunities/options/analyze": {"post"},
+    "/opportunities/agui": {"post"},
     "/fno/overnight": {"get"},
     "/fno/info": {"get"},
     "/fno/config": {"get", "patch"},

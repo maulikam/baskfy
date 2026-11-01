@@ -20,6 +20,8 @@ SOLE_BROKER_ACCOUNT_ID = int(os.getenv("BASKFY_SOLE_BROKER_ACCOUNT_ID", "1"))
 # allowlisted (a rotating residential v6 prefix) while the v4 address sat in the console.
 # Default ON: the failure it prevents is every order in a batch being rejected.
 FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() != "false"
+# Static-IP egress proxy for every Kite call (SEBI allowlist), e.g. https://user:pass@host:443.
+KITE_PROXY_URL = os.getenv("BASKFY_KITE_PROXY_URL", "").strip()
 
 # --- browser-facing security ----------------------------------------------------------
 # The interface places real orders. On a cloud host it is reached through an SSH tunnel,
@@ -30,6 +32,9 @@ FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() != "false"
 # "testserver" is the Host the test client sends. It is not a public name and nothing can
 # resolve to it, so allowing it costs nothing and keeps the suite honest about the rest.
 DESK_ALLOWED_HOSTS = os.getenv("DESK_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
+# Mount the desk under a path on the web app's own address (core/path_prefix.py). Empty = served
+# at the root of its own host, as on every deployment before 29 Oct 2026.
+DESK_PATH_PREFIX = os.getenv("DESK_PATH_PREFIX", "")
 DESK_PORT = int(os.getenv("DESK_PORT", "8420"))
 # Empty means no password, which is right for a laptop on loopback. Set it on any shared
 # or hosted box: loopback is not a boundary between users of the same machine.
@@ -150,6 +155,9 @@ SWING_MONITOR_ENABLED = os.getenv("BASKFY_SWING_MONITOR_ENABLED", "false").lower
 # (non-negotiable 4) and every gateway guard apply exactly as they do to a human click. What
 # is removed is the human, and nothing else.
 SWING_AUTO_EXECUTE = os.getenv("BASKFY_SWING_AUTO_EXECUTE", "false").lower() == "true"
+# SW29/SW30: the benchmark the swing gate reads — the worker's `swing_index_slug`, read from the
+# same environment name so the nightly and the session's live re-read ask about the same index.
+SWING_INDEX_SLUG = os.getenv("BASKFY_SWING_INDEX_SLUG", "nifty-smallcap-250")
 # SW15 "Scan now" from the desk page: the same two rules the API applies, read from the same
 # environment names so the two buttons cannot disagree — at least this many seconds between
 # two requests, and a QUEUED/RUNNING run older than this no longer counts as in flight.

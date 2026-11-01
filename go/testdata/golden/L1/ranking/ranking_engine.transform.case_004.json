@@ -1,0 +1,47 @@
+{
+ "fn": "baskfy_core.ranking_engine.transform",
+ "inputs": {
+  "term": {
+   "key": "ma_dist_50",
+   "label": "DISTANCE FROM MA 50",
+   "null_policy": "null_on_undefined_ratio",
+   "preference": "target_range",
+   "target_max": null,
+   "target_min": 30.0,
+   "weight": 1.0,
+   "weight_family": "trend_structure"
+  },
+  "values": [
+   10.0,
+   20.0,
+   20.0,
+   null,
+   40.0
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "target_range lower only. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "dtype": "float64",
+  "index": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
+  "values": [
+   0.0,
+   0.5,
+   0.5,
+   null,
+   1.0
+  ]
+ }
+}

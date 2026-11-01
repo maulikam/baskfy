@@ -1,0 +1,23 @@
+{
+ "fn": "baskfy_core.screener.cache_key",
+ "inputs": {
+  "as_of": "2026-08-18",
+  "columns": [
+   "ma_200"
+  ],
+  "data_version": 1,
+  "definition": {
+   "index": "nifty-500",
+   "sort_by": "ret_12m"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "columns change the digest. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "screen:4ae324a835f42c0ffe4833883a6799c749fb6ab56fe58662f6919d15e38fdef9:2026-08-18:1"
+}

@@ -29,6 +29,8 @@ import {
  * `nav.test.ts` still pins docs/08's IA — only where it is *drawn* moved.
  */
 export interface UserMenuProps {
+  /** Whether a session exists; when omitted, a non-empty `email` stands in for it. */
+  signedIn?: boolean;
   email: string | null;
   name: string | null;
   /**
@@ -53,8 +55,8 @@ const MENU_GROUPS = NAV_GROUPS.filter(
 
 const STAFF_ONLY_GROUPS = new Set(["Real money", "Operator"]);
 
-export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
-  if (!email) {
+export function UserMenu({ signedIn, email, name, isStaff = false }: UserMenuProps) {
+  if (!(signedIn ?? email !== null)) {
     return (
       <Button variant="outline" size="sm" asChild>
         <Link href="/login">
@@ -72,7 +74,7 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Account menu for ${email}`}>
+        <Button variant="ghost" size="icon" aria-label={`Account menu for ${email ?? name ?? "this account"}`}>
           <User aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>

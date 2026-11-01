@@ -1,0 +1,17 @@
+{
+ "fn": "baskfy_core.exposure.allocation.order_sales",
+ "inputs": {
+  "nearby_band": 3,
+  "positions": [],
+  "tax_flagged": []
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "positions in sale order. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": []
+}

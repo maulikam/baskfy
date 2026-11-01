@@ -1,0 +1,224 @@
+{
+ "fn": "baskfy_core.fno.journal.journal_figures",
+ "inputs": {
+  "fills": [
+   {
+    "filled_at": "2026-10-06T09:21:00",
+    "kind": "ENTRY",
+    "plan_id": "F1",
+    "price": "2450.5",
+    "quantity": 250,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-10-26T15:00:00",
+    "kind": "ROLL",
+    "plan_id": "R1",
+    "price": "2600",
+    "quantity": 250,
+    "side": "SELL"
+   },
+   {
+    "filled_at": "2026-10-26T15:00:05",
+    "kind": "ROLL",
+    "plan_id": "R1",
+    "price": "2615.5",
+    "quantity": 250,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-11-23T15:00:00",
+    "kind": "ROLL",
+    "plan_id": "R2",
+    "price": "2700",
+    "quantity": 250,
+    "side": "SELL"
+   },
+   {
+    "filled_at": "2026-11-23T15:00:03",
+    "kind": "ROLL",
+    "plan_id": "R2",
+    "price": "2712",
+    "quantity": 250,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-12-03T11:00:00",
+    "kind": "EXIT",
+    "plan_id": "F9",
+    "price": "2650",
+    "quantity": 250,
+    "side": "SELL"
+   }
+  ],
+  "future_rates": {
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.00173",
+   "gst_pct": "18",
+   "slippage_pct": "0.03",
+   "stamp_buy_pct": "0.002",
+   "stt_sell_pct": "0.05"
+  },
+  "marks_inr": [
+   "-5000",
+   "40000"
+  ],
+  "option_rates": {
+   "auto_squareoff_inr": "50",
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.03553",
+   "gst_pct": "18",
+   "ipft_per_crore_inr": "0.01",
+   "review_after_days": 90,
+   "reviewed_on": "2026-09-22",
+   "sebi_per_crore_inr": "10",
+   "stamp_buy_pct": "0.003",
+   "stt_exercise_intrinsic_pct": "0.15",
+   "stt_sell_premium_pct": "0.15",
+   "synthetic_half_spread_min_inr": "0.10",
+   "synthetic_half_spread_pct": "1.5"
+  },
+  "r_inr": "30187.5",
+  "structure": "FUTURE"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a future with two rolls, each journalled with its own costs. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cost_detail": {
+   "entry": {
+    "brokerage": "20.00",
+    "exchange_txn": "10.60",
+    "gst": "5.51",
+    "ipft": "0.00",
+    "orders": 1,
+    "sebi": "0.00",
+    "stamp": "12.25",
+    "stt": "0.00",
+    "total": "48.36"
+   },
+   "exit": {
+    "brokerage": "20.00",
+    "exchange_txn": "11.46",
+    "gst": "5.66",
+    "ipft": "0.00",
+    "orders": 1,
+    "sebi": "0.00",
+    "stamp": "0.00",
+    "stt": "331.25",
+    "total": "368.37"
+   },
+   "rolls": [
+    {
+     "bought_inr": "653875.00",
+     "costs": {
+      "brokerage": "40.00",
+      "exchange_txn": "22.56",
+      "gst": "11.26",
+      "ipft": "0.00",
+      "orders": 2,
+      "sebi": "0.00",
+      "stamp": "13.08",
+      "stt": "325.00",
+      "total": "411.90"
+     },
+     "on": "2026-10-26",
+     "plan_id": "R1",
+     "sold_inr": "650000.00"
+    },
+    {
+     "bought_inr": "678000.00",
+     "costs": {
+      "brokerage": "40.00",
+      "exchange_txn": "23.41",
+      "gst": "11.41",
+      "ipft": "0.00",
+      "orders": 2,
+      "sebi": "0.00",
+      "stamp": "13.56",
+      "stt": "337.50",
+      "total": "425.88"
+     },
+     "on": "2026-11-23",
+     "plan_id": "R2",
+     "sold_inr": "675000.00"
+    }
+   ],
+   "total": "1254.51"
+  },
+  "figures": {
+   "costs_inr": "1254.51",
+   "entry_costs": {
+    "brokerage": "20.00",
+    "exchange_txn": "10.60",
+    "gst": "5.51",
+    "ipft": "0.00",
+    "orders": 1,
+    "sebi": "0.00",
+    "stamp": "12.25",
+    "stt": "0.00",
+    "total": "48.36"
+   },
+   "entry_inr": "612625.00",
+   "exit_costs": {
+    "brokerage": "20.00",
+    "exchange_txn": "11.46",
+    "gst": "5.66",
+    "ipft": "0.00",
+    "orders": 1,
+    "sebi": "0.00",
+    "stamp": "0.00",
+    "stt": "331.25",
+    "total": "368.37"
+   },
+   "exit_inr": "662500.00",
+   "gross_pnl_inr": "43000.00",
+   "mae_r": "-0.17",
+   "mfe_r": "1.33",
+   "net_pnl_inr": "41745.49",
+   "r_inr": "30187.50",
+   "r_multiple": "1.38",
+   "rolls": [
+    {
+     "bought_inr": "653875.00",
+     "costs": {
+      "brokerage": "40.00",
+      "exchange_txn": "22.56",
+      "gst": "11.26",
+      "ipft": "0.00",
+      "orders": 2,
+      "sebi": "0.00",
+      "stamp": "13.08",
+      "stt": "325.00",
+      "total": "411.90"
+     },
+     "on": "2026-10-26",
+     "plan_id": "R1",
+     "sold_inr": "650000.00"
+    },
+    {
+     "bought_inr": "678000.00",
+     "costs": {
+      "brokerage": "40.00",
+      "exchange_txn": "23.41",
+      "gst": "11.41",
+      "ipft": "0.00",
+      "orders": 2,
+      "sebi": "0.00",
+      "stamp": "13.56",
+      "stt": "337.50",
+      "total": "425.88"
+     },
+     "on": "2026-11-23",
+     "plan_id": "R2",
+     "sold_inr": "675000.00"
+    }
+   ]
+  }
+ }
+}

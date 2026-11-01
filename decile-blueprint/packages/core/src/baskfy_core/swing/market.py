@@ -49,7 +49,7 @@ class BreadthSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class IndexReading:
-    """The benchmark index at the close, with its two MAs."""
+    """The benchmark index at the close, with its two EMAs (SW31; simple averages until then)."""
 
     close: float
     ma_fast: float
@@ -118,6 +118,69 @@ def market_gate(
     if breadth.pct_up_strong_1m >= config.green_min_pct_up and (index is None or index.long_bias):
         return MarketGate.GREEN
     return MarketGate.AMBER
+
+
+#: How many published closes an index reading is taken over. The averages are exponential
+#: (SW31), so the window is warm-up, not the average's length: 120 sessions already reproduce
+#: TradingView's EMA(10) and EMA(20) on NIFTY SMLCAP 250 to the paisa (29 Sep 2026: 18,086.77
+#: and 18,173.17); 250 leaves margin and is still one small query.
+INDEX_HISTORY_SESSIONS: Final = 250
+
+
+def ema(values: Sequence[float], length: int) -> float:
+    """The exponential moving average of ``values`` (oldest first) at the last value.
+
+    TradingView's `ta.ema`: ``alpha = 2 / (length + 1)``, seeded with the simple average of the
+    first ``length`` values. With fewer values than ``length`` it is their simple average.
+    """
+    if not values:
+        raise ValueError("an EMA of no values")
+    if len(values) <= length:
+        return sum(values) / len(values)
+    alpha = 2.0 / (length + 1)
+    value = sum(values[:length]) / length
+    for x in values[length:]:
+        value = alpha * x + (1.0 - alpha) * value
+    return value
+
+
+def index_reading(levels: Sequence[float], config: MarketConfig) -> IndexReading | None:
+    """The benchmark's newest level and its two EMAs (`04` §8.2), from levels oldest first.
+
+    **Exponential, by Maulik's correction (SW31, 30 Sep 2026)**: his chart's EMA(10, close) and
+    EMA(20, close); the simple averages this read until then were not the numbers he trades on.
+    ``None`` when there are fewer than ``index_ma_slow`` levels. Readers pass up to
+    :data:`INDEX_HISTORY_SESSIONS` closes; the session's live read (SW30) appends today's quote,
+    which is exactly the value the chart shows on the forming bar.
+    """
+    if len(levels) < config.index_ma_slow:
+        return None
+    return IndexReading(
+        close=float(levels[-1]),
+        ma_fast=ema(levels, config.index_ma_fast),
+        ma_slow=ema(levels, config.index_ma_slow),
+    )
+
+
+def intraday_tier(close: ExposureTier, gate: MarketGate, config: MarketConfig) -> ExposureTier:
+    """The rung while the gate is re-read on the live index during a session (SW30).
+
+    The ladder does not move intraday: its steps are "tomorrow's rung from today's results", and
+    a session has no results yet. Only the gate's two sides change what the rung allows:
+
+    * a drawdown lock-out holds whatever the index does — the lock is about the sleeve;
+    * a live RED is rung 0 with no new entries, as :func:`exposure_tier` makes a closing RED;
+    * a live GREEN or AMBER allows entries at the rung the last close left — rung 0 after a
+      closing RED, since the ladder climbs one step a night and never on a quote.
+    """
+    if close.drawdown_locked:
+        return close
+    if gate is MarketGate.RED:
+        positions, exposure = config.tiers[0]
+        return ExposureTier(0, positions, exposure, new_entries_allowed=False)
+    level = min(max(close.level, 0), len(config.tiers) - 1)
+    positions, exposure = config.tiers[level]
+    return ExposureTier(level, positions, exposure, new_entries_allowed=True)
 
 
 def _loss_streak(recent_r: Sequence[Decimal]) -> int:

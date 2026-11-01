@@ -147,6 +147,31 @@ CONDOR_DETAIL: dict[str, object] = {
 }
 
 
+F3_NO_SIGNAL_DETAIL: dict[str, object] = {
+    "underlying": "NIFTY",
+    "sleeve": "F3N",
+    "next_session": "2026-09-23",
+    "direction_daily": "DOWN",
+    "confirm": {"agrees": False, "message": "the 75-minute bar disagrees"},
+}
+F3_CANDIDATE_DETAIL: dict[str, object] = {
+    "underlying": "BANKNIFTY",
+    "sleeve": "F3B",
+    "next_session": "2026-09-23",
+    "entry_session": "2026-09-23",
+    "direction": "UP",
+    "level": "54210.00",
+    "expiry": "2026-09-29",
+    "expiry_kind": "monthly",
+    "legs": [
+        {"entry_seq": 1, "role": "LONG_PUT", "strike": "52300", "option_type": "PE"},
+        {"entry_seq": 2, "role": "SHORT_PUT", "strike": "53400", "option_type": "PE"},
+    ],
+    "credit_points": "31.45",
+    "max_loss_per_lot_inr": "32119.50",
+}
+
+
 async def _book(session: AsyncSession, user_id: int) -> int:
     """F1 and F2 scans, one open F1 structure with a mark, closed paper trades, re-test rows."""
     session.add_all(
@@ -162,6 +187,8 @@ async def _book(session: AsyncSession, user_id: int) -> int:
             _scan(user_id, "F2", "RELIANCE", "CANDIDATE", {"breakout_level": "1450.00"}),
             _scan(user_id, "F2", "TCS", "REJECTED_SIZE", {"risk_per_lot_inr": "61250.00"}),
             _scan(user_id, "F2", "INFY", "NO_SIGNAL", {}),
+            _scan(user_id, "F3N", "NIFTY", "NO_SIGNAL", F3_NO_SIGNAL_DETAIL),
+            _scan(user_id, "F3B", "BANKNIFTY", "CANDIDATE", F3_CANDIDATE_DETAIL),
         ]
     )
     session.add(
@@ -310,7 +337,21 @@ class TestTheEmptyPageSaysWhy:
         assert body["scan_date"] is None
         assert [u["symbol"] for u in body["underlyings"]] == ["NIFTY", "BANKNIFTY"]
         assert all(u["scan"] is None for u in body["underlyings"])
-        assert [g["mode"] for g in body["gates"]] == ["PAPER", "PAPER"]
+        assert [(g["group"], g["mode"]) for g in body["gates"]] == [
+            ("F1", "PAPER"),
+            ("F2", "PAPER"),
+            ("F3", "PAPER"),
+        ]
+        f3 = body["f3"]
+        assert f3["scan_date"] is None
+        assert [(u["symbol"], u["sleeve"]) for u in f3["underlyings"]] == [
+            ("NIFTY", "F3N"),
+            ("BANKNIFTY", "F3B"),
+        ]
+        assert all(u["scan"] is None for u in f3["underlyings"])
+        assert f3["open"] == [] and f3["closed"] == [] and f3["backtests"] == []
+        assert "the 75-minute confirm" in f3["not_tested"]
+        assert "-0.021R" in f3["research_line"]
         assert body["evidence"]["caveat"] == fno_read.TIER_2E_CAVEAT
 
     async def test_with_the_scan_on_and_no_row_it_is_never_scanned(
@@ -378,6 +419,32 @@ class TestTheOvernightPage:
         assert f2["open"] == []
         assert [c["symbol"] for c in f2["closed"]] == ["LT"]
         assert "+0.017R" in f2["research_line"]
+
+    async def test_it_serves_f3s_night_beside_f1_and_f2(
+        self, scan_on: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _tenant(screener_session, monkeypatch)
+        await _config(screener_session, user_id)
+        await _book(screener_session, user_id)
+        _clock(monkeypatch)
+        async with running_app(scan_on, screener_session) as client:
+            response = await client.get(url("/fno/overnight"), headers=bearer(public_id))
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        f3 = body["f3"]
+        assert f3["scan_date"] == "2026-09-22"
+        f3n, f3b = f3["underlyings"]
+        assert (f3n["sleeve"], f3n["scan"]["state"]) == ("F3N", "NO_SIGNAL")
+        assert f3n["next_entry_date"] == "2026-09-23", "the next session the desk may plan"
+        assert f3n["level"]["live_symbol"] == "NIFTY 50"
+        assert (f3b["sleeve"], f3b["scan"]["state"]) == ("F3B", "CANDIDATE")
+        assert f3b["scan"]["detail"]["credit_points"] == "31.45", "passed through, not re-rounded"
+        assert f3["open"] == [] and f3["closed"] == []
+        assert [b["family"] for b in f3["backtests"]] == [], "no F3 re-test has run in the fixture"
+        assert [u["scan"]["sleeve"] for u in body["underlyings"]] == ["F1N", "F1B"], (
+            "F3's rows never land on F1's cards"
+        )
 
     async def test_another_users_rows_are_not_served(
         self, scan_on: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

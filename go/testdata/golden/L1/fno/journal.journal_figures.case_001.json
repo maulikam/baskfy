@@ -1,0 +1,171 @@
+{
+ "fn": "baskfy_core.fno.journal.journal_figures",
+ "inputs": {
+  "fills": [
+   {
+    "filled_at": "2026-10-06T09:25:00",
+    "kind": "ENTRY",
+    "plan_id": "P1",
+    "price": "35",
+    "quantity": 75,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-10-06T09:25:00",
+    "kind": "ENTRY",
+    "plan_id": "P1",
+    "price": "30",
+    "quantity": 75,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-10-06T09:25:00",
+    "kind": "ENTRY",
+    "plan_id": "P1",
+    "price": "70",
+    "quantity": 75,
+    "side": "SELL"
+   },
+   {
+    "filled_at": "2026-10-06T09:25:00",
+    "kind": "ENTRY",
+    "plan_id": "P1",
+    "price": "60",
+    "quantity": 75,
+    "side": "SELL"
+   },
+   {
+    "filled_at": "2026-10-19T11:40:00",
+    "kind": "EXIT",
+    "plan_id": "P2",
+    "price": "9.85",
+    "quantity": 75,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-10-19T11:40:00",
+    "kind": "EXIT",
+    "plan_id": "P2",
+    "price": "1.20",
+    "quantity": 75,
+    "side": "SELL"
+   },
+   {
+    "filled_at": "2026-10-19T11:40:00",
+    "kind": "EXIT",
+    "plan_id": "P2",
+    "price": "9.85",
+    "quantity": 75,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-10-19T11:40:00",
+    "kind": "EXIT",
+    "plan_id": "P2",
+    "price": "1.20",
+    "quantity": 75,
+    "side": "SELL"
+   }
+  ],
+  "future_rates": {
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.00173",
+   "gst_pct": "18",
+   "slippage_pct": "0.03",
+   "stamp_buy_pct": "0.002",
+   "stt_sell_pct": "0.05"
+  },
+  "marks_inr": [
+   "-1200",
+   "2500.5",
+   "4100"
+  ],
+  "option_rates": {
+   "auto_squareoff_inr": "50",
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.03553",
+   "gst_pct": "18",
+   "ipft_per_crore_inr": "0.01",
+   "review_after_days": 90,
+   "reviewed_on": "2026-09-22",
+   "sebi_per_crore_inr": "10",
+   "stamp_buy_pct": "0.003",
+   "stt_exercise_intrinsic_pct": "0.15",
+   "stt_sell_premium_pct": "0.15",
+   "synthetic_half_spread_min_inr": "0.10",
+   "synthetic_half_spread_pct": "1.5"
+  },
+  "r_inr": "17625",
+  "structure": "IRON_CONDOR"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an iron condor closed at a profit. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cost_detail": {
+   "entry": {
+    "brokerage": "80.00",
+    "exchange_txn": "5.20",
+    "gst": "15.34",
+    "ipft": "0.00",
+    "orders": 4,
+    "sebi": "0.01",
+    "stamp": "0.15",
+    "stt": "14.63",
+    "total": "115.33"
+   },
+   "exit": {
+    "brokerage": "80.00",
+    "exchange_txn": "0.59",
+    "gst": "14.51",
+    "ipft": "0.00",
+    "orders": 4,
+    "sebi": "0.00",
+    "stamp": "0.04",
+    "stt": "0.27",
+    "total": "95.41"
+   },
+   "rolls": [],
+   "total": "210.74"
+  },
+  "figures": {
+   "costs_inr": "210.74",
+   "entry_costs": {
+    "brokerage": "80.00",
+    "exchange_txn": "5.20",
+    "gst": "15.34",
+    "ipft": "0.00",
+    "orders": 4,
+    "sebi": "0.01",
+    "stamp": "0.15",
+    "stt": "14.63",
+    "total": "115.33"
+   },
+   "entry_inr": "4875.00",
+   "exit_costs": {
+    "brokerage": "80.00",
+    "exchange_txn": "0.59",
+    "gst": "14.51",
+    "ipft": "0.00",
+    "orders": 4,
+    "sebi": "0.00",
+    "stamp": "0.04",
+    "stt": "0.27",
+    "total": "95.41"
+   },
+   "exit_inr": "1297.50",
+   "gross_pnl_inr": "3577.50",
+   "mae_r": "-0.07",
+   "mfe_r": "0.23",
+   "net_pnl_inr": "3366.76",
+   "r_inr": "17625.00",
+   "r_multiple": "0.19",
+   "rolls": []
+  }
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "fn": "baskfy_core.fno.gating.fno_gates",
+ "inputs": {
+  "flags": {
+   "dry_run": false,
+   "f1_execution_enabled": false,
+   "fno_carry_enabled": true,
+   "options_enabled": false
+  },
+  "sleeve": "F1N"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "F1N, dry_run=False, options_enabled=False, fno_carry_enabled=True, f1_execution_enabled=False. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "dry_run": true,
+  "fno_carry_enabled": true,
+  "intraday_enabled": false,
+  "mode": "PAPER",
+  "options_enabled": true,
+  "simulated": true,
+  "sleeve": "F1N"
+ }
+}

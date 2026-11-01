@@ -1,0 +1,140 @@
+{
+ "fn": "baskfy_core.vbt.plan.exit_lines",
+ "inputs": {
+  "book": {
+   "cash_available_inr": "1000000",
+   "entries_already_this_session": 0,
+   "open_entry_counts": {},
+   "open_exposure_inr": "0",
+   "open_instrument_ids": [],
+   "positions_naked_of_gtt": [
+    [
+     11,
+     "KKK",
+     25,
+     "301.15"
+    ]
+   ],
+   "working_instrument_ids": []
+  },
+  "expired": [
+   [
+    {
+     "cancel_reason": null,
+     "filled_quantity": 0,
+     "instrument_id": 9,
+     "limit_price": "100.00",
+     "quantity": 100,
+     "sessions_worked": 0,
+     "signal_date": "2024-01-02",
+     "state": "SENT",
+     "stop_price": "88.00"
+    },
+    "III"
+   ]
+  ],
+  "managed": [
+   [
+    1,
+    "AAA",
+    100,
+    {
+     "action": "QUEUE_SELL_AT_OPEN",
+     "new_stop": null,
+     "note": "close 97.5 below the 21-day EMA 98",
+     "price": null,
+     "quantity": null,
+     "reason": "EMA_EXIT"
+    }
+   ],
+   [
+    2,
+    "BBB",
+    99,
+    {
+     "action": "QUEUE_PARTIAL_AT_OPEN",
+     "new_stop": "100.25",
+     "note": "a third into strength",
+     "price": null,
+     "quantity": 33,
+     "reason": "PARTIAL"
+    }
+   ]
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "every kind at once, in exit_lines' own order. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "cap": null,
+   "instrument_id": 1,
+   "kind": "SELL_AT_OPEN",
+   "limit_price": null,
+   "note": "close 97.5 below the 21-day EMA 98",
+   "position_id": null,
+   "quantity": 100,
+   "reason": "EMA_EXIT",
+   "stop_price": null,
+   "symbol": "AAA",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 2,
+   "kind": "SELL_AT_OPEN",
+   "limit_price": null,
+   "note": "a third into strength",
+   "position_id": null,
+   "quantity": 33,
+   "reason": "PARTIAL",
+   "stop_price": null,
+   "symbol": "BBB",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 2,
+   "kind": "RAISE_GTT_STOP",
+   "limit_price": null,
+   "note": "stop to breakeven after the partial",
+   "position_id": null,
+   "quantity": 66,
+   "reason": null,
+   "stop_price": "100.25",
+   "symbol": "BBB",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 9,
+   "kind": "CANCEL_LIMIT",
+   "limit_price": "100.00",
+   "note": "the third session has closed; the limit stops being an order",
+   "position_id": null,
+   "quantity": 100,
+   "reason": null,
+   "stop_price": null,
+   "symbol": "III",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "instrument_id": 11,
+   "kind": "ARM_GTT",
+   "limit_price": null,
+   "note": "a position without a resting stop is the one state the method forbids",
+   "position_id": null,
+   "quantity": 25,
+   "reason": null,
+   "stop_price": "301.15",
+   "symbol": "KKK",
+   "value_inr": "0"
+  }
+ ]
+}

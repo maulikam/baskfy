@@ -19,6 +19,9 @@
 #   * `deploy-swing.sh` refuses during market hours and inside the 18:40-21:15 nightly window.
 #     Those guards are the point; do not add a flag to skip them.
 set -euo pipefail
+# AWS CLI v2 pipes any output to a TTY through `less`. On 29 Sep 2026 a deploy sat at a pager's
+# ":" for twenty minutes, mid-seed, with every service still on the old image. Never page.
+export AWS_PAGER=""
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 export AWS_PROFILE="${AWS_PROFILE:-baskfy-poc}"

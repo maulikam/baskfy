@@ -35,6 +35,8 @@ class ProviderSettings(BaseSettings):
     #: Explicit HTTP timeout for KiteConnect (AF 3.11). The SDK defaults to 7 s, which is too
     #: short for a historical_data chunk on a loaded night and too opaque to tune from env.
     kite_request_timeout_seconds: float = Field(default=30.0, gt=0)
+    #: Static-IP egress proxy for every Kite call (SEBI allowlist), e.g. https://user:pass@host:443.
+    kite_proxy_url: str = ""
 
     #: docs/09: "Rate limit ~ 3 req/s". Kite states this as a combined ceiling across every
     #: endpoint, so it is the clock EVERY Kite read waits on, whatever it is asking for.

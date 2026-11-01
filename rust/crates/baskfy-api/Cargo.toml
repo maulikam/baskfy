@@ -1,0 +1,43 @@
+[package]
+name = "baskfy-api"
+version = "0.1.0"
+description = "Baskfy's HTTP API (axum), ported from decile-blueprint/services/api (baskfy_api): the request pipeline, auth, problem+json, and one route module per Python router."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "baskfy-api"
+path = "src/main.rs"
+
+[dependencies]
+baskfy-core = { workspace = true }
+baskfy-db = { workspace = true }
+baskfy-providers = { workspace = true }
+polars = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rust_decimal = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
+hmac = { workspace = true }
+base64 = { workspace = true }
+percent-encoding = { workspace = true }
+num-bigint = { workspace = true }
+redis = { workspace = true }
+futures-util = { workspace = true }
+csv = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

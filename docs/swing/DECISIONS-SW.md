@@ -2834,3 +2834,113 @@ cap through `_held_refusal`. `manage_open_positions` manages each position and e
 raise line carries its `position_id` (`sw_plan_line.position_id`, already in the schema); the
 desk's `_sell` and `_raise_stop` act on the position the line names. **How to reverse:**
 `pyramiding=False`.
+
+## SW29 — the market gate reads NIFTY Smallcap 250; by Maulik's instruction in session (29 Sep 2026) ✅ decided by Maulik
+
+**Context.** Maulik, in session, linking Kite's chart of `NIFTY SMLCAP 250` (instrument 267273):
+*"Use this index as an underlying for the swing. Currently, we are using different indexes where we
+are checking the 10-day moving average and 20-day moving average, so use this index instead."*
+The gate (`04` §8.2) read NIFTY MidSmallcap 400 since SW17 (`67df9b4`, 3 Sep 2026).
+
+**What changed.** The benchmark slug is `nifty-smallcap-250` in every default that names it:
+`WorkerSettings.swing_index_slug`, `PipelineDependencies.swing_index_slug`, the API's
+`Settings.swing_index_slug`, `run_detect_swing`'s keyword default and both `.env.example`s (which
+still said `nifty-500`, stale since SW17). `KiteProvider.INDEX_QUOTE_SYMBOL` gains
+`nifty-smallcap-250 → NIFTY SMLCAP 250` so the live scan's intraday level (9 Sep) works for the
+new benchmark; the MidSmallcap 400 mapping stays. The box sets no `BASKFY_SWING_INDEX_SLUG`, so the
+code default is what runs. `index_snapshot_daily` on the box holds 2,415 Smallcap 250 sessions,
+2017-01-02 → 2026-09-29, so the 10/20-day averages are readable on the first night.
+
+**What did not change.** The rule (10-day SMA over the 20-day: long bias; under: RED), the
+fallback (NIFTY 500), breadth, and every other sleeve: VBT, TWT and the weekly desk's
+`structural_indices` are not the swing gate. Past `sw_market` rows keep the index they were read
+with (`index_slug` is stored per row).
+
+**Tests.** `test_celery_config.TestTheMarketGateReadsTheSmallcap250` pins the default to this
+decision; `test_swing_scan_now` checks the benchmark has a Kite quote symbol.
+
+**How to reverse.** Set `BASKFY_SWING_INDEX_SLUG=nifty-mid-small-400` in the box's
+`.env.staging.compose` (no image needed), or revert the defaults.
+
+## SW30 — the gate is re-read on the live index during the session, both ways; by Maulik's instruction in session (29 Sep 2026) ✅ decided by Maulik
+
+**Context.** Maulik, in session: *"The gate we are checking is currently implemented as end of the
+day. The gate should be checked on live data. Let's say tomorrow, if the 10-day moving average is
+crossing the 20-day, the gate should automatically open."* The desk's `load_context` read the gate
+and rung from the last close's `sw_market_daily` row only; a live scan (9 Sep) could move the
+index half, but only when someone pressed Scan now, and the monitor and the confirm never read it.
+On 29 Sep the gate had been RED for weeks on the index alone (breadth 10.09 % against the 5 %
+floor).
+
+**His two answers (asked with options the same evening).** (1) **Both ways** — the live read
+opens the gate on a cross up and closes it on a cross back down. (2) **The index live, breadth at
+the last close** — breadth needs a scan of the whole liquid universe; the index is one quote.
+
+**What changed.**
+* Core (pure): `baskfy_core.swing.market.index_reading` (the 10/20 SMAs from levels, `None` when
+  short) and `intraday_tier` — the ladder never moves on a quote: a live RED is rung 0 with no
+  entries, a live GREEN/AMBER allows entries at the rung the close left (rung 0 after a closing
+  RED: 2 positions, 25 %), a drawdown lock holds whatever the index does.
+* Desk: `app/swing_live_gate.py`. Between 09:15 and 15:30 on a weekday, `load_context` (given a
+  live level) runs `market_gate` over the close's breadth and the benchmark's last 19 published
+  closes plus today's Kite quote (`SWING_INDEX_SLUG`, SW29's `nifty-smallcap-250` → `NIFTY SMLCAP
+  250`; `Kite.ltp`, cached and rate-limited). The monitor reads it per trigger and, since this
+  entry, once a minute in the heartbeat, which now says which gate is in force and from which data
+  and logs every change with the averages that caused it. The desk's confirm (`PgSwingStore`
+  on Postgres) reads the same, so the SIGNAL line and the confirm cannot disagree.
+* Outside the session, with no Kite session, with no quote symbol for the index, or with fewer
+  than 19 published closes, the gate is the last close's — exactly the behaviour before SW30.
+
+**What did not change.** The rule, the thresholds, breadth, the nightly row (`sw_market_daily` is
+still the closed day's record), the ladder's nightly steps, and every order path: this changes
+which entries the rules allow, never how an order is placed. A trigger refused `GATE_RED` before
+the cross is not re-raised by the cross.
+
+**Tests.** Core `test_swing_market` (7 new); desk `test_swing_monitor.TestTheGateIsReReadLive`
+and `TestTheKiteLevel` (16 new): the cross up opens at rung 0, the cross down closes, equal
+averages are AMBER, thin breadth stays RED, the lock holds, outside hours Kite is not asked, no
+level or too few closes keep the close, the store's per-trigger re-read flips with the level, the
+heartbeat re-reads once a minute.
+
+**How to reverse.** Build the monitor and the desk store without a live level
+(`live_level=None`); every reader falls back to the last close.
+
+## SW31 — the gate's averages are exponential: EMA(10) and EMA(20) of the close; by Maulik's correction in session (30 Sep 2026) ✅ decided by Maulik
+
+**Context.** After SW30 reported the Smallcap 250's averages as 18,103.59 and 18,234.55, Maulik
+sent his TradingView chart: *"The current value of EMA 10 and EMA 20 is not the correct one which
+you have showcased"* — EMA(10, close) **18,086.77**, EMA(20, close) **18,173.17** on 29 Sep. The
+gate had always computed simple averages (`04` §8.2 said "SMAs"); his rule is the EMAs.
+
+**Checked before changing anything.** The stored closes are right: computed as EMAs, the box's
+`index_snapshot_daily` series reproduces his two numbers to the paisa from 120 sessions of history
+(60 sessions gives 18,174.08 for the 20 — too short a warm-up).
+
+**What changed.** `baskfy_core.swing.market.ema` (TradingView's `ta.ema`: `alpha = 2/(n+1)`,
+seeded with the simple average of the first n) and `index_reading` now returns the two EMAs;
+`INDEX_HISTORY_SESSIONS = 250` is how many closes every reader passes. All three readers use it:
+the worker's nightly and Scan now (`_index_reading`), the backtest (`_IndexSeries.reading_on`,
+the same 250-close window per session, so no look-ahead), and the desk's live gate (SW30: 249
+published closes plus today's quote — the value the chart shows on the forming bar). The web
+market page labels the columns "10-day EMA" / "20-day EMA".
+
+**What did not change.** The rule (fast above slow → long bias; below → RED), the lengths (10,
+20), the index (SW29), breadth. **Past `sw_market_daily` rows keep the simple averages they were
+decided on** — they are the record of what the gate read that night; rows from 30 Sep are EMAs.
+The backtest still reads NIFTY 500 (its own frame, STANDING-ANSWERS A12); only its averages
+changed.
+
+**Tests.** Core `test_the_reading_is_his_charts_ema_ten_and_twenty` pins 18,086.77 / 18,173.17
+on the real 150 closes to 29 Sep; the EMA seed and weight; the desk's live-gate tests at EMA values.
+
+**How to reverse.** `index_reading` back to simple means of the last 10/20 levels.
+
+**Found on the way, not changed:** `test_swing_goldens` `build_entries.case_*` drift on the
+`position_id` field SW28 added to plan lines; the goldens were not regenerated then. Unrelated to
+the index.
+
+## Opportunities › Swing: nine pattern setups (31 Oct 2026) ⚠ UNREVIEWED
+
+- Scanner-only (no orders): VCP, TWT, EP, FLAG/HTF, inside bar/NR7, 52w high, cup with handle,
+  EMA bounce, VBT. Rules and sources: `docs/rust-rewrite/DECISIONS-RS.md` R8.os.
+

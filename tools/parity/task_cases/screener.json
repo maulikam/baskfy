@@ -1,0 +1,528 @@
+{
+  "lane": "screener",
+  "note": "Wave 6 lane screener: baskfy.compute.warm_screen_cache and baskfy.alerts.dispatch at before/inside/after-session clocks, a Friday, a Saturday, and their failure paths. SEED alerts point at the bed's own users and screens; mail goes only to the harness's SMTP sink.",
+  "cases": [
+    {
+      "name": "warm-default-after-publish",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "note": "the bed's 11 screens (none with ranking_terms) run for the published 29 Oct, cached 48 h in Redis, screen_run upserted (no change: the nightly wrote the same rows)"
+    },
+    {
+      "name": "warm-limit-3-inside-session",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {
+        "limit": 3
+      },
+      "now": "2026-10-30T13:15:00",
+      "note": "inside the next session: the as-of is still the last published day (the published series never claims today)"
+    },
+    {
+      "name": "warm-limit-positional-before-session",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": [
+        2
+      ],
+      "now": "2026-10-30T08:00:00"
+    },
+    {
+      "name": "warm-limit-0",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {
+        "limit": 0
+      },
+      "now": "2026-10-29T19:30:00",
+      "note": "no screen: Redis is never touched"
+    },
+    {
+      "name": "warm-saturday",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {
+        "limit": 4
+      },
+      "now": "2026-10-31T10:00:00"
+    },
+    {
+      "name": "warm-unreadable-definition",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen (public_id, user_id, name, definition, columns, is_example) VALUES ('rsbadscreen1', 1, 'Broken screen', '{\"index\": \"no-such-index\", \"sort_by\": 7}'::jsonb, '[]'::jsonb, false);",
+      "mask": {
+        "screen": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "a stored definition that no longer validates is listed in failures and costs only itself"
+    },
+    {
+      "name": "warm-no-usable-cache",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "env": {
+        "BASKFY_REDIS_URL": "notaurl"
+      },
+      "note": "build_cache() is None: redis-py refuses the URL"
+    },
+    {
+      "name": "warm-cache-unreachable",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "env": {
+        "BASKFY_REDIS_URL": "redis://127.0.0.1:18801/1"
+      },
+      "note": "nothing listens on 18801: the first GET raises ConnectionError, the transaction rolls back"
+    },
+    {
+      "name": "warm-bad-keyword",
+      "task": "baskfy.compute.warm_screen_cache",
+      "args": {
+        "limt": 3
+      },
+      "now": "2026-10-29T19:30:00"
+    },
+    {
+      "name": "dispatch-no-alerts",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "note": "the bed has no screen_alert and no webhook_endpoint"
+    },
+    {
+      "name": "dispatch-seeded-default-date",
+      "task": "baskfy.alerts.dispatch",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "today in IST (Thursday 29 Oct): singles, a two-screen digest, weekly Thursday due and weekly Friday not, an inactive alert, top_n, min_move, webhooks enqueued"
+    },
+    {
+      "name": "dispatch-seeded-explicit-before-session",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-30T08:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "dispatch-friday-inside-session",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": null
+      },
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "Friday 30 Oct, not published: ensure_run runs every alerted screen for 30 Oct (no factor rows, empty runs), so every name exits; the weekly Friday alert is due"
+    },
+    {
+      "name": "dispatch-saturday",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": ""
+      },
+      "now": "2026-10-31T10:00:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "an empty string is today (Python's `if trade_date`); a non-trading day"
+    },
+    {
+      "name": "dispatch-rerun-already-delivered",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);INSERT INTO screen_alert_delivery (alert_id, as_of, status, detail) SELECT id, DATE '2026-10-29', 'sent', 'null'::jsonb FROM screen_alert WHERE public_id IN ('al0000000001', 'al0000000002');",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "house rule 7: an alert already delivered for the date sends nothing"
+    },
+    {
+      "name": "dispatch-definition-changed",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);INSERT INTO screen_run (screen_id, as_of, definition_hash, result_count, results, created_at) VALUES (1, DATE '2026-10-28', 'rs-edited', 0, '[]'::jsonb, TIMESTAMPTZ '2026-10-28T13:00:00Z');",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "dispatch-no-previous-run",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-26"
+      },
+      "now": "2026-10-26T20:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef",
+        "BASKFY_ALERT_LOOKBACK_DAYS": "1"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "Monday 26 Oct with a one-day lookback: the window [25 Oct, 26 Oct) holds no run, so every due alert is skipped no_previous_run_in_window (a lookback of 0 is refused by both Settings at startup)"
+    },
+    {
+      "name": "dispatch-max-rows-2",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef",
+        "BASKFY_ALERT_MAX_ROWS": "2"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "the email's '... and N more'"
+    },
+    {
+      "name": "dispatch-mail-down",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef",
+        "BASKFY_SMTP_PORT": "18802"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "nothing listens on 18802: every send is recorded failed"
+    },
+    {
+      "name": "dispatch-invalid-definition",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen (public_id, user_id, name, definition, columns, is_example) VALUES ('rsbadscreen1', 1, 'Broken screen', '{\"index\": \"no-such-index\", \"sort_by\": 7}'::jsonb, '[]'::jsonb, false);INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, unsubscribe_token_hash) SELECT 'al00000000bd', 1, id, 'daily', 'rs-test-hbd' FROM screen WHERE public_id = 'rsbadscreen1';",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "screen": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "dispatch-no-secret",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);",
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "no signing secret: RuntimeError, everything rolled back"
+    },
+    {
+      "name": "dispatch-top-n-zero",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T19:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, weekday, top_n, min_move, digest, is_active, unsubscribe_token_hash) VALUES ('al0000000001', 1, 1, 'daily', NULL, NULL, 1, false, true, 'rs-test-h1'),('al0000000002', 1, 10, 'daily', NULL, 20, 1, true, true, 'rs-test-h2'),('al0000000003', 1, 11, 'daily', NULL, NULL, 3, true, true, 'rs-test-h3'),('al0000000004', 1, 12, 'weekly', NULL, NULL, 1, false, true, 'rs-test-h4'),('al0000000005', 1, 13, 'weekly', 3, NULL, 1, false, true, 'rs-test-h5'),('al0000000006', 6, 21, 'daily', NULL, 10, 1, false, true, 'rs-test-h6'),('al0000000007', 1, 14, 'daily', NULL, NULL, 1, false, false, 'rs-test-h7'),('al0000000008', 4, 9, 'daily', NULL, 5, 1, false, true, 'rs-test-h8'),('al0000000009', 1, 545, 'daily', NULL, 3, 1, false, true, 'rs-test-h9');INSERT INTO webhook_endpoint (public_id, user_id, screen_id, url, events) VALUES ('wh0000000001', 1, 10, 'https://example.invalid/hook-a', '[\"screen.entries\", \"screen.exits\"]'::jsonb),('wh0000000002', 1, 2, 'https://example.invalid/hook-b', '[\"screen.exits\"]'::jsonb),('wh0000000003', 1, 12, 'https://example.invalid/hook-c', '[\"screen.entries\"]'::jsonb);UPDATE screen_alert SET top_n = 0 WHERE public_id = 'al0000000006';",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "dispatch-bad-date",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-13-01"
+      },
+      "now": "2026-10-29T19:30:00"
+    },
+    {
+      "name": "dispatch-int-date",
+      "task": "baskfy.alerts.dispatch",
+      "args": [
+        20261029
+      ],
+      "now": "2026-10-29T19:30:00"
+    },
+    {
+      "name": "dispatch-no-change",
+      "task": "baskfy.alerts.dispatch",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T20:30:00",
+      "seed_sql": "INSERT INTO screen_alert (public_id, user_id, screen_id, frequency, top_n, min_move, unsubscribe_token_hash) VALUES ('al00000000nc', 1, 12, 'daily', 1, 100000, 'rs-test-hnc'), ('al00000000wk', 1, 13, 'weekly', NULL, 1, 'rs-test-hwk');",
+      "env": {
+        "BASKFY_JWT_SECRET": "rs-parity-test-only-jwt-secret-0123456789abcdef"
+      },
+      "mask": {
+        "screen_alert": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        },
+        "screen_alert_delivery": {
+          "created_at": "stamp"
+        },
+        "webhook_delivery": {
+          "created_at": "stamp"
+        },
+        "screen_run": {
+          "created_at": "stamp"
+        },
+        "webhook_endpoint": {
+          "created_at": "stamp",
+          "updated_at": "stamp"
+        }
+      },
+      "note": "Beat's 20:30 moment: the top-1 of screen 12 held and no move reaches 100000 places, so the alert is recorded skipped no_change; a weekly (Friday) alert is not due on Thursday"
+    }
+  ]
+}

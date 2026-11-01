@@ -1,0 +1,249 @@
+{
+  "note": "Lane exec_guards: the browser-facing guards of an interface that can place orders (app/core/websec.py, tests/test_websec.py), graded over HTTP on both desks. The instrument guards, product gates, risk ledger and limiters have no route of their own; they are graded in Rust unit tests (src/lanes/exec_core/exec_guards/tests_*.rs) and through /execute by desk_cases/exec_gateway.json. Every case leaves the replay Kite's order/GTT log empty.",
+  "cases": [
+    {
+      "name": "guards: the names it answers to still work (localhost)",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Host": "localhost"
+      }
+    },
+    {
+      "name": "guards: a Host that merely starts with an allowed name is refused 421",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Host": "127.0.0.1.evil.example"
+      }
+    },
+    {
+      "name": "guards: the Host check is case-insensitive and ignores the port",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Host": "LocalHost:9999"
+      }
+    },
+    {
+      "name": "guards: a POST with no Origin and no Referer is refused 403",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "daily"
+      },
+      "headers": {
+        "Origin": ""
+      }
+    },
+    {
+      "name": "guards: a POST from another origin is refused 403",
+      "method": "POST",
+      "path": "/settings",
+      "form": {
+        "note": "x"
+      },
+      "headers": {
+        "Origin": "https://evil.example"
+      }
+    },
+    {
+      "name": "guards: an execute from another origin is refused before the route",
+      "method": "POST",
+      "path": "/execute",
+      "form": {
+        "plan_id": "x",
+        "confirm": "true"
+      },
+      "headers": {
+        "Origin": "https://evil.example:8420"
+      }
+    },
+    {
+      "name": "guards: a Referer from the desk stands in when Origin is absent",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "nope"
+      },
+      "headers": {
+        "Origin": "",
+        "Referer": "http://localhost/ops"
+      }
+    },
+    {
+      "name": "guards: an allowed origin without the port reaches the route",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "nope"
+      },
+      "headers": {
+        "Origin": "https://localhost"
+      }
+    },
+    {
+      "name": "guards: reads are never blocked by the origin rule",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Origin": "https://evil.example"
+      }
+    },
+    {
+      "name": "guards: DELETE is an unsafe method too",
+      "method": "DELETE",
+      "path": "/no-such-page",
+      "headers": {
+        "Origin": "https://evil.example"
+      }
+    },
+    {
+      "name": "guards: PUT is an unsafe method too",
+      "method": "PUT",
+      "path": "/no-such-page",
+      "headers": {
+        "Origin": ""
+      }
+    },
+    {
+      "name": "guards: the docs are closed by default (/docs)",
+      "method": "GET",
+      "path": "/docs"
+    },
+    {
+      "name": "guards: the docs are closed by default (/redoc)",
+      "method": "GET",
+      "path": "/redoc"
+    },
+    {
+      "name": "guards: the docs are closed by default (/openapi.json)",
+      "method": "GET",
+      "path": "/openapi.json"
+    },
+    {
+      "name": "guards (review): a non-ASCII Host is refused 421, not waved through",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Host": "évil.example"
+      }
+    },
+    {
+      "name": "guards (review): a non-ASCII Origin on a POST is refused 403 even with a desk Referer",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "x"
+      },
+      "headers": {
+        "Origin": "http://évil.example",
+        "Referer": "http://localhost/ops"
+      }
+    },
+    {
+      "name": "guards (review): an empty Host is not checked (Python: falsy host)",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Host": ""
+      }
+    },
+    {
+      "name": "guards (review): PATCH is an unsafe method too",
+      "method": "PATCH",
+      "path": "/no-such-page",
+      "headers": {
+        "Origin": "https://evil.example"
+      }
+    },
+    {
+      "name": "guards (review): HEAD is safe whatever the origin",
+      "method": "HEAD",
+      "path": "/no-such-page",
+      "headers": {
+        "Origin": "https://evil.example"
+      }
+    },
+    {
+      "name": "guards (review): OPTIONS is safe whatever the origin",
+      "method": "OPTIONS",
+      "path": "/no-such-page",
+      "headers": {
+        "Origin": "https://evil.example"
+      }
+    },
+    {
+      "name": "guards (review): Origin 'null' is refused 403",
+      "method": "POST",
+      "path": "/execute",
+      "form": {
+        "plan_id": "x",
+        "confirm": "true"
+      },
+      "headers": {
+        "Origin": "null"
+      }
+    },
+    {
+      "name": "guards (review): an allowed host on the wrong port is refused 403",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "x"
+      },
+      "headers": {
+        "Origin": "http://localhost:8421"
+      }
+    },
+    {
+      "name": "guards (review): a Referer that only starts with an allowed origin is refused 403",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "x"
+      },
+      "headers": {
+        "Origin": "",
+        "Referer": "http://localhost.evil.example/ops"
+      }
+    },
+    {
+      "name": "guards (review): a Referer equal to an allowed origin with no path is accepted",
+      "method": "POST",
+      "path": "/no-such-page",
+      "form": {
+        "op": "x"
+      },
+      "headers": {
+        "Origin": "",
+        "Referer": "https://127.0.0.1"
+      }
+    },
+    {
+      "name": "guards (review): an execute with a desk origin but no plan reaches the route and places nothing",
+      "method": "POST",
+      "path": "/execute",
+      "form": {
+        "plan_id": "no-such-plan",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "guards (review): an execute without confirm=true places nothing",
+      "method": "POST",
+      "path": "/execute",
+      "form": {
+        "plan_id": "no-such-plan"
+      }
+    },
+    {
+      "name": "guards (review): Host with an IPv6 literal is refused 421",
+      "method": "GET",
+      "path": "/no-such-page",
+      "headers": {
+        "Host": "[::1]:8420"
+      }
+    }
+  ]
+}

@@ -1,0 +1,446 @@
+{
+  "lane": "fno",
+  "note": "Declared by the wave-6 foundation; the lane adds a case per path of each task it ports (README, Grading a task). The two cases below were written by the foundation to prove the replay upstream (R8.3): the real 28 Oct F&O bhavcopy and 29 Oct ban list from the archive, and a day with no file. Lane fno (RS6): a case per path of each of the seven tasks.",
+  "cases": [
+    {
+      "name": "ingest-bhavcopy-recorded-day",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "trade_date": "2026-10-28",
+        "at": "2026-10-28T19:30:00"
+      },
+      "now": "2026-10-28T19:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "the bed's 28 Oct ingest removed: the archived raw zip (the real file) is parsed without a request; fo_contract_daily, fo_ingest_day, the 29 Oct ban list from the archive",
+      "seed_sql": "DELETE FROM fo_contract_daily WHERE trade_date = DATE '2026-10-28'; DELETE FROM fo_ingest_day WHERE trade_date = DATE '2026-10-28';",
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "ingest-bhavcopy-missing-at-2330",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "trade_date": "2026-10-29",
+        "at": "2026-10-29T23:30:00"
+      },
+      "now": "2026-10-29T23:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "the bed's 29 Oct ingest removed and no raw file recorded for it: the archive misses, the upstream answers 404, the 23:30 attempt records MISSING and alerts",
+      "seed_sql": "DELETE FROM fo_contract_daily WHERE trade_date = DATE '2026-10-29'; DELETE FROM fo_ingest_day WHERE trade_date = DATE '2026-10-29';",
+      "payload_mask": [
+        "/alert/raised_at"
+      ]
+    },
+    {
+      "name": "ingest-bhavcopy-disabled",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {},
+      "now": "2026-10-29T18:30:00"
+    },
+    {
+      "name": "ingest-bhavcopy-missing-at-1930-pending",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "trade_date": "2026-10-29",
+        "at": "2026-10-29T19:30:00"
+      },
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "no file for 29 Oct before the final attempt: PENDING, attempts grows, no alert, the ban list is already stored",
+      "seed_sql": "DELETE FROM fo_contract_daily WHERE trade_date = DATE '2026-10-29'; UPDATE fo_ingest_day SET status = 'PENDING' WHERE trade_date = DATE '2026-10-29';"
+    },
+    {
+      "name": "ingest-bhavcopy-already-ingested",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": [],
+      "now": "2026-10-29T20:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "Beat's path at 20:30 on an ingested night: no NSE request, fo_underlying_daily re-derived and the scan re-run over the bed's own 29 Oct rows"
+    },
+    {
+      "name": "ingest-bhavcopy-with-book",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "the same night with open F1N, F2 and F3N positions and a paper loss in the journal: OPEN_POSITION rows, the ledger's pauses",
+      "seed_sql": "INSERT INTO fo_position (id,user_id,sleeve,symbol,structure,entry_plan_id,legs,lots,lot_size,max_loss_inr,stop_price,hard_exit_date,next_roll_date,opened_at,closed_at,closed_reason,simulated) OVERRIDING SYSTEM VALUE VALUES (9001,1,'F2','RELIANCE','FUTURE','p-f2-1','{\"legs\":[],\"carry\":{\"time_exit_date\":\"2026-11-02\"}}',1,500,10000.00,1400.00,NULL,'2026-11-20','2026-10-20 04:00+00',NULL,NULL,true),(9002,1,'F1N','NIFTY','IRON_CONDOR','p-f1-1','{\"legs\":[{\"expiry\":\"2026-11-24\"}]}',1,75,20000.00,NULL,'2026-11-02',NULL,'2026-10-21 04:00+00',NULL,NULL,true),(9003,1,'F1B','BANKNIFTY','IRON_CONDOR','p-f1-2','[]',1,35,15000.00,NULL,'2026-10-29',NULL,'2026-10-01 04:00+00','2026-10-29 09:00+00','LOSS_CLOSE',true),(9004,1,'F2','TCS','FUTURE','p-f2-2','[]',1,175,8000.00,NULL,NULL,NULL,'2026-10-05 04:00+00','2026-10-30 08:00+00','STOP',false),(9005,1,'F3N','NIFTY','CREDIT_SPREAD','p-f3-1','{\"legs\":[{\"role\":\"SHORT_PUT\",\"strike\":\"24000\"}],\"level\":\"24100.50\"}',1,75,9000.00,24100.50,'2026-11-03',NULL,'2026-10-27 04:00+00',NULL,NULL,true);INSERT INTO fo_journal (position_id,user_id,sleeve,symbol,structure,opened_on,closed_on,entry_inr,exit_inr,gross_pnl_inr,costs_inr,net_pnl_inr,risk_budget_inr,r_multiple,closed_reason,sessions_held,rolls,simulated,sizing_mode) VALUES (9003,1,'F1B','BANKNIFTY','IRON_CONDOR','2026-10-01','2026-10-29',3000.00,6000.00,-3000.00,250.50,-3250.50,15000.00,-0.2167,'LOSS_CLOSE',20,0,true,'BUDGET'),(9004,1,'F2','TCS','FUTURE','2026-10-05','2026-10-30',500000.00,507000.00,7000.00,120.25,6879.75,8000.00,0.8600,'STOP',19,1,false,'BUDGET');"
+    },
+    {
+      "name": "ingest-bhavcopy-saturday",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "at": "2026-10-31T18:30:00"
+      },
+      "now": "2026-10-31T18:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "not an NSE trading day"
+    },
+    {
+      "name": "ingest-bhavcopy-bad-date",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "trade_date": "29-10-2026"
+      },
+      "now": "2026-10-29T18:30:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "ValueError from fromisoformat"
+    },
+    {
+      "name": "ingest-bhavcopy-bad-at",
+      "task": "baskfy.fno.ingest_bhavcopy",
+      "args": {
+        "at": "tonight"
+      },
+      "now": "2026-10-29T18:30:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "scan-disabled",
+      "task": "baskfy.fno.scan",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:00:00"
+    },
+    {
+      "name": "scan-2026-10-29",
+      "task": "baskfy.fno.scan",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T21:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "the re-run by hand over the bed's ingested 29 Oct"
+    },
+    {
+      "name": "scan-2026-10-28-fresh",
+      "task": "baskfy.fno.scan",
+      "args": {
+        "trade_date": "2026-10-28"
+      },
+      "now": "2026-10-29T21:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      },
+      "seed_sql": "DELETE FROM fo_scan WHERE trade_date = DATE '2026-10-28';",
+      "note": "every 28 Oct row inserted afresh (sequence moves)"
+    },
+    {
+      "name": "scan-not-ingested",
+      "task": "baskfy.fno.scan",
+      "args": [],
+      "now": "2026-10-30T21:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      },
+      "note": "30 Oct has no bhavcopy: NO_DATA per sleeve, said in words"
+    },
+    {
+      "name": "scan-paused-book",
+      "task": "baskfy.fno.scan",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T22:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_scan": {
+          "created_at": "stamp"
+        }
+      },
+      "seed_sql": "INSERT INTO fo_position (id,user_id,sleeve,symbol,structure,entry_plan_id,legs,lots,lot_size,max_loss_inr,stop_price,hard_exit_date,next_roll_date,opened_at,closed_at,closed_reason,simulated) OVERRIDING SYSTEM VALUE VALUES (9001,1,'F2','RELIANCE','FUTURE','p-f2-1','{\"legs\":[],\"carry\":{\"time_exit_date\":\"2026-11-02\"}}',1,500,10000.00,1400.00,NULL,'2026-11-20','2026-10-20 04:00+00',NULL,NULL,true),(9002,1,'F1N','NIFTY','IRON_CONDOR','p-f1-1','{\"legs\":[{\"expiry\":\"2026-11-24\"}]}',1,75,20000.00,NULL,'2026-11-02',NULL,'2026-10-21 04:00+00',NULL,NULL,true),(9003,1,'F1B','BANKNIFTY','IRON_CONDOR','p-f1-2','[]',1,35,15000.00,NULL,'2026-10-29',NULL,'2026-10-01 04:00+00','2026-10-29 09:00+00','LOSS_CLOSE',true),(9004,1,'F2','TCS','FUTURE','p-f2-2','[]',1,175,8000.00,NULL,NULL,NULL,'2026-10-05 04:00+00','2026-10-30 08:00+00','STOP',false),(9005,1,'F3N','NIFTY','CREDIT_SPREAD','p-f3-1','{\"legs\":[{\"role\":\"SHORT_PUT\",\"strike\":\"24000\"}],\"level\":\"24100.50\"}',1,75,9000.00,24100.50,'2026-11-03',NULL,'2026-10-27 04:00+00',NULL,NULL,true);INSERT INTO fo_journal (position_id,user_id,sleeve,symbol,structure,opened_on,closed_on,entry_inr,exit_inr,gross_pnl_inr,costs_inr,net_pnl_inr,risk_budget_inr,r_multiple,closed_reason,sessions_held,rolls,simulated,sizing_mode) VALUES (9003,1,'F1B','BANKNIFTY','IRON_CONDOR','2026-10-01','2026-10-29',3000.00,6000.00,-3000.00,250.50,-3250.50,15000.00,-0.2167,'LOSS_CLOSE',20,0,true,'BUDGET'),(9004,1,'F2','TCS','FUTURE','2026-10-05','2026-10-30',500000.00,507000.00,7000.00,120.25,6879.75,8000.00,0.8600,'STOP',19,1,false,'BUDGET');UPDATE fo_sleeve_config SET paused_until = DATE '2026-11-05', paused_reason = 'PAPER:F2 month R' WHERE sleeve = 'F2'; UPDATE fo_book_config SET paused_until = DATE '2026-11-02', paused_reason = NULL; INSERT INTO fo_sleeve_config (user_id, sleeve, capital_inr, risk_per_trade_pct, max_lots, max_open_positions, paper_enabled, updated_at) SELECT 1, 'F3', 500000.00, risk_per_trade_pct, max_lots, max_open_positions, paper_enabled, TIMESTAMPTZ '2026-10-29 10:00+00' FROM fo_sleeve_config WHERE sleeve = 'F1';",
+      "note": "a hand-set book pause and a ledger-written F2 pause, F3 capital: PAUSED rows"
+    },
+    {
+      "name": "index-daily-disabled",
+      "task": "baskfy.fno.index_daily",
+      "args": {},
+      "now": "2026-10-29T18:15:00"
+    },
+    {
+      "name": "index-daily-no-session",
+      "task": "baskfy.fno.index_daily",
+      "args": {},
+      "now": "2026-10-29T18:15:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "index-daily-extend-unrecorded",
+      "task": "baskfy.fno.index_daily",
+      "args": {
+        "at": "2026-10-29T18:15:00"
+      },
+      "now": "2026-10-29T18:15:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "Kite's daily candles are not recorded in the session bundle: the upstream answers 404 and the task raises the provider's error on both sides"
+    },
+    {
+      "name": "weekly-disabled",
+      "task": "baskfy.fno.weekly",
+      "args": {},
+      "now": "2026-10-30T16:35:00"
+    },
+    {
+      "name": "weekly-friday",
+      "task": "baskfy.fno.weekly",
+      "args": {},
+      "now": "2026-10-30T16:35:00",
+      "env": {
+        "BASKFY_FNO_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "INSERT INTO fo_position (id,user_id,sleeve,symbol,structure,entry_plan_id,legs,lots,lot_size,max_loss_inr,stop_price,hard_exit_date,next_roll_date,opened_at,closed_at,closed_reason,simulated) OVERRIDING SYSTEM VALUE VALUES (9001,1,'F2','RELIANCE','FUTURE','p-f2-1','{\"legs\":[],\"carry\":{\"time_exit_date\":\"2026-11-02\"}}',1,500,10000.00,1400.00,NULL,'2026-11-20','2026-10-20 04:00+00',NULL,NULL,true),(9002,1,'F1N','NIFTY','IRON_CONDOR','p-f1-1','{\"legs\":[{\"expiry\":\"2026-11-24\"}]}',1,75,20000.00,NULL,'2026-11-02',NULL,'2026-10-21 04:00+00',NULL,NULL,true),(9003,1,'F1B','BANKNIFTY','IRON_CONDOR','p-f1-2','[]',1,35,15000.00,NULL,'2026-10-29',NULL,'2026-10-01 04:00+00','2026-10-29 09:00+00','LOSS_CLOSE',true),(9004,1,'F2','TCS','FUTURE','p-f2-2','[]',1,175,8000.00,NULL,NULL,NULL,'2026-10-05 04:00+00','2026-10-30 08:00+00','STOP',false),(9005,1,'F3N','NIFTY','CREDIT_SPREAD','p-f3-1','{\"legs\":[{\"role\":\"SHORT_PUT\",\"strike\":\"24000\"}],\"level\":\"24100.50\"}',1,75,9000.00,24100.50,'2026-11-03',NULL,'2026-10-27 04:00+00',NULL,NULL,true);INSERT INTO fo_journal (position_id,user_id,sleeve,symbol,structure,opened_on,closed_on,entry_inr,exit_inr,gross_pnl_inr,costs_inr,net_pnl_inr,risk_budget_inr,r_multiple,closed_reason,sessions_held,rolls,simulated,sizing_mode) VALUES (9003,1,'F1B','BANKNIFTY','IRON_CONDOR','2026-10-01','2026-10-29',3000.00,6000.00,-3000.00,250.50,-3250.50,15000.00,-0.2167,'LOSS_CLOSE',20,0,true,'BUDGET'),(9004,1,'F2','TCS','FUTURE','2026-10-05','2026-10-30',500000.00,507000.00,7000.00,120.25,6879.75,8000.00,0.8600,'STOP',19,1,false,'BUDGET');",
+      "payload_mask": [
+        "/users/1/sent/raised_at"
+      ],
+      "note": "a paper F1B loss and a LIVE F2 win this week, two open positions: one FNO_WEEKLY mail, never pooled"
+    },
+    {
+      "name": "weekly-empty-week",
+      "task": "baskfy.fno.weekly",
+      "args": {
+        "at": "2026-10-23T16:35:00"
+      },
+      "now": "2026-10-23T16:35:00",
+      "env": {
+        "BASKFY_FNO_MONITOR_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/users/1/sent/raised_at"
+      ]
+    },
+    {
+      "name": "alerts-disabled",
+      "task": "baskfy.fno.alerts",
+      "args": {},
+      "now": "2026-10-30T19:00:00"
+    },
+    {
+      "name": "alerts-evening",
+      "task": "baskfy.fno.alerts",
+      "args": {},
+      "now": "2026-10-30T19:00:00",
+      "env": {
+        "BASKFY_FNO_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "INSERT INTO fo_position (id,user_id,sleeve,symbol,structure,entry_plan_id,legs,lots,lot_size,max_loss_inr,stop_price,hard_exit_date,next_roll_date,opened_at,closed_at,closed_reason,simulated) OVERRIDING SYSTEM VALUE VALUES (9001,1,'F2','RELIANCE','FUTURE','p-f2-1','{\"legs\":[],\"carry\":{\"time_exit_date\":\"2026-11-02\"}}',1,500,10000.00,1400.00,NULL,'2026-11-20','2026-10-20 04:00+00',NULL,NULL,true),(9002,1,'F1N','NIFTY','IRON_CONDOR','p-f1-1','{\"legs\":[{\"expiry\":\"2026-11-24\"}]}',1,75,20000.00,NULL,'2026-11-02',NULL,'2026-10-21 04:00+00',NULL,NULL,true),(9003,1,'F1B','BANKNIFTY','IRON_CONDOR','p-f1-2','[]',1,35,15000.00,NULL,'2026-10-29',NULL,'2026-10-01 04:00+00','2026-10-29 09:00+00','LOSS_CLOSE',true),(9004,1,'F2','TCS','FUTURE','p-f2-2','[]',1,175,8000.00,NULL,NULL,NULL,'2026-10-05 04:00+00','2026-10-30 08:00+00','STOP',false),(9005,1,'F3N','NIFTY','CREDIT_SPREAD','p-f3-1','{\"legs\":[{\"role\":\"SHORT_PUT\",\"strike\":\"24000\"}],\"level\":\"24100.50\"}',1,75,9000.00,24100.50,'2026-11-03',NULL,'2026-10-27 04:00+00',NULL,NULL,true);INSERT INTO fo_journal (position_id,user_id,sleeve,symbol,structure,opened_on,closed_on,entry_inr,exit_inr,gross_pnl_inr,costs_inr,net_pnl_inr,risk_budget_inr,r_multiple,closed_reason,sessions_held,rolls,simulated,sizing_mode) VALUES (9003,1,'F1B','BANKNIFTY','IRON_CONDOR','2026-10-01','2026-10-29',3000.00,6000.00,-3000.00,250.50,-3250.50,15000.00,-0.2167,'LOSS_CLOSE',20,0,true,'BUDGET'),(9004,1,'F2','TCS','FUTURE','2026-10-05','2026-10-30',500000.00,507000.00,7000.00,120.25,6879.75,8000.00,0.8600,'STOP',19,1,false,'BUDGET');INSERT INTO fo_plan (id,user_id,plan_id,sleeve,symbol,trade_date,structure,kind,sizing_mode,issued_at,expires_at,hard_exit_date,credit_points,lots,lot_size,max_loss_inr,margin_required_inr,status,detail) OVERRIDING SYSTEM VALUE VALUES (9101,1,'fo-test-entry-1','F1N','NIFTY','2026-10-30','IRON_CONDOR','ENTRY','BUDGET','2026-10-30 03:50+00','2026-10-30 04:20+00','2026-11-20',85.50,1,75,12000.00,95000.00,'ISSUED','{}'),(9102,1,'fo-test-entry-2','F2','INFY','2026-10-30','FUTURE','ENTRY','BUDGET','2026-10-30 03:55+00','2026-10-30 04:25+00',NULL,NULL,1,400,8000.00,NULL,'REJECTED_SIZE','{}'),(9103,1,'p-f1-1','F1N','NIFTY','2026-10-21','IRON_CONDOR','ENTRY','BUDGET','2026-10-21 03:50+00','2026-10-21 04:20+00','2026-11-02',90.00,1,75,20000.00,NULL,'OPEN','{\"violations\":[{\"code\":\"LATE_EXIT\",\"at\":\"2026-10-30T15:20:00+05:30\",\"message\":\"open past its hard exit\"},{\"code\":\"NAKED_FUTURE\",\"at\":\"2026-10-30T10:00:00+05:30\"}]}');",
+      "note": "a plan issued (and a refused one, silent), an exit, a LATE_EXIT, two hard exits tomorrow (F1's date, F2's carry): five mails, five markers"
+    },
+    {
+      "name": "alerts-morning",
+      "task": "baskfy.fno.alerts",
+      "args": {
+        "at": "2026-10-30T10:00:00+05:30"
+      },
+      "now": "2026-10-30T10:00:00",
+      "env": {
+        "BASKFY_FNO_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "INSERT INTO fo_position (id,user_id,sleeve,symbol,structure,entry_plan_id,legs,lots,lot_size,max_loss_inr,stop_price,hard_exit_date,next_roll_date,opened_at,closed_at,closed_reason,simulated) OVERRIDING SYSTEM VALUE VALUES (9001,1,'F2','RELIANCE','FUTURE','p-f2-1','{\"legs\":[],\"carry\":{\"time_exit_date\":\"2026-11-02\"}}',1,500,10000.00,1400.00,NULL,'2026-11-20','2026-10-20 04:00+00',NULL,NULL,true),(9002,1,'F1N','NIFTY','IRON_CONDOR','p-f1-1','{\"legs\":[{\"expiry\":\"2026-11-24\"}]}',1,75,20000.00,NULL,'2026-11-02',NULL,'2026-10-21 04:00+00',NULL,NULL,true),(9003,1,'F1B','BANKNIFTY','IRON_CONDOR','p-f1-2','[]',1,35,15000.00,NULL,'2026-10-29',NULL,'2026-10-01 04:00+00','2026-10-29 09:00+00','LOSS_CLOSE',true),(9004,1,'F2','TCS','FUTURE','p-f2-2','[]',1,175,8000.00,NULL,NULL,NULL,'2026-10-05 04:00+00','2026-10-30 08:00+00','STOP',false),(9005,1,'F3N','NIFTY','CREDIT_SPREAD','p-f3-1','{\"legs\":[{\"role\":\"SHORT_PUT\",\"strike\":\"24000\"}],\"level\":\"24100.50\"}',1,75,9000.00,24100.50,'2026-11-03',NULL,'2026-10-27 04:00+00',NULL,NULL,true);INSERT INTO fo_journal (position_id,user_id,sleeve,symbol,structure,opened_on,closed_on,entry_inr,exit_inr,gross_pnl_inr,costs_inr,net_pnl_inr,risk_budget_inr,r_multiple,closed_reason,sessions_held,rolls,simulated,sizing_mode) VALUES (9003,1,'F1B','BANKNIFTY','IRON_CONDOR','2026-10-01','2026-10-29',3000.00,6000.00,-3000.00,250.50,-3250.50,15000.00,-0.2167,'LOSS_CLOSE',20,0,true,'BUDGET'),(9004,1,'F2','TCS','FUTURE','2026-10-05','2026-10-30',500000.00,507000.00,7000.00,120.25,6879.75,8000.00,0.8600,'STOP',19,1,false,'BUDGET');INSERT INTO fo_plan (id,user_id,plan_id,sleeve,symbol,trade_date,structure,kind,sizing_mode,issued_at,expires_at,hard_exit_date,credit_points,lots,lot_size,max_loss_inr,margin_required_inr,status,detail) OVERRIDING SYSTEM VALUE VALUES (9101,1,'fo-test-entry-1','F1N','NIFTY','2026-10-30','IRON_CONDOR','ENTRY','BUDGET','2026-10-30 03:50+00','2026-10-30 04:20+00','2026-11-20',85.50,1,75,12000.00,95000.00,'ISSUED','{}'),(9102,1,'fo-test-entry-2','F2','INFY','2026-10-30','FUTURE','ENTRY','BUDGET','2026-10-30 03:55+00','2026-10-30 04:25+00',NULL,NULL,1,400,8000.00,NULL,'REJECTED_SIZE','{}'),(9103,1,'p-f1-1','F1N','NIFTY','2026-10-21','IRON_CONDOR','ENTRY','BUDGET','2026-10-21 03:50+00','2026-10-21 04:20+00','2026-11-02',90.00,1,75,20000.00,NULL,'OPEN','{\"violations\":[{\"code\":\"LATE_EXIT\",\"at\":\"2026-10-30T15:20:00+05:30\",\"message\":\"open past its hard exit\"},{\"code\":\"NAKED_FUTURE\",\"at\":\"2026-10-30T10:00:00+05:30\"}]}');",
+      "note": "before 18:00 no hard-exit-tomorrow is raised"
+    },
+    {
+      "name": "retest-disabled",
+      "task": "baskfy.fno.retest",
+      "args": {},
+      "now": "2026-10-30T06:00:00"
+    },
+    {
+      "name": "retest-not-due",
+      "task": "baskfy.fno.retest",
+      "args": {},
+      "now": "2026-10-30T06:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "October already ran on 3 Oct"
+    },
+    {
+      "name": "retest-unknown-family",
+      "task": "baskfy.fno.retest",
+      "args": {
+        "families": [
+          "F3N",
+          "Z9",
+          "B4"
+        ],
+        "force": true
+      },
+      "now": "2026-10-30T06:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "retest-forced-f3n",
+      "task": "baskfy.fno.retest",
+      "args": {
+        "families": [
+          "F3N"
+        ],
+        "force": true
+      },
+      "now": "2026-10-30T06:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_backtest_run": {
+          "run_at": "stamp"
+        }
+      },
+      "note": "F3N over the bed's 23 sessions"
+    },
+    {
+      "name": "retest-forced-futures",
+      "task": "baskfy.fno.retest",
+      "args": {
+        "families": [
+          "F2",
+          "A0",
+          "E"
+        ],
+        "force": true
+      },
+      "now": "2026-10-30T06:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_backtest_run": {
+          "run_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "retest-forced-b1",
+      "task": "baskfy.fno.retest",
+      "args": {
+        "families": [
+          "B1",
+          "B4"
+        ],
+        "force": true
+      },
+      "now": "2026-10-30T06:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "mask": {
+        "fo_backtest_run": {
+          "run_at": "stamp"
+        }
+      },
+      "note": "a stock option family through the batched loader, and the index condor"
+    },
+    {
+      "name": "spread-sample-disabled",
+      "task": "baskfy.fno.spread_sample",
+      "args": {},
+      "now": "2026-10-29T15:00:00"
+    },
+    {
+      "name": "spread-sample-after-close",
+      "task": "baskfy.fno.spread_sample",
+      "args": {},
+      "now": "2026-10-29T15:30:01",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "spread-sample-saturday",
+      "task": "baskfy.fno.spread_sample",
+      "args": {},
+      "now": "2026-10-31T15:00:00",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "spread-sample-no-kite",
+      "task": "baskfy.fno.spread_sample",
+      "args": {},
+      "now": "2026-10-29T15:00:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "no Kite session: no Kite adapter, no quote; the NSE results calendar for the 30 names (unrecorded: per-symbol errors)"
+    },
+    {
+      "name": "spread-sample-1529",
+      "task": "baskfy.fno.spread_sample",
+      "args": {},
+      "now": "2026-10-29T15:29:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_FNO_SCAN_ENABLED": "true"
+      },
+      "note": "one quote() over 448-ish keys at the recorded 15:29 minute: NIFTY's chain answers, the rest do not"
+    }
+  ]
+}

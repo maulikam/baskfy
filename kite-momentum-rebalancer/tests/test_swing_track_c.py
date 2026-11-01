@@ -348,8 +348,8 @@ def _carries_user_id(statement: str, function_code: str) -> bool:
     match = _SW_WRITE.search(statement)
     assert match is not None
     if match.group(1).upper().startswith("INSERT"):
-        # The column list sits between the table (and an optional alias) and VALUES.
-        columns = statement[match.end():].split("VALUES", 1)[0]
+        # The column list sits between the table (and an optional alias) and VALUES / SELECT.
+        columns = re.split(r"\b(?:VALUES|SELECT)\b", statement[match.end():], maxsplit=1)[0]
         if "{" in columns:
             # A dynamic column list (`create_position`, `add_fill`): the function must build it
             # with `user_id` first.

@@ -1,0 +1,104 @@
+{
+ "fn": "baskfy_core.options.executor.run_exit",
+ "inputs": {
+  "books": {
+   "LONG_CALL": {
+    "ask": "10.20",
+    "bid": "10.00"
+   },
+   "LONG_PUT": {
+    "ask": "8.55",
+    "bid": "8.40"
+   },
+   "SHORT_CALL": {
+    "ask": "20.30",
+    "bid": "20.05"
+   },
+   "SHORT_PUT": {
+    "ask": "19.10",
+    "bid": "18.90"
+   }
+  },
+  "config": {
+   "exit_final_marketable": true,
+   "feed_grace_seconds": 60,
+   "feed_watch_from": "14:00:00",
+   "fill_wait_seconds": 20,
+   "latency_ticks": 1,
+   "limit_improve_ticks": 1,
+   "plan_ttl_minutes": 30
+  },
+  "position": {
+   "LONG_CALL": 65
+  },
+  "quantity": 65,
+  "script": [
+   0,
+   0
+  ],
+  "sleeve": "O2",
+  "tick": "0.05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "events": [
+   {
+    "attempt": 1,
+    "closing": true,
+    "filled": 0,
+    "marketable": false,
+    "price": "9.95",
+    "requested": 65,
+    "role": "LONG_CALL",
+    "side": "SELL"
+   },
+   {
+    "attempt": 2,
+    "closing": true,
+    "filled": 0,
+    "marketable": false,
+    "price": "9.90",
+    "requested": 65,
+    "role": "LONG_CALL",
+    "side": "SELL"
+   },
+   {
+    "attempt": 3,
+    "closing": true,
+    "filled": 65,
+    "marketable": true,
+    "price": "10.00",
+    "requested": 65,
+    "role": "LONG_CALL",
+    "side": "SELL"
+   }
+  ],
+  "fills": {
+   "LONG_CALL": [
+    {
+     "avg_price": null,
+     "quantity": 0
+    },
+    {
+     "avg_price": null,
+     "quantity": 0
+    },
+    {
+     "avg_price": "10.00",
+     "quantity": 65
+    }
+   ]
+  },
+  "outcome": "FLAT",
+  "position": {
+   "LONG_CALL": 0
+  }
+ }
+}

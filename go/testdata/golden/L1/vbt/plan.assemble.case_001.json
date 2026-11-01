@@ -1,0 +1,219 @@
+{
+ "fn": "baskfy_core.vbt.plan.assemble",
+ "inputs": {
+  "entries": [
+   {
+    "cap": "SLOT",
+    "instrument_id": 2,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "120.40",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 830,
+    "reason": null,
+    "stop_price": "105.95",
+    "symbol": "BBB",
+    "value_inr": "99932.00"
+   },
+   {
+    "cap": "SLOT",
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 400,
+    "reason": null,
+    "stop_price": "220.00",
+    "symbol": "AAA",
+    "value_inr": "100000.00"
+   }
+  ],
+  "equity": "1000000",
+  "exits": [
+   {
+    "cap": null,
+    "instrument_id": 4,
+    "kind": "SELL_AT_OPEN",
+    "limit_price": null,
+    "note": "close below the EMA",
+    "position_id": null,
+    "quantity": 70,
+    "reason": "EMA_EXIT",
+    "stop_price": null,
+    "symbol": "DDD",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "instrument_id": 6,
+    "kind": "CANCEL_LIMIT",
+    "limit_price": "100.00",
+    "note": "",
+    "position_id": null,
+    "quantity": 100,
+    "reason": null,
+    "stop_price": null,
+    "symbol": "FFF",
+    "value_inr": "0"
+   }
+  ],
+  "gate": "OPEN",
+  "session": "2026-10-27",
+  "skips": [
+   {
+    "detail": "3 new entries a session",
+    "instrument_id": 8,
+    "reason": "SESSION_CAP",
+    "symbol": "HHH"
+   }
+  ],
+  "source": "EVENING"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "exits first, entries after, each kind sorted by symbol. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "canonical": [
+   {
+    "instrument_id": 4,
+    "kind": "SELL_AT_OPEN",
+    "limit_price": "",
+    "position_id": "",
+    "quantity": 70,
+    "stop_price": "",
+    "symbol": "DDD"
+   },
+   {
+    "instrument_id": 6,
+    "kind": "CANCEL_LIMIT",
+    "limit_price": "100.00",
+    "position_id": "",
+    "quantity": 100,
+    "stop_price": "",
+    "symbol": "FFF"
+   },
+   {
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "position_id": "",
+    "quantity": 400,
+    "stop_price": "220.00",
+    "symbol": "AAA"
+   },
+   {
+    "instrument_id": 2,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "120.40",
+    "position_id": "",
+    "quantity": 830,
+    "stop_price": "105.95",
+    "symbol": "BBB"
+   }
+  ],
+  "entries": [
+   {
+    "cap": "SLOT",
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 400,
+    "reason": null,
+    "stop_price": "220.00",
+    "symbol": "AAA",
+    "value_inr": "100000.00"
+   },
+   {
+    "cap": "SLOT",
+    "instrument_id": 2,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "120.40",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 830,
+    "reason": null,
+    "stop_price": "105.95",
+    "symbol": "BBB",
+    "value_inr": "99932.00"
+   }
+  ],
+  "plan": {
+   "gate": "OPEN",
+   "generated_from": "EVENING",
+   "lines": [
+    {
+     "cap": null,
+     "instrument_id": 4,
+     "kind": "SELL_AT_OPEN",
+     "limit_price": null,
+     "note": "close below the EMA",
+     "position_id": null,
+     "quantity": 70,
+     "reason": "EMA_EXIT",
+     "stop_price": null,
+     "symbol": "DDD",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "instrument_id": 6,
+     "kind": "CANCEL_LIMIT",
+     "limit_price": "100.00",
+     "note": "",
+     "position_id": null,
+     "quantity": 100,
+     "reason": null,
+     "stop_price": null,
+     "symbol": "FFF",
+     "value_inr": "0"
+    },
+    {
+     "cap": "SLOT",
+     "instrument_id": 1,
+     "kind": "PLACE_LIMIT",
+     "limit_price": "250.00",
+     "note": "limit at the signal close; slot bound the size",
+     "position_id": null,
+     "quantity": 400,
+     "reason": null,
+     "stop_price": "220.00",
+     "symbol": "AAA",
+     "value_inr": "100000.00"
+    },
+    {
+     "cap": "SLOT",
+     "instrument_id": 2,
+     "kind": "PLACE_LIMIT",
+     "limit_price": "120.40",
+     "note": "limit at the signal close; slot bound the size",
+     "position_id": null,
+     "quantity": 830,
+     "reason": null,
+     "stop_price": "105.95",
+     "symbol": "BBB",
+     "value_inr": "99932.00"
+    }
+   ],
+   "session": "2026-10-27",
+   "skips": [
+    {
+     "detail": "3 new entries a session",
+     "instrument_id": 8,
+     "reason": "SESSION_CAP",
+     "symbol": "HHH"
+    }
+   ],
+   "sleeve_equity_inr": "1000000"
+  },
+  "plan_hash": "5f680f3539891905aaa245aabacf03f22c0c90be797445d45df8c8480fbe7302",
+  "total_new_exposure_inr": "199932.00"
+ }
+}

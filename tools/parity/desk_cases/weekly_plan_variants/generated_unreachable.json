@@ -1,0 +1,10 @@
+{
+ "note": "Run with --backend sqlite --env SCAN_SOURCE_DEFAULT=generated: the screener's DSN is postgresql://nobody@127.0.0.1:1/none, so the max(date) read and the bar read both fail with libpq's connection-refused text (psycopg's str(exc)), and the breadth input falls back to the scan's own.",
+ "cases": [
+  {"name": "flag on, screener unreachable: 503 naming the connection failure", "method": "POST", "path": "/analyze", "form": {}},
+  {"name": "generate_for with no retained scan is the 'upload one first' 503 before any connection", "method": "POST", "path": "/analyze", "form": {"generate_for": "2018-03-01"}},
+  {"name": "an upload still plans (breadth from the scan's own: pipeline unreachable)", "method": "POST", "path": "/analyze", "files": {"scan": {"path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv", "filename": "sample_scan.csv"}}, "plan": true},
+  {"name": "generate_for with a retained scan and the screener down: 503 could not generate", "method": "POST", "path": "/analyze", "form": {"generate_for": "2018-03-01"}},
+  {"name": "flag on, retained scan, screener down: the max(date) 503", "method": "POST", "path": "/analyze", "form": {}}
+ ]
+}

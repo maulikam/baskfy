@@ -1,0 +1,178 @@
+{
+ "note": "Lane vbt (wave D2): the four executable kinds no desk_diff case reached before (RAISE_GTT_STOP, SELL_AT_OPEN incl. a PARTIAL, ARM_GTT, CANCEL_LIMIT), their refusals, and R8.VB2's pre-send one-entry-per-signal refusal, all DRY_RUN over the replay Kite (no order or GTT call may reach it). Runs after vbt_edges.json (file order), on the book that scenario built.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ],
+  "public.vb_fill": [
+   "created_at"
+  ],
+  "public.vb_order": [
+   "updated_at"
+  ],
+  "public.vb_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.vb_scan_run": [
+   "created_at"
+  ],
+  "public.vb_plan_line": [
+   "updated_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "RAISE_GTT_STOP OAL on a DRY_RUN position: both desks 500 (pre-existing Python defect, reproduced, R8.VB5): a simulated GTT is stored as gtt_id '' (not 'DRY-'), so int('') raises before anything is written; the stop stays where it was",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9001",
+    "confirm": "true"
+   },
+   "clock": "2026-10-19T09:25:00+05:30",
+   "sql": [
+    "INSERT INTO vb_plan (id, plan_id, user_id, session_date, source, built_at, expires_at, plan_hash, gate, sleeve_equity_inr, total_new_exposure_inr, created_at) OVERRIDING SYSTEM VALUE VALUES (9001, 'ab000000-0000-4000-8000-00000000a001', 1, '2026-10-19', 'MORNING', '2026-10-19 09:00:00+05:30', '2026-10-19 09:55:00+05:30', 'lane-vbt-d2', 'OPEN', 1000000, 0, '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9001, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'OAL'), 'RAISE_GTT_STOP', 'PROPOSED', 397, NULL, 590.00, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:OAL:RAISE_GTT_STOP', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'OAL') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9002, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TECHM'), 'RAISE_GTT_STOP', 'PROPOSED', 139, NULL, 1500.00, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TECHM:RAISE_GTT_STOP', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'TECHM') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9003, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TIPSMUSIC'), 'RAISE_GTT_STOP', 'PROPOSED', 334, NULL, 800.00, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TIPSMUSIC:RAISE_GTT_STOP', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'TIPSMUSIC') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9004, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TECHM'), 'SELL_AT_OPEN', 'PROPOSED', 140, NULL, NULL, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TECHM:SELL_AT_OPEN', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'TECHM') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9005, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TIPSMUSIC'), 'SELL_AT_OPEN', 'PROPOSED', 334, NULL, NULL, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TIPSMUSIC:SELL_AT_OPEN', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'TIPSMUSIC') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9006, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'OAL'), 'SELL_AT_OPEN', 'PROPOSED', 132, NULL, NULL, 0, 'PARTIAL', 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:OAL:SELL_AT_OPEN', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'OAL') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9007, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TECHM'), 'ARM_GTT', 'PROPOSED', 139, NULL, NULL, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TECHM:ARM_GTT', (SELECT id FROM vb_position WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'TECHM') AND state = 'OPEN' ORDER BY id LIMIT 1), NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_order (id, user_id, broker_account_id, instrument_id, signal_date, limit_price, stop_price, quantity, state, working_from, expires_after_session, sessions_worked, broker_order_id, client_id, simulated, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9001, 1, 1, (SELECT id FROM instrument WHERE symbol = 'TCS'), '2026-10-19', 3000.00, 2700.00, 5, 'SENT', '2026-10-19', '2026-10-21', 0, 'B-LANE-VBT-1', 'lane-vbt-d2:TCS', true, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9008, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TCS'), 'CANCEL_LIMIT', 'PROPOSED', 5, 3000.00, 2700.00, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TCS:CANCEL_LIMIT', NULL, 9001, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9009, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'MVGJL'), 'CANCEL_LIMIT', 'PROPOSED', 5, 241.15, 212.20, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:MVGJL:CANCEL_LIMIT', NULL, NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')",
+    "INSERT INTO vb_plan_line (id, plan_id, user_id, instrument_id, kind, state, quantity, limit_price, stop_price, value_inr, reason, note, client_id, position_id, order_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9010, 9001, 1, (SELECT id FROM instrument WHERE symbol = 'TCS'), 'PLACE_LIMIT', 'PROPOSED', 5, 3000.00, 2700.00, 0, NULL, 'lane vbt D2', 'ab000000-0000-4000-8000-00000000a001:TCS:PLACE_LIMIT', NULL, NULL, '2026-10-19 09:00:00+05:30', '2026-10-19 09:00:00+05:30')"
+   ],
+   "note": "Seeds plan 9001 (MORNING, session 19 Oct, expiring 09:55) with one line of every kind no other case file reaches, on the book vbt_edges.json built (OAL, TECHM, TIPSMUSIC open with simulated GTTs), plus a working TCS limit with a broker order id. Explicit ids (OVERRIDING SYSTEM VALUE) and stamps, so both clones hold identical rows."
+  },
+  {
+   "name": "RAISE_GTT_STOP TECHM to 1500.00 is refused: a stop never falls (resting 1575.20)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9002",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "RAISE_GTT_STOP TIPSMUSIC to 800.00 is refused: at or above the last price (the entry, no quote read for a raise) would fire at once",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9003",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "SELL_AT_OPEN TECHM 140 against 139 held is BLOCKED with both numbers",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9004",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "SELL_AT_OPEN TIPSMUSIC 334 (all of it): simulated fill, the position CLOSED",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9005",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "SELL_AT_OPEN OAL 132 PARTIAL: a third sold, the position stays OPEN",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9006",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "ARM_GTT TECHM after its GTT went missing: the backstop re-arms the stop (non-negotiable 4)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9007",
+    "confirm": "true"
+   },
+   "sql": [
+    "UPDATE vb_position SET gtt_id = NULL WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'TECHM') AND state = 'OPEN'"
+   ]
+  },
+  {
+   "name": "CANCEL_LIMIT TCS: the working limit is cancelled through the gateway's dry-run branch (EXPIRY_SWEEP)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9008",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "CANCEL_LIMIT MVGJL with no working order is BLOCKED rather than silent",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9009",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "PLACE_LIMIT TCS on the same 19 Oct signal as the cancelled order is ALREADY_SENT before the gateway (R8.VB2: uq_vb_order_one_per_signal holds one order per name per signal, in any state)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9010",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "RAISE_GTT_STOP OAL to 590.00 once its GTT id is a broker's (numeric): the resting GTT is cancelled through the gateway's dry-run branch and re-armed at the new trigger",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9001",
+    "confirm": "true"
+   },
+   "sql": [
+    "UPDATE vb_position SET gtt_id = '424242' WHERE user_id = 1 AND instrument_id = (SELECT id FROM instrument WHERE symbol = 'OAL') AND state = 'OPEN'"
+   ]
+  },
+  {
+   "name": "the raised line again is 409 (it was FILLED by the raise above)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "ab000000-0000-4000-8000-00000000a001",
+    "line_id": "9001",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "vbt data after every line kind",
+   "method": "GET",
+   "path": "/vbt/data"
+  },
+  {
+   "name": "vbt page after every line kind",
+   "method": "GET",
+   "path": "/vbt"
+  }
+ ]
+}

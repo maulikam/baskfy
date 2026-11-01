@@ -8477,3 +8477,84 @@ the overlap page's Laya panel (which now reads an empty cache and says so), `ove
 Redis wake key (a no-op with no listener), the OV3/OV11 record above. Removing the vocabulary
 would need a migration over stored tags and buys nothing while the sidecar is gone; it is a
 follow-up if Maulik wants the panel gone too.
+
+## RECUT — a screen basket is re-cut on demand, by Maulik's choice in session (14 Oct 2026) ✅ decided by Maulik
+
+**What prompted it.** Maulik saved two baskets from screens and asked whether a basket "is linked to
+the screen always, so whenever the stock list changes in the screen it also reflects on the basket".
+It did not: `POST /cb/baskets/from-screen` writes a GENESIS version once, and `source_screen_id`
+(migration 0017, "what makes the re-cut possible") was never read by anything. Offered on-demand vs
+a scheduled re-cut, he chose **on demand** — "re-run the screen, see what was added and removed,
+and decide when to rebalance".
+
+**What was built.** `POST /cb/baskets/{slug}/recut` (`routers/curated_from_screen.py`): sole-tenant
+only, `source = 'SCREEN'` baskets only, re-runs the basket's own screen server-side.
+`confirm=false` previews added / removed / kept and writes nothing; `confirm=true` writes the next
+version (label `CHANGED`). A cut identical to the current version is never written, so a double
+click cannot stack versions. It keeps the current version's name count (trimmed if the screen now
+returns fewer) and the weight method recorded in its notes; `CUSTOM` falls back to `EQUAL` and the
+response says so. No order path — buying the new holdings is still the Invest hand-off. The web
+basket page shows a "Re-cut from screen" panel for screen baskets.
+
+**Done on the box the same day, outside the repo** (both reversible):
+- Baskets 102 `avg-sharp-12-1m` and 103 `maulik` set `PRIVATE` → `PUBLISHED` at his instruction.
+  Every read route filters on `visibility = 'PUBLISHED'` and `cb_basket` has no owner column, so a
+  basket saved from a screen is invisible everywhere, its own page included. **Still open:** the
+  next basket saved from a screen is hidden again, until an owner-aware read lands.
+- `BASKFY_KITE_PUBLISHER_API_KEY` set to the Kite **Connect** key: Kite answered `Invalid api_key`
+  for the Publisher key (tested from the box), and accepts the Connect key on the same form.
+  Backup: `/opt/baskfy/.env.staging.pre-publisher-key-*`.
+
+## AWS-EXIT — off AWS, onto this Mac, read-only, by Maulik's instruction in session (29 Oct 2026) ✅ decided by Maulik
+
+*"I dont want to have aws anymore, and want to run everything locally, and save money."* His
+answers the same day: **read-only locally** (Kite takes API orders only from the registered static
+IP, which was the box's EIP — `07` §4a — so every execution and auto-execute flag is false on the
+Mac); **on demand**, not always on; **Tailscale** for remote access; **AWS torn down whole**, but
+*"I need all the data which are on aws here as well, once all A to Z completed, then lets start
+work on removing everything from aws"*; and *"no need to wait for nightly run on aws, lets do that
+here in mac tonight"*.
+
+- `tools/deploy/exit-aws.sh export` ran at 16:01 IST after the close: the box's thirteen app
+  services stopped (and stay stopped), Postgres dumped (`-Fc`, 3.5 GB → 471 MB) with a row count
+  per table, every Docker volume but pgdata, all of `/opt/baskfy` and every container's log packed,
+  sha256'd, uploaded; `fetch` verified all fifteen files. Bundle, S3 mirror, images, Route 53
+  records and the pre-destroy tfstate: `/Volumes/T7-Work/baskfy-aws-exit-20261029/`.
+- `tools/deploy/local.sh restore`: **186 tables, 13,035,906 rows, identical to the box**; alembic
+  `0059_f3_directional`, last bar 28 Oct, ohlcv_daily's compressed chunks intact. Stack up on
+  `127.0.0.1:8480` (app) / `:8481` (desk), images `d78907f` from ECR (= the box), Kite authed.
+- Found by rehearsal before the real run, and fixed: `pg_restore -j` breaks the Timescale
+  catalog's load order (ohlcv_daily came back empty and the row-count diff refused), so the
+  restore is single-threaded; and the flag check's `=(false|0|)$` is rejected by macOS grep, so it
+  passed without checking — now `=(false|0)?$`, proven to fail a container with an armed flag.
+- The 29 Oct nightly runs on the Mac (bhavcopy 18:15, chain 18:45 IST), not the box.
+- Reverse: `exit-aws.sh`'s bundle restores onto any box; re-arming execution needs a static IP
+  registered with Kite and Maulik's hand on the flags. Runbook: `docs/LOCAL.md`.
+- **Not yet done:** `terraform destroy`, emptying `baskfy-archive` and ECR, deleting the SES SMTP
+  user — after Maulik's go-ahead. `baskfy.com`'s nameservers point at Route 53
+  (`aws-metadata/route53-nameservers.txt`); the zone holds only the two staging A records.
+
+## LOCAL-1 — DRY_RUN off for the API container only on the Mac (30 Oct 2026, Maulik's choice in session)
+
+**Context.** `tools/deploy/local.sh` forced `DRY_RUN=true` in every service. The API reads `DRY_RUN`
+as "never call Kite" (`broker_oauth.simulated_exchange_reasons`, `broker_holdings`,
+`broker_trades`), so the Zerodha login's `request_token` exchange answered 503 and holdings/trades
+read nothing. Asked, Maulik chose "API only: DRY_RUN off".
+**Choice.** `compose.local.yml` sets `DRY_RUN=false` on the `api` service alone. The API has no
+order, GTT or Kite write call (no `place_order`, no `baskfy_execution` gateway use); the desk,
+monitors, workers and `twt-auto` keep `DRY_RUN=true`; every execute/auto flag stays false; the
+Kite app has no registered static IP, so Kite refuses API orders regardless.
+**Rejected.** A separate read-only broker switch (cleaner, but a code change and an image rebuild);
+staying unconnected (no holdings, no live marks).
+**Reverse.** Delete `environment: {DRY_RUN: "false"}` from the `api` line in `local.sh` and
+`/Volumes/T7-Work/baskfy-local/compose.local.yml`, then recreate `api`.
+
+## KITE-PROXY — static-IP egress for Kite (31 Oct 2026)
+
+* Maulik bought a static IP (staticip.in, `82.118.26.6`, valid to 30 Oct 2027). Every Kite call
+  (Python desk + screener providers/worker/API oauth; Rust providers `KiteConnect` + session
+  verifiers) now honours `BASKFY_KITE_PROXY_URL`; empty = direct, as before. `https://` scheme so
+  the proxy credentials travel encrypted. Credentials live only in untracked env files.
+* No flag moved. Note: LOCAL-1 cited "no registered static IP" as a backstop; once the IP is
+  whitelisted on the Kite app that backstop is gone — the money flags and DRY_RUN remain the guard.
+* Reverse: unset `BASKFY_KITE_PROXY_URL`.

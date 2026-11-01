@@ -201,6 +201,7 @@ def verify_session(token: str) -> str:
                 "Authorization": f"token {settings.kite_api_key}:{token}",
             },
             timeout=15.0,
+            proxy=settings.kite_proxy_url.strip() or None,
         )
     except httpx.HTTPError as exc:
         raise SystemExit(

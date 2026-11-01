@@ -1,0 +1,9 @@
+{
+ "note": "Run with --env SCAN_SOURCE_DEFAULT=generated (postgres backend; the screener is the bed clone): with no file and no date, /analyze builds the scan for the pipeline's latest date, so with no retained scan it is the 'upload one first' 503 after the max(date) read; a typed generate_for still wins over the flag. A no-file analyze after an upload would generate the whole 3.9M-bar history in both desks and is deliberately not a case (16 GB machine shared with the live stack).",
+ "cases": [
+  {"name": "flag on, no file, no date, no retained scan: 503 upload one first", "method": "POST", "path": "/analyze", "form": {}},
+  {"name": "flag on, an explicit malformed date is still the 400", "method": "POST", "path": "/analyze", "form": {"generate_for": "last tuesday"}},
+  {"name": "flag on, the upload path still answers with an upload", "method": "POST", "path": "/analyze", "files": {"scan": {"path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv", "filename": "sample_scan.csv"}}, "plan": true},
+  {"name": "flag on, an explicit date generates from the retained sample scan's carried columns", "method": "POST", "path": "/analyze", "form": {"generate_for": "2018-03-01"}, "plan": true}
+ ]
+}

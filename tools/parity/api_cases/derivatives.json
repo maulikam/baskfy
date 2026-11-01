@@ -1,0 +1,1830 @@
+{
+ "cases": [
+  {
+   "name": "fno-overnight-owner",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "owner",
+   "note": "the sole tenant's FO page"
+  },
+  {
+   "name": "fno-overnight-plain",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "plain",
+   "note": "another tenant: 404 not-the-sole-tenant"
+  },
+  {
+   "name": "fno-overnight-subscriber",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "subscriber",
+   "note": "a paying account that is not the sole tenant"
+  },
+  {
+   "name": "fno-overnight-anonymous",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "anonymous",
+   "note": "AuthenticatedDep: 401"
+  },
+  {
+   "name": "fno-info-owner",
+   "method": "GET",
+   "path": "/api/v1/fno/info",
+   "user": "owner",
+   "note": "the sole tenant's FO page"
+  },
+  {
+   "name": "fno-info-plain",
+   "method": "GET",
+   "path": "/api/v1/fno/info",
+   "user": "plain",
+   "note": "another tenant: 404 not-the-sole-tenant"
+  },
+  {
+   "name": "fno-info-subscriber",
+   "method": "GET",
+   "path": "/api/v1/fno/info",
+   "user": "subscriber",
+   "note": "a paying account that is not the sole tenant"
+  },
+  {
+   "name": "fno-info-anonymous",
+   "method": "GET",
+   "path": "/api/v1/fno/info",
+   "user": "anonymous",
+   "note": "AuthenticatedDep: 401"
+  },
+  {
+   "name": "fno-config-owner",
+   "method": "GET",
+   "path": "/api/v1/fno/config",
+   "user": "owner",
+   "note": "the sole tenant's FO page"
+  },
+  {
+   "name": "fno-config-plain",
+   "method": "GET",
+   "path": "/api/v1/fno/config",
+   "user": "plain",
+   "note": "another tenant: 404 not-the-sole-tenant"
+  },
+  {
+   "name": "fno-config-subscriber",
+   "method": "GET",
+   "path": "/api/v1/fno/config",
+   "user": "subscriber",
+   "note": "a paying account that is not the sole tenant"
+  },
+  {
+   "name": "fno-config-anonymous",
+   "method": "GET",
+   "path": "/api/v1/fno/config",
+   "user": "anonymous",
+   "note": "AuthenticatedDep: 401"
+  },
+  {
+   "name": "fno-overnight-expired",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "expired"
+  },
+  {
+   "name": "fno-overnight-stale-epoch",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "fno-info-trailing-slash",
+   "method": "GET",
+   "path": "/api/v1/fno/info/",
+   "user": "owner",
+   "note": "Starlette's slash redirect"
+  },
+  {
+   "name": "options-today-owner",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "owner"
+  },
+  {
+   "name": "options-today-plain",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "plain"
+  },
+  {
+   "name": "options-today-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-positions-owner",
+   "method": "GET",
+   "path": "/api/v1/options/positions",
+   "user": "owner"
+  },
+  {
+   "name": "options-positions-plain",
+   "method": "GET",
+   "path": "/api/v1/options/positions",
+   "user": "plain"
+  },
+  {
+   "name": "options-positions-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/positions",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-config-owner",
+   "method": "GET",
+   "path": "/api/v1/options/config",
+   "user": "owner"
+  },
+  {
+   "name": "options-config-plain",
+   "method": "GET",
+   "path": "/api/v1/options/config",
+   "user": "plain"
+  },
+  {
+   "name": "options-config-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/config",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-journal-owner",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner"
+  },
+  {
+   "name": "options-journal-plain",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "plain"
+  },
+  {
+   "name": "options-journal-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-backtest-owner",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner"
+  },
+  {
+   "name": "options-backtest-plain",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "plain"
+  },
+  {
+   "name": "options-backtest-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-calendar-owner",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner"
+  },
+  {
+   "name": "options-calendar-plain",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "plain"
+  },
+  {
+   "name": "options-calendar-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-sessions-owner",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner"
+  },
+  {
+   "name": "options-sessions-plain",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "plain"
+  },
+  {
+   "name": "options-sessions-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-chain-owner",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner"
+  },
+  {
+   "name": "options-chain-plain",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "plain"
+  },
+  {
+   "name": "options-chain-anonymous",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "anonymous"
+  },
+  {
+   "name": "options-today-subscriber",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "subscriber"
+  },
+  {
+   "name": "options-today-garbage-token",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "garbage"
+  },
+  {
+   "name": "options-scan-O1M",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1M",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-O1W",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1W",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-O2",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-O3A",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O3A",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-O3B",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O3B",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-o2",
+   "method": "GET",
+   "path": "/api/v1/options/scan/o2",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-o3b",
+   "method": "GET",
+   "path": "/api/v1/options/scan/o3b",
+   "user": "owner",
+   "note": "latest scanned session"
+  },
+  {
+   "name": "options-scan-O1M-date",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1M",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-29"
+   }
+  },
+  {
+   "name": "options-scan-O3A-date-old",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O3A",
+   "user": "owner",
+   "query": {
+    "date": "2026-09-23"
+   }
+  },
+  {
+   "name": "options-scan-O2-date-empty",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2020-01-01"
+   },
+   "note": "no rows that day"
+  },
+  {
+   "name": "options-scan-O2-date-midnight",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-28T00:00:00"
+   },
+   "note": "pydantic's lax date"
+  },
+  {
+   "name": "options-scan-unknown-sleeve",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O4",
+   "user": "owner",
+   "note": "404 sleeve"
+  },
+  {
+   "name": "options-scan-unknown-sleeve-plain",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O4",
+   "user": "plain",
+   "note": "tenant refusal comes first"
+  },
+  {
+   "name": "options-scan-bad-date",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1M",
+   "user": "owner",
+   "query": {
+    "date": "2026-13-01"
+   }
+  },
+  {
+   "name": "options-scan-bad-date-anon",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1M",
+   "user": "anonymous",
+   "query": {
+    "date": "nope"
+   },
+   "note": "401 before validation"
+  },
+  {
+   "name": "options-scan-empty-date",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1M",
+   "user": "owner",
+   "query": "date="
+  },
+  {
+   "name": "options-scan-plain",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1M",
+   "user": "plain"
+  },
+  {
+   "name": "options-scan-encoded",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O%31M",
+   "user": "owner",
+   "note": "decoded path"
+  },
+  {
+   "name": "options-scan-last-wins",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": "date=2020-01-01&date=2026-10-27"
+  },
+  {
+   "name": "options-chain-expiry-1103",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": {
+    "expiry": "2026-11-03"
+   }
+  },
+  {
+   "name": "options-chain-expiry-1027",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": {
+    "expiry": "2026-10-27"
+   },
+   "note": "an expired monthly"
+  },
+  {
+   "name": "options-chain-expiry-0929",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": {
+    "expiry": "2026-09-29"
+   }
+  },
+  {
+   "name": "options-chain-expiry-none",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": {
+    "expiry": "2020-01-07"
+   },
+   "note": "no snapshot: empty list"
+  },
+  {
+   "name": "options-chain-bad-expiry",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": {
+    "expiry": "tomorrow"
+   }
+  },
+  {
+   "name": "options-sessions-window",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2026-09-01",
+    "to": "2026-10-30"
+   }
+  },
+  {
+   "name": "options-sessions-O2",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2026-09-01",
+    "sleeve": "O2"
+   }
+  },
+  {
+   "name": "options-sessions-o3a",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2026-09-01",
+    "to": "2026-10-30",
+    "sleeve": "o3a"
+   }
+  },
+  {
+   "name": "options-sessions-bad-sleeve",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "sleeve": "X"
+   }
+  },
+  {
+   "name": "options-sessions-empty-sleeve",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": "sleeve="
+  },
+  {
+   "name": "options-sessions-reversed",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2026-10-30",
+    "to": "2026-10-01"
+   }
+  },
+  {
+   "name": "options-sessions-too-long",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2025-01-01",
+    "to": "2026-10-30"
+   }
+  },
+  {
+   "name": "options-sessions-401-days",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2025-09-24",
+    "to": "2026-10-30"
+   }
+  },
+  {
+   "name": "options-sessions-400-days",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2025-09-25",
+    "to": "2026-10-30"
+   }
+  },
+  {
+   "name": "options-sessions-bad-dates",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "x",
+    "to": "2026-02-30"
+   },
+   "note": "both errors, in order"
+  },
+  {
+   "name": "options-sessions-bad-window-and-sleeve",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2026-10-30",
+    "to": "2026-10-01",
+    "sleeve": "X"
+   },
+   "note": "window refusal first"
+  },
+  {
+   "name": "options-journal-O1M",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "O1M"
+   }
+  },
+  {
+   "name": "options-backtest-O1M",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner",
+   "query": {
+    "sleeve": "O1M"
+   }
+  },
+  {
+   "name": "options-journal-O1W",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "O1W"
+   }
+  },
+  {
+   "name": "options-backtest-O1W",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner",
+   "query": {
+    "sleeve": "O1W"
+   }
+  },
+  {
+   "name": "options-journal-O2",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "O2"
+   }
+  },
+  {
+   "name": "options-backtest-O2",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner",
+   "query": {
+    "sleeve": "O2"
+   }
+  },
+  {
+   "name": "options-journal-O3A",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "O3A"
+   }
+  },
+  {
+   "name": "options-backtest-O3A",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner",
+   "query": {
+    "sleeve": "O3A"
+   }
+  },
+  {
+   "name": "options-journal-O3B",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "O3B"
+   }
+  },
+  {
+   "name": "options-backtest-O3B",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner",
+   "query": {
+    "sleeve": "O3B"
+   }
+  },
+  {
+   "name": "options-journal-bad",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "bad"
+   }
+  },
+  {
+   "name": "options-backtest-bad",
+   "method": "GET",
+   "path": "/api/v1/options/backtest",
+   "user": "owner",
+   "query": {
+    "sleeve": "O9"
+   }
+  },
+  {
+   "name": "options-calendar-2020",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2020"
+   }
+  },
+  {
+   "name": "options-calendar-2026",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2026"
+   }
+  },
+  {
+   "name": "options-calendar-2027",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2027"
+   }
+  },
+  {
+   "name": "options-calendar-2100",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2100"
+   }
+  },
+  {
+   "name": "options-calendar-2026.0",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2026.0"
+   }
+  },
+  {
+   "name": "options-calendar-2027-spaced",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": " 2027 "
+   }
+  },
+  {
+   "name": "options-calendar-2_026",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2_026"
+   }
+  },
+  {
+   "name": "options-calendar-bad-2019",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2019"
+   }
+  },
+  {
+   "name": "options-calendar-bad-2101",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2101"
+   }
+  },
+  {
+   "name": "options-calendar-bad-abc",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "abc"
+   }
+  },
+  {
+   "name": "options-calendar-bad-blank",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": ""
+   }
+  },
+  {
+   "name": "options-calendar-bad-2026.5",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2026.5"
+   }
+  },
+  {
+   "name": "options-calendar-bad-99999999999999999999999",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "99999999999999999999999"
+   }
+  },
+  {
+   "name": "backtests-list-subscriber",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-list-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "owner"
+  },
+  {
+   "name": "backtests-list-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "plain"
+  },
+  {
+   "name": "backtests-list-anonymous",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "anonymous"
+  },
+  {
+   "name": "backtests-list-expired",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "expired"
+  },
+  {
+   "name": "backtests-list-limit-1",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "1"
+   }
+  },
+  {
+   "name": "backtests-list-limit-500",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "500"
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad-0",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "0"
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad-501",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "501"
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad-abc",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "abc"
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad-blank",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": ""
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad-1.5",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "1.5"
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad--1",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "-1"
+   }
+  },
+  {
+   "name": "backtests-list-limit-bad-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "plain",
+   "query": {
+    "limit": "0"
+   },
+   "note": "validation before the entitlement"
+  },
+  {
+   "name": "backtests-list-limit-bad-anon",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "anonymous",
+   "query": {
+    "limit": "0"
+   },
+   "note": "401 before validation"
+  },
+  {
+   "name": "backtests-list-slash",
+   "method": "GET",
+   "path": "/api/v1/backtests/",
+   "user": "subscriber",
+   "note": "307 to the list"
+  },
+  {
+   "name": "backtests-detail-subscriber",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-detail-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7",
+   "user": "owner"
+  },
+  {
+   "name": "backtests-detail-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7",
+   "user": "plain"
+  },
+  {
+   "name": "backtests-detail-anonymous",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7",
+   "user": "anonymous"
+  },
+  {
+   "name": "backtests-detail-unknown",
+   "method": "GET",
+   "path": "/api/v1/backtests/000000000000000000000000",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-detail-quote",
+   "method": "GET",
+   "path": "/api/v1/backtests/it's",
+   "user": "subscriber",
+   "note": "repr picks double quotes"
+  },
+  {
+   "name": "backtests-trades-subscriber",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/trades",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-trades-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/trades",
+   "user": "owner"
+  },
+  {
+   "name": "backtests-trades-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/trades",
+   "user": "plain"
+  },
+  {
+   "name": "backtests-trades-anonymous",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/trades",
+   "user": "anonymous"
+  },
+  {
+   "name": "backtests-trades-cursor",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/trades",
+   "user": "subscriber",
+   "query": {
+    "cursor": "x",
+    "limit": "5"
+   },
+   "note": "not done comes before the cursor"
+  },
+  {
+   "name": "backtests-trades-limit-bad",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/trades",
+   "user": "subscriber",
+   "query": {
+    "limit": "0"
+   }
+  },
+  {
+   "name": "backtests-trades-unknown",
+   "method": "GET",
+   "path": "/api/v1/backtests/nope/trades",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-holdings-subscriber",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-holdings-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "owner"
+  },
+  {
+   "name": "backtests-holdings-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "plain"
+  },
+  {
+   "name": "backtests-holdings-anonymous",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "anonymous"
+  },
+  {
+   "name": "backtests-holdings-cursor",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "subscriber",
+   "query": {
+    "cursor": "x",
+    "limit": "5"
+   },
+   "note": "not done comes before the cursor"
+  },
+  {
+   "name": "backtests-holdings-limit-bad",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "subscriber",
+   "query": {
+    "limit": "0"
+   }
+  },
+  {
+   "name": "backtests-holdings-unknown",
+   "method": "GET",
+   "path": "/api/v1/backtests/nope/holdings",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-holdings-date",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "subscriber",
+   "query": {
+    "rebalance_date": "2026-01-02"
+   }
+  },
+  {
+   "name": "backtests-holdings-bad-date",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/holdings",
+   "user": "subscriber",
+   "query": {
+    "rebalance_date": "2026-01-32",
+    "limit": "x"
+   }
+  },
+  {
+   "name": "backtests-export-subscriber",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "subscriber"
+  },
+  {
+   "name": "backtests-export-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "owner"
+  },
+  {
+   "name": "backtests-export-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "plain"
+  },
+  {
+   "name": "backtests-export-anonymous",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "anonymous"
+  },
+  {
+   "name": "backtests-export-equity",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "subscriber",
+   "query": {
+    "artefact": "equity"
+   }
+  },
+  {
+   "name": "backtests-export-bad",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "subscriber",
+   "query": {
+    "artefact": "parquet"
+   }
+  },
+  {
+   "name": "backtests-export-bad-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/export",
+   "user": "plain",
+   "query": {
+    "artefact": "parquet"
+   }
+  },
+  {
+   "name": "backtests-download-bad-token",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/trades",
+   "user": "anonymous",
+   "query": {
+    "expires": "4102444800",
+    "token": "AAAA"
+   }
+  },
+  {
+   "name": "backtests-download-bad-token-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/holdings",
+   "user": "owner",
+   "query": {
+    "expires": "1",
+    "token": "AAAA"
+   }
+  },
+  {
+   "name": "backtests-download-expired-token-user",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/trades",
+   "user": "expired",
+   "query": {
+    "expires": "1",
+    "token": "x"
+   },
+   "note": "the router's principal still refuses a bad bearer"
+  },
+  {
+   "name": "backtests-download-missing",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/trades",
+   "user": "anonymous",
+   "note": "expires and token both required"
+  },
+  {
+   "name": "backtests-download-bad-expires",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/trades",
+   "user": "anonymous",
+   "query": {
+    "expires": "soon",
+    "token": "x"
+   }
+  },
+  {
+   "name": "backtests-download-huge-expires",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/trades",
+   "user": "anonymous",
+   "query": {
+    "expires": "999999999999999999999999999",
+    "token": "x"
+   }
+  },
+  {
+   "name": "backtests-download-unicode-token",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/equity",
+   "user": "anonymous",
+   "query": {
+    "expires": "10",
+    "token": "é"
+   }
+  },
+  {
+   "name": "backtests-download-bad-artefact",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/download/parquet",
+   "user": "anonymous",
+   "query": {
+    "token": "x"
+   }
+  },
+  {
+   "name": "backtests-download-unknown-run",
+   "method": "GET",
+   "path": "/api/v1/backtests/nope/download/trades",
+   "user": "anonymous",
+   "query": {
+    "expires": "10",
+    "token": "x"
+   }
+  },
+  {
+   "name": "backtests-events-subscriber",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/events",
+   "user": "subscriber",
+   "note": "a failed run: progress then end"
+  },
+  {
+   "name": "backtests-events-owner",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/events",
+   "user": "owner",
+   "note": "a failed run: progress then end"
+  },
+  {
+   "name": "backtests-events-plain",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/events",
+   "user": "plain",
+   "note": "a failed run: progress then end"
+  },
+  {
+   "name": "backtests-events-anonymous",
+   "method": "GET",
+   "path": "/api/v1/backtests/e6f0727d3f8dba80097e76d7/events",
+   "user": "anonymous",
+   "note": "a failed run: progress then end"
+  },
+  {
+   "name": "backtests-events-unknown",
+   "method": "GET",
+   "path": "/api/v1/backtests/nope/events",
+   "user": "subscriber"
+  },
+  {
+   "name": "overlap-tags-export-owner",
+   "method": "GET",
+   "path": "/api/v1/overlap/tags/export",
+   "user": "owner"
+  },
+  {
+   "name": "overlap-tags-export-plain",
+   "method": "GET",
+   "path": "/api/v1/overlap/tags/export",
+   "user": "plain"
+  },
+  {
+   "name": "overlap-tags-export-subscriber",
+   "method": "GET",
+   "path": "/api/v1/overlap/tags/export",
+   "user": "subscriber"
+  },
+  {
+   "name": "overlap-tags-export-anonymous",
+   "method": "GET",
+   "path": "/api/v1/overlap/tags/export",
+   "user": "anonymous"
+  },
+  {
+   "name": "overlap-tags-export-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/overlap/tags/export",
+   "user": "wrong_key"
+  },
+  {
+   "name": "overlap-reviews-export-owner",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "owner"
+  },
+  {
+   "name": "overlap-reviews-export-plain",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "plain"
+  },
+  {
+   "name": "overlap-reviews-export-subscriber",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "subscriber"
+  },
+  {
+   "name": "overlap-reviews-export-anonymous",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "anonymous"
+  },
+  {
+   "name": "overlap-reviews-export-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "wrong_key"
+  },
+  {
+   "name": "overlap-catalyst-scan-owner",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner"
+  },
+  {
+   "name": "overlap-catalyst-scan-plain",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "plain"
+  },
+  {
+   "name": "overlap-catalyst-scan-subscriber",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "subscriber"
+  },
+  {
+   "name": "overlap-catalyst-scan-anonymous",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "anonymous"
+  },
+  {
+   "name": "overlap-catalyst-scan-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "wrong_key"
+  },
+  {
+   "name": "overlap-catalyst-scan-slash",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan/",
+   "user": "owner",
+   "note": "307"
+  },
+  {
+   "name": "verify-list",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-2",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "2"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-plus",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "+2"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-0pad",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "02"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-2.0",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "2.0"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-1e1",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "1e1"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-space",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": " 2 "
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-arabic",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "٢"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-dup",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": "limit=1&limit=3",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-list-us",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "subscriber",
+   "query": {
+    "limit": "1_0"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-'+2026'",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "+2026"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-'٢٠٢٦'",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "٢٠٢٦"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-'2026e0'",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2026e0"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-'0x7EA'",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "0x7EA"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-'-2026'",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "-2026"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-' '",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": " "
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-cal-'2026\\t'",
+   "method": "GET",
+   "path": "/api/v1/options/calendar",
+   "user": "owner",
+   "query": {
+    "year": "2026\t"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-1761696000",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "1761696000"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026-10-29T00:00:00Z",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-29T00:00:00Z"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026-10-29T05:30:00+05:30",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-29T05:30:00+05:30"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026-10-29T00:00:00+05:30",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-29T00:00:00+05:30"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-20261029",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "20261029"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026-1-29",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-1-29"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-1761696000.0",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "1761696000.0"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-0",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "0"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026-10-29 ",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-29 "
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026-10-29T00:00",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026-10-29T00:00"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-2026/10/29",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "2026/10/29"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-date-1761739200",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2",
+   "user": "owner",
+   "query": {
+    "date": "1761739200"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-sleeve-O1m",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O1m",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-sleeve-%20O2",
+   "method": "GET",
+   "path": "/api/v1/options/scan/%20O2",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-sleeve-O2%20",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O2%20",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-sleeve-o1w",
+   "method": "GET",
+   "path": "/api/v1/options/scan/o1w",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-sleeve-O3",
+   "method": "GET",
+   "path": "/api/v1/options/scan/O3",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-scan-sleeve-",
+   "method": "GET",
+   "path": "/api/v1/options/scan/",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-sessions-sleeve-space",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "sleeve": " O2"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-sessions-from-only-old",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "from": "2020-01-01"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-sessions-to-only",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": {
+    "to": "2026-10-01"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-sessions-dup-sleeve",
+   "method": "GET",
+   "path": "/api/v1/options/sessions",
+   "user": "owner",
+   "query": "sleeve=X&sleeve=O2",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-journal-lower",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": {
+    "sleeve": "o2"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-journal-empty",
+   "method": "GET",
+   "path": "/api/v1/options/journal",
+   "user": "owner",
+   "query": "sleeve=",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-chain-expiry-ts",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": {
+    "expiry": "2026-11-03T00:00:00"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-chain-expiry-dup",
+   "method": "GET",
+   "path": "/api/v1/options/chain",
+   "user": "owner",
+   "query": "expiry=bad&expiry=2026-11-03",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-method-HEAD-today",
+   "method": "HEAD",
+   "path": "/api/v1/options/today",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-method-OPTIONS-today",
+   "method": "OPTIONS",
+   "path": "/api/v1/options/today",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-method-PUT-today",
+   "method": "PUT",
+   "path": "/api/v1/options/today",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-today-slash",
+   "method": "GET",
+   "path": "/api/v1/options/today/",
+   "user": "owner",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-fno-overnight-query",
+   "method": "GET",
+   "path": "/api/v1/fno/overnight",
+   "user": "owner",
+   "query": {
+    "x": "1"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-overlap-reviews-export-q",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "owner",
+   "query": {
+    "format": "csv"
+   },
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-stale-epoch-bt",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "stale_epoch",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-too-long-bt",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "too_long",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-unknown-bt",
+   "method": "GET",
+   "path": "/api/v1/backtests",
+   "user": "unknown",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-alg-none-opt",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "alg_none",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  },
+  {
+   "name": "verify-empty-bearer-opt",
+   "method": "GET",
+   "path": "/api/v1/options/today",
+   "user": "empty_bearer",
+   "note": "adversarial review: Python's lax parsing / method / auth edge"
+  }
+ ]
+}

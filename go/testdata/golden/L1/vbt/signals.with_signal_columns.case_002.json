@@ -1,0 +1,175 @@
+{
+ "fn": "baskfy_core.vbt.signals.with_signal_columns",
+ "inputs": {
+  "config": {
+   "breadth": {
+    "dma_bars": 200,
+    "min_pct_above_dma": 40.0
+   },
+   "costs": {
+    "cost_pct_per_side": 0.25
+   },
+   "data": {
+    "etf_name_pattern": "\\bETF\\b",
+    "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+    "etf_universe_slug": "etf",
+    "instrument_type": "EQ",
+    "keep_null_series": true,
+    "rolling_min_share": 0.9,
+    "series_allowed": [
+     "EQ",
+     "BE",
+     "BZ"
+    ],
+    "thin_session_min_periods": 5,
+    "thin_session_min_share": 0.25,
+    "thin_session_window_bars": 41
+   },
+   "entry": {
+    "fill_through_pct": 0.0,
+    "limit_at": "SIGNAL_CLOSE",
+    "valid_sessions": 3
+   },
+   "exits": {
+    "gtt_band_max_pct": 0.15,
+    "gtt_band_min_pct": 0.005,
+    "gtt_limit_fraction": 0.97,
+    "no_bar_tolerance_sessions": 5,
+    "qulla": {
+     "breakeven_after_r": 1.0,
+     "fast_trail_min_adr_pct": 6.0,
+     "max_stop_adr_multiple": 1.0,
+     "max_stop_distance_pct": 10.0,
+     "partial_denominator": 3,
+     "partial_earliest_bar": 3,
+     "partial_latest_bar": 5,
+     "partial_numerator": 1
+    },
+    "qulla_exits": true,
+    "stop_pct": 12.0,
+    "trail_ema_bars": 21
+   },
+   "scan": {
+    "min_change_pct": 6.5,
+    "min_close_raw_inr": 30.0,
+    "min_vol_sma": 25000.0,
+    "min_volume": 50000.0,
+    "vol_mult": 3.0,
+    "vol_sma_bars": 50
+   },
+   "sizing": {
+    "first_live_sessions": 5,
+    "max_entries_per_name": 2,
+    "max_new_entries_per_session": 3,
+    "max_position_pct": 12.5,
+    "max_position_vs_turnover": 0.01,
+    "max_slots": 10,
+    "min_trade_value_inr": "10000",
+    "pyramiding": true,
+    "risk_multiplier_first_live": 0.5
+   },
+   "trend": {
+    "breakout_high_bars": 20,
+    "dma_bars": 200,
+    "max_change_pct": 15.0,
+    "max_ret_20_pct": 25.0,
+    "min_close_position": 0.6,
+    "min_turnover_avg_inr": 20000000.0,
+    "ret_bars": 20,
+    "turnover_bars": 20
+   }
+  },
+  "frame": {
+   "columns": [
+    "instrument_id",
+    "date",
+    "close",
+    "close_raw",
+    "volume",
+    "vol_sma",
+    "change_pct",
+    "sma_dma",
+    "high_prior",
+    "ret_lookback_pct",
+    "close_position",
+    "turnover_avg",
+    "turnover_inr"
+   ],
+   "dtypes": {
+    "change_pct": "Float64",
+    "close": "Float64",
+    "close_position": "Float64",
+    "close_raw": "Float64",
+    "date": "Date",
+    "high_prior": "Float64",
+    "instrument_id": "Int64",
+    "ret_lookback_pct": "Float64",
+    "sma_dma": "Float64",
+    "turnover_avg": "Float64",
+    "turnover_inr": "Float64",
+    "vol_sma": "Float64",
+    "volume": "Float64"
+   },
+   "rows": []
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an empty frame. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "columns": [
+   "instrument_id",
+   "date",
+   "close",
+   "close_raw",
+   "volume",
+   "vol_sma",
+   "change_pct",
+   "sma_dma",
+   "high_prior",
+   "ret_lookback_pct",
+   "close_position",
+   "turnover_avg",
+   "turnover_inr",
+   "scan_hit",
+   "filter_A",
+   "filter_B",
+   "filter_C",
+   "filter_D",
+   "filter_E",
+   "filter_F",
+   "state",
+   "failed_filters"
+  ],
+  "dtypes": {
+   "change_pct": "Float64",
+   "close": "Float64",
+   "close_position": "Float64",
+   "close_raw": "Float64",
+   "date": "Date",
+   "failed_filters": "List(String)",
+   "filter_A": "Boolean",
+   "filter_B": "Boolean",
+   "filter_C": "Boolean",
+   "filter_D": "Boolean",
+   "filter_E": "Boolean",
+   "filter_F": "Boolean",
+   "high_prior": "Float64",
+   "instrument_id": "Int64",
+   "ret_lookback_pct": "Float64",
+   "scan_hit": "Boolean",
+   "sma_dma": "Float64",
+   "state": "String",
+   "turnover_avg": "Float64",
+   "turnover_inr": "Float64",
+   "vol_sma": "Float64",
+   "volume": "Float64"
+  },
+  "rows": []
+ }
+}

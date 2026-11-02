@@ -82,8 +82,9 @@ history; D3 is no longer the engineering blocker.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.
 4. Every buy gets a GTT stop the same session, vol-scaled 8–12% via `stop_from_vol()`.
-5. Product gates: CNC-only; MIS needs `INTRADAY_ENABLED`, NFO/BFO needs `OPTIONS_ENABLED`;
-   both default off, enforced inside the gateway.
+5. Product gates: CNC or MTF on cash equity (MTF is Maulik, 2 Nov 2026; Kite Connect
+   `product: "MTF"`). MIS needs `INTRADAY_ENABLED`, NFO/BFO needs `OPTIONS_ENABLED`;
+   both default off, enforced inside the gateway. MIS/NFO are never admitted silently.
 6. All order flow goes through the gateway (guards → risk → rate-limits → journal);
    `client_id = plan_id:symbol` so a re-posted plan cannot double-send; SGB*/G-sec blocked at
    the lowest layer. **Caveat carried from the desk's own wording, still true:** GTT stops go

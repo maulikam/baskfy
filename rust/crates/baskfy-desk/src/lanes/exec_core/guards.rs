@@ -6,9 +6,11 @@
 //! carry is refused by [`assert_not_overnight_option`] (16 Aug 2026: no option is held past the
 //! close), and an order carrying a `fo_plan` reference meets the narrower covered-overnight
 //! guard [`assert_overnight_option_is_covered`] instead (`docs/fno/02` §1, FO6). The product
-//! allow-list [`product_exchange_refusal`] is non-negotiable 5: CNC on NSE/BSE; MIS needs
-//! `INTRADAY_ENABLED`; a derivative venue needs `OPTIONS_ENABLED` and admits MIS only — plus
-//! the one FO branch (NRML on NFO with `BASKFY_FNO_CARRY_ENABLED` and a `fo_plan`).
+//! allow-list [`product_exchange_refusal`] is non-negotiable 5: CNC or MTF on NSE/BSE (MTF
+//! is Maulik, 2 Nov 2026 — Kite Connect product code `MTF`); MIS needs `INTRADAY_ENABLED`;
+//! a derivative venue needs `OPTIONS_ENABLED` and admits MIS only — plus the one FO branch
+//! (NRML on NFO with `BASKFY_FNO_CARRY_ENABLED` and a `fo_plan`). MIS and NFO are never
+//! admitted silently.
 //!
 //! Every message is Python's, character for character: the desk's tests and the sleeves'
 //! reports match on them.
@@ -256,13 +258,15 @@ pub fn product_exchange_refusal(
         }
         return String::new();
     }
-    if product_u != "CNC" {
-        return format!(
-            "{}: only CNC is allowed on cash equity unless INTRADAY_ENABLED (MIS)",
-            or_repr(&product_u, product)
-        );
+    // CNC is delivery. MTF is Zerodha's margin trading facility on cash equity (Maulik,
+    // 2 Nov 2026; Kite Connect `product: "MTF"`). Both overnight the shares; neither is MIS.
+    if product_u == "CNC" || product_u == "MTF" {
+        return String::new();
     }
-    String::new()
+    format!(
+        "{}: only CNC or MTF is allowed on cash equity unless INTRADAY_ENABLED (MIS)",
+        or_repr(&product_u, product)
+    )
 }
 
 /// One option position in units (positive long, negative short) — the shape

@@ -555,7 +555,13 @@ class TestTheBookIsCncOnly:
         assert len(places) == 2, "the buy and the sell"
         for call in places:
             kw = {k.arg: k.value for k in call.keywords}
-            assert isinstance(kw["product"], ast.Constant) and kw["product"].value == "CNC"
+            prod = kw["product"]
+            if isinstance(prod, ast.Constant):
+                assert prod.value == "CNC"
+            else:
+                assert isinstance(prod, ast.Call)
+                func = prod.func
+                assert isinstance(func, ast.Name) and func.id == "cash_product"
             assert isinstance(kw["exchange"], ast.Constant) and kw["exchange"].value == "NSE"
             # The order type may be a literal (the sell's MARKET) or the name the entry
             # resolves from config (`entry_order_type`, MARKET since 4 Sep 2026). Either way
@@ -571,7 +577,7 @@ class TestTheBookIsCncOnly:
         # ...and the module refuses anything else at run time rather than sending it.
         assert "if order_type not in ENTRY_ORDER_TYPES:" in inspect.getsource(X._buy)
         code = _code_only(inspect.getsource(X))
-        for word in ('"MIS"', '"NFO"', '"BFO"', '"co"', '"bo"', "MTF"):
+        for word in ('"MIS"', '"NFO"', '"BFO"', '"co"', '"bo"'):
             assert word not in code
 
     def test_the_gates_never_allow_intraday_or_options_whatever_the_weekly_desk_says(self,

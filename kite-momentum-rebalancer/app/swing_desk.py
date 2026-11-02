@@ -1628,6 +1628,151 @@ def _refused_json(exc: Exception, **extra: Any) -> dict:
                       **extra})
 
 
+@router.post("/swing/analyze")
+async def swing_analyze(
+    symbol: str = Form(...),
+    instrument_id: int = Form(...),
+    setup: str = Form(""),
+    amount_inr: str = Form(...),
+    product: str = Form("CNC"),
+    last_price_in: str = Form(..., alias="last_price"),
+    trigger: str = Form(...),
+    stop: str = Form(...),
+    lot_size: int = Form(1),
+):
+    """Opportunities row Buy: size a one-line SIGNAL plan from a rupee amount. Writes rows;
+    never places. Confirm is POST /swing/execute."""
+    from . import swing_execute  # noqa: PLC0415
+
+    product_u = (product or "CNC").strip().upper()
+    if product_u not in ("CNC", "MTF"):
+        raise HTTPException(400, "product must be CNC or MTF (MIS stays behind INTRADAY_ENABLED)")
+    symbol_u = (symbol or "").strip().upper()
+    if not symbol_u:
+        raise HTTPException(400, "symbol is required")
+    if int(instrument_id) <= 0:
+        raise HTTPException(400, "instrument_id is required")
+    try:
+        amount = Decimal(str(amount_inr).strip())
+        form_price = Decimal(str(last_price_in).strip())
+        trigger_d = Decimal(str(trigger).strip())
+        stop_d = Decimal(str(stop).strip())
+    except (decimal.InvalidOperation, ValueError) as exc:
+        raise HTTPException(400, "amount, last_price, trigger and stop must be numbers") from exc
+    if amount <= 0:
+        raise HTTPException(400, "amount_inr must be positive")
+    if stop_d >= trigger_d:
+        raise HTTPException(400, "stop must be below the trigger")
+    lot = max(int(lot_size or 1), 1)
+    live = last_price(symbol_u)
+    price = live if live is not None else form_price
+    if price <= 0:
+        raise HTTPException(400, "last_price must be positive")
+    qty = int(amount // price)
+    qty = (qty // lot) * lot
+    now = _now()
+    gates = swing_execute.swing_gates()
+    kite_authed = False
+    try:
+        from . import main as _main  # noqa: PLC0415
+
+        kite_authed = bool(_main.kite().is_authed())
+    except Exception:  # noqa: BLE001 - no session is the usual case on a cold desk
+        kite_authed = False
+    skip = ""
+    margin = None
+    if qty <= 0:
+        skip = f"{symbol_u}: amount {amount} is below one lot at {price}"
+    with open_store() as store:
+        context = store.session_context(now.date())
+        if not skip and not context.tier.new_entries_allowed:
+            skip = (
+                f"GATE_RED: {symbol_u} — new entries are closed (rung {context.tier.level})"
+            )
+        if not skip:
+            try:
+                from . import main as _main  # noqa: PLC0415
+
+                resp = _main.kite().kc.basket_order_margins(
+                    [{
+                        "exchange": "NSE",
+                        "tradingsymbol": symbol_u,
+                        "transaction_type": "BUY",
+                        "variety": "regular",
+                        "product": product_u,
+                        "order_type": "MARKET",
+                        "quantity": qty,
+                    }],
+                    True,
+                )
+                total = (resp or {}).get("final") or {}
+                raw = total.get("total") if isinstance(total, dict) else None
+                if raw not in (None, "", 0, 0.0):
+                    margin = Decimal(str(raw))
+            except Exception as exc:  # noqa: BLE001 - a quote, never a blocker
+                log.warning("no MTF/CNC margin quote for %s: %s", symbol_u, exc)
+        plan_id = None
+        line_id = None
+        expires_at = None
+        if not skip:
+            plan_id = str(uuid.uuid4())
+            expires_at = now + dt.timedelta(minutes=30)
+            risk = (trigger_d - stop_d) * qty
+            value = price * qty
+            note = f"{swing_execute.OPPS_NOTE_PREFIX}product={product_u} amount={amount}"
+            plan_hash = hashlib.sha256(f"opps:{plan_id}".encode()).hexdigest()
+            plan_row = store.conn.execute(
+                f"INSERT INTO {store.t('sw_plan')} (plan_id, user_id, as_of, source, built_at, "
+                "expires_at, plan_hash, gate, exposure_level, total_risk_inr, "
+                "total_new_exposure_inr) VALUES (?, ?, ?, 'SIGNAL', ?, ?, ?, ?, ?, ?, ?) "
+                "RETURNING id",
+                (
+                    plan_id, store.user_id, now.date(), now, expires_at, plan_hash,
+                    context.gate.value if hasattr(context.gate, "value") else str(context.gate),
+                    context.tier.level, risk, value,
+                ),
+            ).fetchone()
+            plan_pk = int(plan_row["id"])
+            line_row = store.conn.execute(
+                f"INSERT INTO {store.t('sw_plan_line')} (plan_id, user_id, kind, instrument_id, "
+                "setup, quantity, trigger, stop, risk_inr, position_value, trail, note, state, "
+                "client_id) VALUES (?, ?, 'BUY_ON_TRIGGER', ?, ?, ?, ?, ?, ?, ?, NULL, ?, "
+                "'PROPOSED', ?) RETURNING id",
+                (
+                    plan_pk, store.user_id, int(instrument_id), setup or None, qty,
+                    trigger_d, stop_d, risk, value, note,
+                    f"{plan_id}:{symbol_u}:BUY_ON_TRIGGER",
+                ),
+            ).fetchone()
+            line_id = int(line_row["id"])
+    gtt_note = (
+        "A same-session GTT stop is still required (vol-scaled 8–12%). Kite GTT legs are CNC "
+        "cash triggers — Kite GTT does not accept product MTF — so the stop sells the shares, "
+        "it does not attach to the MTF facility. If Kite refuses the GTT, arm it from the desk."
+        if product_u == "MTF"
+        else "A same-session GTT stop is required (vol-scaled 8–12%)."
+    )
+    return _jsonable({
+        "confirmable": not skip and line_id is not None,
+        "plan_id": plan_id,
+        "line_id": line_id,
+        "symbol": symbol_u,
+        "product": product_u,
+        "quantity": qty,
+        "amount_inr": amount,
+        "last_price": price,
+        "required_margin_inr": margin,
+        "skip": skip or None,
+        "simulated": gates.dry_run,
+        "kite_authed": kite_authed,
+        "dry_run": C.DRY_RUN,
+        "swing_execution_enabled": C.SWING_EXECUTION_ENABLED,
+        "expires_at": expires_at,
+        "gtt_note": gtt_note,
+        "gate": context.gate.value if hasattr(context.gate, "value") else str(context.gate),
+    })
+
+
 @router.post("/swing/execute")
 async def swing_execute_line(
     plan_id: str = Form(...), line_id: int = Form(...), confirm: str = Form(...)

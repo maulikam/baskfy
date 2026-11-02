@@ -271,7 +271,7 @@ async fn non_negotiable_5_product_gates_block_inside_the_gateway() {
             "NRML",
             "NSE",
             gates(false, false, false),
-            "only CNC is allowed",
+            "only CNC or MTF is allowed",
         ),
     ];
     for (product, exchange, g, why) in cases {

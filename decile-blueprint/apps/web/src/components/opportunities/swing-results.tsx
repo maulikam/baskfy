@@ -11,6 +11,7 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { SwingBuyButton } from "@/components/opportunities/buy-panel";
 import { SortableHeader } from "@/components/opportunities/sortable-header";
 import { DataStatusBanner, WarningsList } from "@/components/opportunities/states";
 import { SwingDetail } from "@/components/opportunities/swing-detail";
@@ -114,6 +115,11 @@ function columns(status: DataStatus) {
       header: "RS excess",
       cell: ({ row }) => formatPct(row.original.relative_strength.excess_return_pct, 2, true),
     }),
+    column.display({
+      id: "buy",
+      header: () => <span className="sr-only">Buy</span>,
+      cell: ({ row }) => <SwingBuyButton opportunity={row.original} />,
+    }),
   ];
 }
 
@@ -141,7 +147,7 @@ export function SwingResultsTable({
 
   return (
     <div className="overflow-x-auto" data-testid="swing-results">
-      <table className="w-full min-w-[68rem] border-collapse text-sm">
+      <table className="w-full min-w-[74rem] border-collapse text-sm">
         <thead>
           {table.getHeaderGroups().map((group) => (
             <tr key={group.id} className="border-b border-border/70">

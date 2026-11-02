@@ -134,12 +134,19 @@ def test_without_options_enabled_the_refusal_names_that_switch_first(
 
 @pytest.mark.parametrize(("intraday", "options"), SWITCHES)
 def test_the_cash_venues_are_unchanged(intraday: bool, options: bool) -> None:
-    """OP2 touches the derivative branch only. CNC on NSE/BSE is always admitted; MIS on cash
-    needs the intraday switch exactly as before; nothing else is admitted on cash."""
+    """OP2 touches the derivative branch only. CNC and MTF on NSE/BSE are always admitted
+    (MTF: Maulik, 2 Nov 2026); MIS on cash needs the intraday switch exactly as before;
+    NRML/CO/BO stay refused on cash."""
     for exchange in ("NSE", "BSE"):
         assert (
             product_exchange_refusal(
                 "CNC", exchange, intraday_enabled=intraday, options_enabled=options
+            )
+            == ""
+        )
+        assert (
+            product_exchange_refusal(
+                "MTF", exchange, intraday_enabled=intraday, options_enabled=options
             )
             == ""
         )

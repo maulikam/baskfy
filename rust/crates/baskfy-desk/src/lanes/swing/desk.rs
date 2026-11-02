@@ -1,5 +1,5 @@
 //! Ports the page half of `app/swing_desk.py` (SW7, SW11B, SW15, A7–A9, A14): the view
-//! (`build_view`, `unavailable_view` and their pieces) and the seven `/swing` routes.
+//! (`build_view`, `unavailable_view` and their pieces) and the `/swing` routes.
 //!
 //! **What this module is, and is not.** It reads the `sw_` tables for one user through
 //! [`PgSwingStore`] and renders them; it takes a form post and hands it to
@@ -1819,6 +1819,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/swing", get(swing_page))
         .route("/swing/data", get(swing_data))
+        .route("/swing/analyze", post(opps_analyze::swing_analyze))
         .route("/swing/execute", post(swing_execute))
         .route("/swing/scan", post(swing_scan))
         .route("/swing/reconcile", post(swing_reconcile))
@@ -1826,6 +1827,7 @@ pub fn routes() -> Router<AppState> {
         .route("/swing/rearm", post(swing_rearm))
 }
 
+mod opps_analyze;
 #[cfg(test)]
 mod scenario;
 #[cfg(test)]

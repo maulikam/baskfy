@@ -183,6 +183,7 @@ fn test_the_cash_venues_are_unchanged() {
     for (intraday, options) in SWITCHES {
         for exchange in ["NSE", "BSE"] {
             assert_eq!(refusal("CNC", exchange, intraday, options), "");
+            assert_eq!(refusal("MTF", exchange, intraday, options), "");
             assert_eq!(
                 refusal("MIS", exchange, intraday, options).is_empty(),
                 intraday

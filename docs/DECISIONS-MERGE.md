@@ -8586,3 +8586,15 @@ Maulik, in session: *"since everything is in local desk should also be non passw
 * **UI.** `/build/desk` in `decile-blueprint/apps/web` is the AppShell chrome around an iframe of same-origin `/desk` (Caddy already reverse-proxies it; `DESK_PATH_PREFIX=/desk`). Staff Build tab **Desk** and the Operator account menu both point there. CSP `frame-src` gained `'self'` so the iframe is allowed. The public web app gains **no** execute route; `POST /execute` stays on the desk origin.
 * **Sign-in.** Unchanged: "Continue on this Mac" (`BASKFY_LOCAL_SIGNIN_PUBLIC_ID`). The desk has no session of its own beyond optional Basic, which is now off locally.
 * Reverse: drop the `desk: {environment: {DESK_PASSWORD: ""}}` line in `local.sh` and recreate `desk`; remove `/build/desk` and the nav entries.
+
+## OPPS-MTF — Opportunities row Buy may send Zerodha MTF (2 Nov 2026) ✅ decided by Maulik
+
+Maulik, in session, 2 Nov 2026: the Opportunities row Buy UI must offer **not only CNC but also MTF**. He enters the rupee amount; if MTF is selected, the live order is Zerodha margin trading facility with that amount. DRY_RUN is already false on this local stack.
+
+* **Product toggle.** CNC | MTF. Default CNC. MTF is an explicit click. MIS stays behind `INTRADAY_ENABLED` and is not offered.
+* **Gateway.** Non-negotiable 5 is widened: cash equity admits **CNC or MTF** (`product_exchange_refusal` in Rust `baskfy-desk` guards and the Python `baskfy_execution` twin). Kite Connect product code is **`MTF`**. MIS still needs `INTRADAY_ENABLED`; NFO/BFO still need `OPTIONS_ENABLED`. Neither is admitted silently. Guards → risk → rate-limit → journal are unchanged.
+* **Plan.** `POST /desk/swing/analyze` writes a one-line SIGNAL `BUY_ON_TRIGGER` whose note is `OPPS product=CNC|MTF amount=…` (no schema migration). `execute_line` reads that note and sends `product: "CNC" | "MTF"` on `place`. Qty is `floor(amount / last_price / lot) * lot`, not risk-per-trade `size_position`. RED gate / drawdown lockout still refuse.
+* **GTT.** Same-session stop remains required (vol-scaled 8–12%). Kite GTT does not accept product MTF — the stop is still placed as a CNC cash trigger that sells the shares. The confirm panel names that restriction rather than skipping the stop.
+* **Confirm copy.** `Place LIVE MTF buy of {qty} {symbol} (~₹amount)` (or CNC; `SIMULATED` when the swing gates are dry). No auto-submit. Confirm is `POST /desk/swing/execute` with `confirm=true`. The public Next.js app gains **no** execute route.
+* **Options.** Not wired: desk `/fno/execute` is F3 credit spreads, not LONG_CALL/PUT/debit spreads.
+* **Reverse.** Refuse MTF again in `product_exchange_refusal`; drop `/swing/analyze` and the Opportunities Buy panel.

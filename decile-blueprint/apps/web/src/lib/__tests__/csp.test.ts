@@ -69,7 +69,7 @@ describe("the Content-Security-Policy header", () => {
       contentSecurityPolicy("abc123", false),
       staticContentSecurityPolicy(false),
     ]) {
-      expect(policy).toContain("frame-src https://api.razorpay.com https://checkout.razorpay.com");
+      expect(policy).toContain("frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com");
       expect(policy).toContain("https://api.razorpay.com");
       expect(policy).toContain("https://checkout.razorpay.com");
       expect(policy).toMatch(/img-src[^;]*razorpay\.com/);

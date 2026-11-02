@@ -8577,3 +8577,12 @@ staying unconnected (no holdings, no live marks).
   `BASKFY_DRY_RUN=true`/`BASKFY_DESK_DRY_RUN=true` when absent, so a box never goes live by default.
   `.env.staging.example` keeps `DRY_RUN=true`.
 * Reverse: `git revert` this commit; locally `bash tools/deploy/local.sh dry`.
+
+## LOCAL-3 — local desk has no password; Desk lives in the web shell (2 Nov 2026) ✅ decided by Maulik
+
+Maulik, in session: *"since everything is in local desk should also be non password based also desk should be incorporated in existing main ui"*
+
+* **Auth.** Local only: `tools/deploy/local.sh` writes `DESK_PASSWORD: ""` on the `desk` service in `compose.local.yml`. HTTP Basic is off when the password is empty (`app/core/websec.py`, `baskfy-desk` `websec.rs`). The copied box env still holds `BASKFY_DESK_PASSWORD` so compose.prod.yml interpolation (`:?`) still succeeds; that value is not what the local desk process reads. Caddy on the Mac never had `basic_auth` (M46.4). AWS/prod compose and the box password are unchanged.
+* **UI.** `/build/desk` in `decile-blueprint/apps/web` is the AppShell chrome around an iframe of same-origin `/desk` (Caddy already reverse-proxies it; `DESK_PATH_PREFIX=/desk`). Staff Build tab **Desk** and the Operator account menu both point there. CSP `frame-src` gained `'self'` so the iframe is allowed. The public web app gains **no** execute route; `POST /execute` stays on the desk origin.
+* **Sign-in.** Unchanged: "Continue on this Mac" (`BASKFY_LOCAL_SIGNIN_PUBLIC_ID`). The desk has no session of its own beyond optional Basic, which is now off locally.
+* Reverse: drop the `desk: {environment: {DESK_PASSWORD: ""}}` line in `local.sh` and recreate `desk`; remove `/build/desk` and the nav entries.

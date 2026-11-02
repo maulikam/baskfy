@@ -344,9 +344,11 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   /* `docs/options/05` §1: appended after Tight. The Overlap matrix gains no Options column — an
      option contract is never an equity name several sleeves hold. */
   { href: "/options", label: "Options" },
+  /* LOCAL-3: the operator console, same-origin `/desk` inside the web shell. Staff only. */
+  { href: "/build/desk", label: "Desk" },
 ];
 
-/** The four operator sleeves that live under Build for staff. */
+/** The operator sleeves (and Desk) that live under Build for staff. */
 export function isSleeveSection(section: SectionKey): boolean {
   return section === "swing" || section === "vbt" || section === "twt" || section === "options";
 }
@@ -450,6 +452,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Operator",
     items: [
+      page("/build/desk", "landmark"),
       page("/swing", "activity"),
       page("/vbt", "trending-up"),
       page("/twt", "line-chart"),

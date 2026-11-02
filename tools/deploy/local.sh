@@ -102,6 +102,10 @@ services:
   # LOCAL-1 (30 Oct 2026): the API is always DRY_RUN=false, so the Kite login exchange and the
   # holdings/trades reads work. The API has no order path.
   api:           {environment: {DRY_RUN: "false"}, volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
+  # LOCAL-3 (2 Nov 2026, Maulik): no HTTP Basic on the local desk. compose.prod.yml still
+  # interpolates BASKFY_DESK_PASSWORD (the box copy stays in the env file); this blanks the
+  # process that serves /desk. AWS/prod is unchanged.
+  desk:          {environment: {DESK_PASSWORD: ""}}
   worker:        {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   ingest-worker: {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   beat:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}

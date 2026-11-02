@@ -38,8 +38,11 @@ bash tools/deploy/local.sh down     # data stays in the baskfy-local_* Docker vo
 
 **One address** (Maulik, 29 Oct 2026): the app at `http://localhost:8480`, the desk at
 `http://localhost:8480/desk` — the same port, bound to 127.0.0.1 only. Caddy routes `/desk/*` to the
-desk, and the desk's `DESK_PATH_PREFIX=/desk` keeps every link it renders under `/desk`. The desk
-still asks for its own password (HTTP basic auth, unchanged from AWS).
+desk, and the desk's `DESK_PATH_PREFIX=/desk` keeps every link it renders under `/desk`. LOCAL-3
+(2 Nov 2026): no HTTP Basic on this Mac — `compose.local.yml` blanks `DESK_PASSWORD` for the desk
+service (the box password stays in the copied env file, unused). Open **Build → Desk** in the web
+app (staff), or `/desk` directly; both are the same origin as "Continue on this Mac". AWS/prod
+still uses the proxy password.
 
 **No Google on this Mac** (Maulik, 29 Oct 2026: "since it is on localhost, no google login
 required"): the login page shows *Continue on this Mac*, which signs in as the account in

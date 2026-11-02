@@ -122,8 +122,10 @@ function commonDirectives(): string[] {
     // which is every call the app actually makes.
     // Razorpay checkout XHR + the API origin the browser talks to (AUDIT 2.7).
     `connect-src 'self' ${apiOrigin()} https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com`.trim(),
-    // Checkout renders inside an iframe hosted by Razorpay (AUDIT 2.7).
-    "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+    // Checkout renders inside an iframe hosted by Razorpay (AUDIT 2.7). `'self'` is the local
+    // desk console at same-origin `/desk` (LOCAL-3): `/build/desk` embeds it; without `'self'`
+    // the browser refuses the iframe. Cross-origin desk hosts stay out of this list.
+    "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
     "object-src 'none'",
     "base-uri 'self'",
     // The Invest panel POSTs the Kite Publisher basket to kite.zerodha.com/connect/basket.

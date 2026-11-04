@@ -211,6 +211,7 @@ pub fn product_exchange_refusal(
     options_enabled: bool,
     fno_carry_enabled: bool,
     fo_plan: bool,
+    screen_mtf: bool,
 ) -> String {
     let product_u = norm(product);
     let exchange_u = norm(exchange);
@@ -260,6 +261,7 @@ pub fn product_exchange_refusal(
     }
     // CNC is delivery. MTF is Zerodha's margin trading facility on cash equity (Maulik,
     // 2 Nov 2026; Kite Connect `product: "MTF"`). Both overnight the shares; neither is MIS.
+    let _ = screen_mtf;
     if product_u == "CNC" || product_u == "MTF" {
         return String::new();
     }
@@ -576,5 +578,6 @@ pub fn fo_gtt_refusal(
         options_enabled,
         fno_carry_enabled,
         true,
+        false,
     )
 }

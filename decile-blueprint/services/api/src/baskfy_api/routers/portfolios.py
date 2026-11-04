@@ -82,6 +82,7 @@ from baskfy_core.models import (
     Portfolio,
     PortfolioHolding,
     PortfolioRebalance,
+    PortfolioSleeve,
     Screen,
 )
 from baskfy_core.models.base import JsonObject
@@ -412,7 +413,10 @@ async def _broker_account_for(
 
 
 def _node_out(
-    node: TreeNode, counts: Mapping[int, int], created: Mapping[int, dt.datetime]
+    node: TreeNode,
+    counts: Mapping[int, int],
+    created: Mapping[int, dt.datetime],
+    screens: Mapping[int, str],
 ) -> PortfolioNodeOut:
     return PortfolioNodeOut(
         id=node.portfolio.id,
@@ -422,7 +426,55 @@ def _node_out(
         broker_account_id=node.portfolio.broker_account_id,
         depth=node.depth,
         holdings_count=counts.get(node.portfolio.id, 0),
-        children=[_node_out(child, counts, created) for child in node.children],
+        screen_public_id=screens.get(node.portfolio.id),
+        children=[_node_out(child, counts, created, screens) for child in node.children],
+    )
+
+
+async def _screen_links(session: AsyncSession, user_id: int) -> dict[int, str]:
+    """``portfolio_id -> screen public_id`` from the first screen sleeve on each book."""
+    rows = (
+        await session.execute(
+            select(PortfolioSleeve.portfolio_id, Screen.public_id)
+            .join(Screen, Screen.id == PortfolioSleeve.screen_id)
+            .join(Portfolio, Portfolio.id == PortfolioSleeve.portfolio_id)
+            .where(
+                Portfolio.user_id == user_id,
+                PortfolioSleeve.kind == "screen",
+                PortfolioSleeve.screen_id.is_not(None),
+            )
+            .order_by(
+                PortfolioSleeve.portfolio_id, PortfolioSleeve.sort_order, PortfolioSleeve.id
+            )
+        )
+    ).all()
+    links: dict[int, str] = {}
+    for portfolio_id, public_id in rows:
+        links.setdefault(int(portfolio_id), public_id)
+    return links
+
+
+async def _attach_screen_sleeve(
+    session: AsyncSession,
+    portfolio: Portfolio,
+    screen: Screen,
+    holdings: Sequence[HoldingOut],
+) -> None:
+    """One screen sleeve so overview and later rebalance can find this book."""
+    capital = Decimal("0")
+    for row in holdings:
+        if row.quantity is not None and row.avg_price is not None:
+            capital += row.quantity * row.avg_price
+    session.add(
+        PortfolioSleeve(
+            portfolio_id=portfolio.id,
+            name=screen.name[:80],
+            kind="screen",
+            screen_id=screen.id,
+            capital=capital,
+            top_n=min(max(len(holdings), 1), 100),
+            sort_order=0,
+        )
     )
 
 
@@ -469,6 +521,7 @@ async def _portfolio_out(session: AsyncSession, portfolio: Portfolio) -> Portfol
         depth = depth_of(nodes, portfolio.id)
     except PortfolioGraphError as exc:
         raise _refuse(exc) from exc
+    links = await _screen_links(session, portfolio.user_id)
     return PortfolioDetailOut(
         id=portfolio.id,
         name=portfolio.name,
@@ -478,6 +531,7 @@ async def _portfolio_out(session: AsyncSession, portfolio: Portfolio) -> Portfol
         broker_account_id=portfolio.broker_account_id,
         depth=depth,
         child_ids=[node.id for node in nodes if node.parent_id == portfolio.id],
+        screen_public_id=links.get(portfolio.id),
     )
 
 
@@ -612,13 +666,16 @@ async def list_portfolios(session: SessionDep, principal: AuthenticatedDep) -> P
     user_id = principal.require_user()
     nodes, created = await _graph_rows(session, user_id)
     counts = await _holdings_counts(session, user_id)
+    screens = await _screen_links(session, user_id)
     try:
         forest = assemble_tree(nodes)
     except PortfolioGraphError as exc:
         raise _refuse(exc) from exc
     return PortfolioForestOut(
-        data=[_node_out(root, counts, created) for root in forest.roots],
-        orphans=[_node_out(orphan.subtree, counts, created) for orphan in forest.orphans],
+        data=[_node_out(root, counts, created, screens) for root in forest.roots],
+        orphans=[
+            _node_out(orphan.subtree, counts, created, screens) for orphan in forest.orphans
+        ],
     )
 
 
@@ -673,6 +730,12 @@ async def create_portfolio(
                 f"deeper than the limit of {MAX_DEPTH}.",
             )
 
+    screen = (
+        await _visible_screen(session, body.screen_public_id, principal)
+        if body.screen_public_id
+        else None
+    )
+
     portfolio = Portfolio(
         user_id=user_id,
         name=body.name,
@@ -685,13 +748,24 @@ async def create_portfolio(
         # and must sum into net worth; a monitoring view is created deliberately, never by
         # default. `started_on` is today because that is the day this grouping begins, and every
         # §5.2 metric is measured from it.
+        #
+        # A screen-sourced create is the exception: the rule the book follows is the screen, so
+        # the source is MY_SCREEN and a sleeve records which one. Still paper — no order path.
         kind=PortfolioKind.CAPITAL.value,
-        source=PortfolioSource.HOLDING_GROUP.value,
+        source=(
+            PortfolioSource.MY_SCREEN.value
+            if screen is not None
+            else PortfolioSource.HOLDING_GROUP.value
+        ),
         started_on=today_ist(),
     )
     session.add(portfolio)
     await session.flush()
     report = await _apply(session, portfolio, _rows_from_body(body.holdings))
+    if screen is not None:
+        await _attach_screen_sleeve(
+            session, portfolio, screen, await _holdings_out(session, portfolio.id)
+        )
     await idempotency.remember(_cache(request), scope, idempotency_key, str(portfolio.id))
     return PortfolioWriteDetailOut(
         portfolio=await _portfolio_out(session, portfolio), report=report

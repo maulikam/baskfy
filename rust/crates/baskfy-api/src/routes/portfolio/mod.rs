@@ -31,6 +31,7 @@ pub(crate) mod pyfmt;
 pub(crate) mod rebalance;
 pub(crate) mod recon;
 pub(crate) mod request;
+pub(crate) mod screen_invest;
 pub(crate) mod suggest;
 pub(crate) mod symbols;
 pub(crate) mod tenant;

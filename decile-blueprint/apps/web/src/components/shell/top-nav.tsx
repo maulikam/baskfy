@@ -4,17 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { CommandPalette } from "@/components/shell/command-palette";
+import { DeskMenu } from "@/components/shell/desk-menu";
 import { FreshnessPill } from "@/components/shell/freshness-pill";
 import { PRIMARY_NAV_ID } from "@/components/shell/ids";
 import { SearchButton } from "@/components/shell/search-button";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { UserMenu, type UserMenuProps } from "@/components/shell/user-menu";
 import { Wordmark } from "@/components/shell/wordmark";
-import { PRIMARY_NAV, SECTION_LABEL, primarySection, type NavItem } from "@/lib/nav";
+import { PRIMARY_NAV, primaryNavLabel, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
- * Tree 6 consumer chrome: logo · 5 destinations · search · date · theme · avatar.
+ * Tree 6 consumer chrome: logo · destinations · search · date · theme · avatar.
+ * Desk sits on this row with Home, Market, Discover, Build and Portfolio, and opens the
+ * console at `/desk`. Under md the row hides and Desk is a sixth bottom tab.
  * Mobile bottom tabs live in `BottomTabBar`; this header shrinks to logo · search · avatar under md.
  *
  * **The sliding pill is gone, and it was a bug as well as a mismatch.** A measured indicator read
@@ -29,16 +32,14 @@ export interface TopNavProps {
 }
 
 /*
-  The section → label map used to be inlined here and again in `BottomTabBar`, and the two had
-  drifted: the bar still said `discover: "Baskets"` after the hub was renamed, so that tab never
-  lit. `SECTION_LABEL` in `lib/nav` is the one record both read now. A section with no primary
-  destination (`me`, since PORTFOLIO_REDESIGN.md §2 moved the money out of it) simply matches
-  nothing, which is the right answer: it is drawn in the user menu, not the pill row.
+  Active label comes from `primaryNavLabel`, shared with `BottomTabBar`. `/desk` lights Desk.
+  The web app's own swing pages still light Build.
 */
 function sectionHref(item: NavItem, pathname: string): boolean {
-  const section = primarySection(pathname);
-  if (!section) return pathname === item.href || pathname.startsWith(`${item.href}/`);
-  return item.label === SECTION_LABEL[section];
+  const label = primaryNavLabel(pathname, true);
+  if (label === "Desk") return false;
+  if (label) return item.label === label;
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
 export function TopNav({ user }: TopNavProps) {
@@ -82,6 +83,9 @@ export function TopNav({ user }: TopNavProps) {
                 </li>
               );
             })}
+            <li>
+              <DeskMenu />
+            </li>
           </ul>
         </nav>
 

@@ -48,11 +48,15 @@ describe("sectionTabIsActive", () => {
       "/vbt",
       "/twt",
       "/options",
+      "/opportunities",
     ];
     expect(sectionTabIsActive("/vbt/book", "/vbt", staffBuildHrefs)).toBe(true);
     expect(sectionTabIsActive("/options/journal", "/options", staffBuildHrefs)).toBe(true);
     expect(sectionTabIsActive("/vbt/book", "/build", staffBuildHrefs)).toBe(false);
     expect(sectionTabIsActive("/swing/watchlist", "/swing", staffBuildHrefs)).toBe(true);
     expect(sectionTabIsActive("/swing", "/swing", staffBuildHrefs)).toBe(true);
+    expect(sectionTabIsActive("/opportunities/options", "/opportunities", staffBuildHrefs)).toBe(
+      true,
+    );
   });
 });

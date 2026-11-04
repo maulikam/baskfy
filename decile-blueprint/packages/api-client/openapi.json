@@ -15415,6 +15415,19 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "screen_public_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen Public Id"
           }
         },
         "required": [
@@ -15524,6 +15537,17 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "screen_public_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen Public Id"
           }
         },
         "required": [
@@ -28681,6 +28705,17 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "screen_public_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen Public Id"
           }
         },
         "required": [

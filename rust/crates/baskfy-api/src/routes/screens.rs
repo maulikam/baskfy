@@ -284,12 +284,12 @@ pub fn to_out(screen: &ScreenRow, principal: &Principal) -> Result<ScreenOut, Pr
     })
 }
 
-/// `_load_visible`: the screen, or `not_found("screen", public_id)` when absent or not yours.
+/// `_load_visible` on the request's connection (a write sees its own inserts).
 ///
 /// # Errors
 /// 404; 500 for a database failure.
-pub async fn load_visible(
-    state: &AppState,
+pub async fn load_visible_on(
+    conn: &mut sqlx::PgConnection,
     public_id: &str,
     principal: &Principal,
 ) -> Result<ScreenRow, Problem> {
@@ -297,7 +297,7 @@ pub async fn load_visible(
         "SELECT {SCREEN_COLUMNS} FROM screen WHERE public_id = $1"
     ))
     .bind(public_id)
-    .fetch_optional(state.db.pool())
+    .fetch_optional(&mut *conn)
     .await
     .map_err(db)?;
     let screen = match found {
@@ -308,6 +308,19 @@ pub async fn load_visible(
         return Err(not_found("screen", public_id));
     }
     Ok(screen)
+}
+
+/// `_load_visible`: the screen, or `not_found("screen", public_id)` when absent or not yours.
+///
+/// # Errors
+/// 404; 500 for a database failure.
+pub async fn load_visible(
+    state: &AppState,
+    public_id: &str,
+    principal: &Principal,
+) -> Result<ScreenRow, Problem> {
+    let mut conn = state.db.pool().acquire().await.map_err(db)?;
+    load_visible_on(&mut conn, public_id, principal).await
 }
 
 /// `GET /screens` (`list_screens`): user screens + example screens, examples first, then
@@ -690,6 +703,14 @@ pub fn router() -> Router<AppState> {
         )
         .route("/screens/{public_id}/runs", get(list_screen_runs))
         .route("/screens/{public_id}/csv", get(export_screen_csv))
+        .route(
+            "/screens/{public_id}/invest-preview",
+            post(crate::routes::portfolios::portfolio::screen_invest::invest_preview),
+        )
+        .route(
+            "/screens/{public_id}/invest",
+            post(crate::routes::portfolios::portfolio::screen_invest::invest_from_screen),
+        )
 }
 
 #[cfg(test)]

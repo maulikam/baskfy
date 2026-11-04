@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import type { Route } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/app/(auth)/login/login-form";
 import { localSignInPublicId } from "@/lib/auth/api-auth";
+import { localDestination } from "@/lib/auth/local-entry";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -24,6 +27,11 @@ export default async function LoginPage({
   const next = typeof params.next === "string" ? params.next : undefined;
   const deleted = params.deleted === "1";
   const local = localSignInPublicId() !== undefined;
+  /* This Mac names the account in the environment. Skip the button and sign in. */
+  if (local && typeof params.error !== "string") {
+    // Route handler, not a page, so typedRoutes cannot see it.
+    redirect(`/login/continue?next=${encodeURIComponent(localDestination(next))}` as Route);
+  }
 
   return (
     <main className="space-y-6">

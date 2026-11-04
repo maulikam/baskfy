@@ -8608,3 +8608,39 @@ Maulik, in session, 2 Nov 2026: the Opportunities row Buy UI must offer **not on
 * **Confirm copy.** `Place LIVE MTF buy of {qty} {symbol} (~₹amount)` (or CNC; `SIMULATED` when the swing gates are dry). No auto-submit. Confirm is `POST /desk/swing/execute` with `confirm=true`. The public Next.js app gains **no** execute route.
 * **Options.** Not wired: desk `/fno/execute` is F3 credit spreads, not LONG_CALL/PUT/debit spreads.
 * **Reverse.** Refuse MTF again in `product_exchange_refusal`; drop `/swing/analyze` and the Opportunities Buy panel.
+
+## SCREEN-INVEST — Invest from a screen creates its own portfolio · ⚠ UNREVIEWED
+
+**Context.** Investing from a screen was tangled with Save-as-basket and the rebalance wizard
+(pick portfolio, pick screen, set top_n / hold_buffer). The wanted path is: build a screen,
+Invest (amount + review), get a dedicated portfolio under Portfolios, later Rebalance that same
+book from the screen.
+**Choice.** `POST /portfolios` accepts optional `screen_public_id`. That create is `MY_SCREEN`,
+writes a screen sleeve (so overview can name the screen), and lists `screen_public_id` on the
+forest. First visit: Invest CTA. Later: Rebalance updates that book's holdings from the current
+screen ranks; Invest again is explicit. Paper only - no execute route, no broker order.
+**Rejected.** Routing through curated baskets (extra object, still no portfolio). Filing existing
+broker holdings via `POST /portfolio` (organizes what you already own; not "invest this amount").
+A new `/screens/{id}/invest` path (unnecessary once create carries the screen).
+**Reverse.** Stop sending `screen_public_id`; hide the screen-header CTAs. Existing books stay.
+
+## SCREEN-INVEST-RS — Rust port + paper MTF · ⚠ UNREVIEWED
+
+**Context.** SCREEN-INVEST landed in Python/Next.js. The wanted stack is Rust. MTF/leverage
+existed only as a Kite product token (`CNC`/`MIS`/`NRML`/`MTF`) and is forbidden on swing/TWT;
+no per-symbol MTF factor lives in the book.
+**Choice.** Sizing lives in `baskfy-api` (`routes/portfolio/screen_invest.rs`). Preview
+`POST /screens/{id}/invest-preview`; create `POST /screens/{id}/invest`; rebalance
+`POST /portfolios/{id}/from-screen`. `POST /portfolios` still accepts `screen_public_id` (+
+optional `amount`/`mtf`/`leverage`). MTF default off; house leverage 4; only `series=EQ` is
+eligible — others flagged, never sized as cash. Paper mark only; no execute route.
+**Rejected.** Client-side leverage math. Inventing a live MTF order. Treating non-EQ as cash
+under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
+**Reverse.** Unregister the three routes; drop the extra create fields.
+
+## SCREEN-INVEST-LIVE — market buys, portfolio only after every fill confirms · ⚠ UNREVIEWED
+
+**Context.** Confirm with MTF ticked must send the buys. The first cut wrote the portfolio, then posted to the desk and got 404, leaving empty AVG SHARP books.
+**Choice.** The screen API sends each buy itself: `MARKET` plus `market_protection=-1` (Kite's auto band, same as VBT/TWT). The order uses Kite's tradingsymbol, so a BE listing is `SWANDEF-BE` rather than the NSE symbol `SWANDEF`. Each name is sized for the same position value; MTF only reduces the cash that position needs. The `MY_SCREEN` portfolio, sleeve, and holdings are inserted only after every buy returns an order id. A failed buy stops the rest (`NOT_SENT`) and writes nothing. The protective GTT sell stays a limit leg because Zerodha GTT requires one. Rebalance still does not send an order. Cash invest (MTF off) still creates the paper book immediately.
+**Rejected.** LIMIT buys. Creating the book before the broker confirms. Sending the rest of the list after one name fails. Ordering the NSE symbol when Kite lists the series suffix.
+**Reverse.** Create the portfolio before `send_screen_mtf` again, and drop `market_protection` from the form.

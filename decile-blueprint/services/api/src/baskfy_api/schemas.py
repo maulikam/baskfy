@@ -1239,6 +1239,9 @@ class HoldingIn(_In):
 class PortfolioCreate(_In):
     name: str = Field(min_length=1, max_length=120)
     holdings: list[HoldingIn] = Field(default_factory=list)
+    #: When set, this portfolio is sourced from that screen (``MY_SCREEN``) and later
+    #: rebalances can find it. Paper construction only — nothing here places an order.
+    screen_public_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class PortfolioRename(_In):
@@ -1323,6 +1326,7 @@ class PortfolioOut(_Out):
     name: str
     created_at: dt.datetime
     holdings: list[HoldingOut]
+    screen_public_id: str | None = None
 
 
 class PortfolioSummaryOut(_Out):
@@ -1330,6 +1334,7 @@ class PortfolioSummaryOut(_Out):
     name: str
     created_at: dt.datetime
     holdings_count: int
+    screen_public_id: str | None = None
 
 
 class PortfolioListOut(_Out):

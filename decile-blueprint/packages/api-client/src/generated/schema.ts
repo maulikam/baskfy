@@ -10202,6 +10202,8 @@ export interface components {
             name: string;
             /** Parent Id */
             parent_id?: number | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
         };
         /**
          * PortfolioForestOut
@@ -10261,6 +10263,8 @@ export interface components {
             name: string;
             /** Parent Id */
             parent_id?: number | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
         };
         /**
          * PortfolioPatchIn
@@ -15147,6 +15151,8 @@ export interface components {
             name: string;
             /** Parent Id */
             parent_id?: number | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
         };
         /** DrawdownPointOut */
         baskfy_api__schemas__DrawdownPointOut: {

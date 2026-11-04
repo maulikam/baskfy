@@ -16,6 +16,7 @@ import { PresetsMenu } from "@/components/screens/presets-menu";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import type { ColumnMeta } from "@/components/screens/result-columns";
 import { ScreenIdentity } from "@/components/screens/screen-identity";
+import { ScreenInvestActions } from "@/components/screens/screen-invest";
 import { ShareButton } from "@/components/screens/share-button";
 import { StoryStrip } from "@/components/screens/story-strip";
 import { Button } from "@/components/ui/button";
@@ -211,6 +212,11 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <ScreenInvestActions
+            screenName={draftName.trim() || screen.name}
+            screenPublicId={screen.public_id}
+            result={preview.data}
+          />
           {readOnly ? (
             <Button
               variant="secondary"

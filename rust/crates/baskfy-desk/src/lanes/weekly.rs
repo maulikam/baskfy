@@ -54,6 +54,7 @@ pub mod score;
 pub mod stops;
 pub mod strategy;
 pub mod weekly_books;
+mod screen_mtf;
 
 use axum::Router;
 
@@ -65,6 +66,7 @@ pub fn routes() -> Router<AppState> {
         .merge(analyze::routes())
         .merge(stops::routes())
         .merge(weekly_books::routes())
+        .merge(screen_mtf::routes())
 }
 
 /// The lane's template globals and filters (e.g. the fno lane's `fno_badge`).

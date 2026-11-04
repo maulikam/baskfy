@@ -316,7 +316,7 @@ fn spec(
     fo: bool,
 ) -> bool {
     let old = baskfy_desk::lanes::exec_core::guards::product_exchange_refusal(
-        product, exchange, intraday, options, false, false,
+        product, exchange, intraday, options, false, false, false,
     );
     old.is_empty() || (exchange == "NFO" && product == "NRML" && options && carry && fo)
 }

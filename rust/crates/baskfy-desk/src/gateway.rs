@@ -323,6 +323,8 @@ pub struct PlaceOrder {
     pub plan_tenant: Option<TenantIds>,
     /// `fo_plan`.
     pub fo_plan: Option<FoPlanRef>,
+    /// Confirmed screen-invest MTF buy. The product gate allows `MTF` only when this is set.
+    pub screen_mtf: bool,
 }
 
 impl Default for PlaceOrder {
@@ -345,6 +347,7 @@ impl Default for PlaceOrder {
             tenant: None,
             plan_tenant: None,
             fo_plan: None,
+            screen_mtf: false,
         }
     }
 }

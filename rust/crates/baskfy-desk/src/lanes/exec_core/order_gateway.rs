@@ -352,6 +352,7 @@ impl OrderGateway {
             gates.options_enabled,
             gates.fno_carry_enabled,
             o.fo_plan.is_some(),
+            o.screen_mtf,
         );
         if !gate_why.is_empty() {
             return Ok(blocked(symbol, &gate_why));
@@ -637,6 +638,7 @@ impl OrderGateway {
                     &g.exchange,
                     gates.intraday_enabled,
                     gates.options_enabled,
+                    false,
                     false,
                     false,
                 );

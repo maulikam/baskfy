@@ -130,7 +130,7 @@ const PRODUCTS: [&str; 6] = ["CNC", "MIS", "NRML", "MTF", "CO", "BO"];
 const SWITCHES: [(bool, bool); 4] = [(false, false), (false, true), (true, false), (true, true)];
 
 fn refusal(product: &str, exchange: &str, intraday: bool, options: bool) -> String {
-    product_exchange_refusal(product, exchange, intraday, options, false, false)
+    product_exchange_refusal(product, exchange, intraday, options, false, false, false)
 }
 
 #[test]
@@ -217,7 +217,9 @@ fn test_every_product_venue_and_switch_combination() {
                 let (intraday, options, carry, fo_plan) =
                     (bits & 1 != 0, bits & 2 != 0, bits & 4 != 0, bits & 8 != 0);
                 let why =
-                    product_exchange_refusal(product, exchange, intraday, options, carry, fo_plan);
+                    product_exchange_refusal(
+                        product, exchange, intraday, options, carry, fo_plan, false,
+                    );
                 let old = refusal(product, exchange, intraday, options);
                 let spec = old.is_empty()
                     || (exchange == "NFO" && product == "NRML" && options && carry && fo_plan);
@@ -237,7 +239,7 @@ fn test_every_product_venue_and_switch_combination() {
 #[test]
 fn test_nrml_on_nfo_with_a_plan_but_no_carry_flag_is_refused_and_says_why() {
     for intraday in [false, true] {
-        let why = product_exchange_refusal("NRML", "NFO", intraday, true, false, true);
+        let why = product_exchange_refusal("NRML", "NFO", intraday, true, false, true, false);
         assert!(
             why.contains("MIS") && why.contains("BASKFY_FNO_CARRY_ENABLED"),
             "{why}"
@@ -248,13 +250,22 @@ fn test_nrml_on_nfo_with_a_plan_but_no_carry_flag_is_refused_and_says_why() {
 #[test]
 fn test_the_carry_branch_is_nfo_only() {
     for exchange in DERIVATIVE_EXCHANGES.iter().filter(|e| **e != "NFO") {
-        assert!(!product_exchange_refusal("NRML", exchange, true, true, true, true).is_empty());
+        assert!(
+            !product_exchange_refusal("NRML", exchange, true, true, true, true, false).is_empty()
+        );
     }
 }
 
 #[test]
+fn test_mtf_on_cash_is_allowed_only_for_a_confirmed_screen_invest() {
+    assert!(product_exchange_refusal("MTF", "NSE", false, false, false, false, false).contains("CNC"));
+    assert!(product_exchange_refusal("MTF", "NSE", false, false, false, false, true).is_empty());
+    assert!(!product_exchange_refusal("MTF", "NFO", true, true, false, false, true).is_empty());
+}
+
+#[test]
 fn test_the_carry_flag_does_not_stand_in_for_options_enabled() {
-    let why = product_exchange_refusal("NRML", "NFO", true, false, true, true);
+    let why = product_exchange_refusal("NRML", "NFO", true, false, true, true, false);
     assert!(why.contains("F&O/derivatives disabled (config.OPTIONS_ENABLED)"));
 }
 

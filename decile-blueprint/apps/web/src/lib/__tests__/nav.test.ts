@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSectionTabs,
+  DESK_MENU,
+  isDeskSection,
   isSleeveSection,
   LEGACY_REDIRECTS,
   NAV_GROUPS,
   NAV_ITEMS,
   OPTIONS_SUBNAV,
   PRIMARY_NAV,
+  primaryNavLabel,
   primarySection,
   SECTION_LABEL,
   SECTION_TABS,
@@ -17,7 +20,8 @@ import { PAGES } from "@/lib/vocabulary";
 /**
  * Tree 6 collapsed the consumer IA to Market · Baskets · Build · Me; SC9 added the signed-in
  * landing surface in front of them; PORTFOLIO_REDESIGN.md §2 replaced Me with Portfolio and gave
- * it five tabs of its own. Desk Real money + Account + Help remain secondary groups.
+ * it five tabs of its own. Desk is a staff item on the primary bar; Account and Help stay
+ * in the user menu. Real money and Operator remain in NAV_GROUPS for the command palette.
  *
  * Five, not four, and the count is asserted rather than inferred: a sixth destination is an IA
  * decision, and it should have to change a test that says so out loud.
@@ -98,8 +102,7 @@ describe("the primary consumer IA", () => {
     expect(PAGES["/discover/search"]).toBeDefined();
     expect(SECTION_TABS.discover.map((t) => t.href)).not.toContain("/create");
     // Create moved here out of Discover: it builds a strategy, which is this hub's job.
-    /* AFH 5.5: Swing / Volume breakout / Three weeks tight left the Build tab row for consumers;
-       they stay reachable under the Operator group in the user menu when is_staff. */
+    /* AFH 5.5: Swing / Volume / Tight left the consumer Build row. Staff reach them from Desk. */
     expect(SECTION_TABS.build.map((t) => t.label)).toEqual([
       "Screens",
       "Backtests",
@@ -300,6 +303,7 @@ describe("the primary consumer IA", () => {
     expect(isSleeveSection("vbt")).toBe(true);
     expect(isSleeveSection("twt")).toBe(true);
     expect(isSleeveSection("options")).toBe(true);
+    expect(isSleeveSection("opportunities")).toBe(true);
     expect(isSleeveSection("build")).toBe(false);
     expect(isSleeveSection("discover")).toBe(false);
     expect(buildSectionTabs("swing", { isStaff: true }).map((t) => t.href)).toEqual(
@@ -334,6 +338,41 @@ describe("the sidebar IA", () => {
       "/regime",
       "/reconcile",
     ]);
+  });
+
+  it("puts the desk console's sections on the Desk menu", () => {
+    expect(DESK_MENU.flat().map((item) => item.href)).toEqual([
+      "/desk/",
+      "/desk/indices",
+      "/desk/performance",
+      "/desk/regime",
+      "/desk/tradebook",
+      "/desk/stops",
+      "/desk/reconcile",
+      "/desk/lifecycle",
+      "/desk/swing",
+      "/desk/nifty-options",
+      "/desk/fno",
+      "/desk/ops",
+      "/desk/settings",
+      "/desk/status",
+    ]);
+    expect(DESK_MENU.flat().find((item) => item.label === "Regime")?.children?.map((tab) => tab.href)).toEqual([
+      "/desk/regime",
+      "/desk/regime/backtest",
+    ]);
+  });
+
+  it("lights Desk on the console, and Build on the web app's own swing page", () => {
+    expect(primaryNavLabel("/desk/swing", true)).toBe("Desk");
+    expect(primaryNavLabel("/desk/regime/backtest", true)).toBe("Desk");
+    expect(primaryNavLabel("/swing/watchlist", true)).toBe("Build");
+    expect(primaryNavLabel("/desk/performance", false)).toBeNull();
+    expect(primaryNavLabel("/home", true)).toBe("Home");
+    expect(isDeskSection("/portfolio/holdings")).toBe(false);
+    expect(primaryNavLabel("/portfolio/holdings", true)).toBe("Portfolio");
+    expect(isDeskSection("/me/swing")).toBe(false);
+    expect(primaryNavLabel("/me/swing", true)).toBe("Me");
   });
 
   it("lists operator sleeve hubs for staff", () => {

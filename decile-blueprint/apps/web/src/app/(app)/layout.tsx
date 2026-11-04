@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Route } from "next";
 import { Suspense, type ReactNode } from "react";
 
 import { Providers } from "@/app/providers";
@@ -9,6 +10,8 @@ import { SessionSentinel } from "@/components/auth/session-sentinel";
 import { AppShell } from "@/components/shell/app-shell";
 import { RscListFallback } from "@/components/shell/rsc-list-fallback";
 import { auth } from "@/lib/auth";
+import { localSignInPublicId } from "@/lib/auth/api-auth";
+import { localDestination } from "@/lib/auth/local-entry";
 import { isPublicPath } from "@/lib/auth/public-routes";
 import { isSessionRevoked } from "@/lib/auth/session-epoch";
 import { fetchMe } from "@/lib/auth/me";
@@ -45,6 +48,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
      hand it to a layout. Absent means something reached this render without the middleware, and
      the safe reading of "I do not know which page this is" is "treat it as gated". */
   const pathname = headerList.get("x-pathname") ?? "";
+  /* This Mac: no sign-in page. The account is the one `local.sh` named. */
+  if (!session?.user && localSignInPublicId()) {
+    const next = localDestination(`${pathname || "/home"}${headerList.get("x-search") ?? ""}`);
+    // Route handler, not a page, so typedRoutes cannot see it.
+    redirect(`/login/continue?next=${encodeURIComponent(next)}` as Route);
+  }
   if (!session?.user && !isPublicPath(pathname)) {
     const next = `${pathname || "/"}${headerList.get("x-search") ?? ""}`;
     redirect(`/login?next=${encodeURIComponent(next)}`);

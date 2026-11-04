@@ -286,7 +286,7 @@ struct Desk {
 }
 
 fn settings_for(dir: &std::path::Path, dry_run: bool) -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = dry_run;
     s.force_ipv4 = false;
     s.shared_read_limits = false;
@@ -592,7 +592,7 @@ async fn dry_run_gtt_stop_simulates_end_to_end_and_never_reaches_the_broker() {
 
 #[tokio::test]
 async fn dry_run_is_the_default() {
-    assert!(Settings::defaults().unwrap().dry_run);
+    assert!(Settings::dry_defaults().unwrap().dry_run);
 }
 
 /// `C.DRY_RUN` is read at the call, not cached at construction: flipping the shared settings

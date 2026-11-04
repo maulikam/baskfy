@@ -210,6 +210,12 @@ export const PAGES = {
     blurb:
       "Which names sit across Volume, Tight, Swing, and up to three screens — and the named pairs underneath.",
   },
+  /* LOCAL-3: the live operator console, embedded at same-origin `/desk`. Confirm stays on the
+     desk service; this app never gains an execute route. */
+  "/build/desk": {
+    title: "Desk",
+    blurb: "The operator console on this Mac — plans and confirms, no extra password.",
+  },
   /* —— The Portfolio hub (PORTFOLIO_REDESIGN.md §2) ——
      Five tabs, one section. `Overview` is the landing tab; `Portfolios` absorbed the tab that
      used to be called `Investments`, because they named the same thing (§1 problem 1). Titles

@@ -1241,7 +1241,11 @@ async fn read_badge(state: &AppState) -> Option<PyDict> {
 #[must_use]
 pub fn nav_badge(state: Option<&AppState>) -> PyDict {
     let settings = state.map_or_else(
-        || Settings::from_env().or_else(|_| Settings::defaults()).ok(),
+        || {
+            Settings::from_env()
+                .or_else(|_| Settings::dry_defaults())
+                .ok()
+        },
         |s| Some(s.settings_snapshot()),
     );
     let modes = settings.as_ref().map_or_else(PyDict::new, modes);
@@ -1609,7 +1613,7 @@ mod tests {
 
     #[test]
     fn the_shipped_modes_are_paper_in_sleeve_order() {
-        let s = Settings::defaults().unwrap();
+        let s = Settings::dry_defaults().unwrap();
         assert_eq!(
             py::dumps(&PyValue::Map(modes(&s))),
             "{\"F1N\": \"PAPER\", \"F1B\": \"PAPER\", \"F2\": \"PAPER\", \"F3N\": \"PAPER\", \

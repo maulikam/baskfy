@@ -779,7 +779,7 @@ def test_env_example_keeps_the_safety_defaults_safe():
     import pathlib
     import re
     text = pathlib.Path(".env.example").read_text()
-    for key, expected in (("DRY_RUN", "true"), ("REGIME_ENABLED", "false"),
+    for key, expected in (("DRY_RUN", "false"), ("REGIME_ENABLED", "false"),  # DRY-LIVE, 1 Nov 2026
                           ("REGIME_MODE", "observe"), ("INTRADAY_ENABLED", "false"),
                           ("OPTIONS_ENABLED", "false")):
         m = re.search(rf"^{key}=(\S+)", text, re.M)

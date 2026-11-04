@@ -50,9 +50,9 @@ fn env_stripped(name: &str) -> String {
     std::env::var(name).unwrap_or_default().trim().to_owned()
 }
 
-/// `broker_oauth.dry_run_enabled()`: anything but an explicit false is dry.
+/// `broker_oauth.dry_run_enabled()`: unset is live (DECISIONS-MERGE DRY-LIVE).
 fn dry_run_enabled() -> bool {
-    let raw = std::env::var("DRY_RUN").unwrap_or_else(|_| "true".to_owned());
+    let raw = std::env::var("DRY_RUN").unwrap_or_else(|_| "false".to_owned());
     matches!(
         raw.trim().to_lowercase().as_str(),
         "" | "1" | "true" | "yes" | "on"

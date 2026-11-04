@@ -55,15 +55,15 @@ if [ "${LOCAL:-0}" = "1" ]; then
     .venv/bin/python -c 'from app import config as C
 print(C.DRY_RUN, C.OPTIONS_ENABLED, C.INTRADAY_ENABLED, C.OPTIONS_O1M_EXECUTION_ENABLED,
       C.OPTIONS_O1W_EXECUTION_ENABLED, C.OPTIONS_O2_EXECUTION_ENABLED, C.OPTIONS_O3_EXECUTION_ENABLED)' 2>&1 | tail -1)"
-  [ "$DESK_FLAGS" = "True False False False False False False" ] \
-    && ok "desk defaults: DRY_RUN true, every options switch false" \
+  [ "$DESK_FLAGS" = "False False False False False False False" ] \
+    && ok "desk defaults: DRY_RUN false (DRY-LIVE), every options switch false" \
     || bad "desk defaults are not safe: $DESK_FLAGS"
   WORKER_FLAGS="$(cd "$ROOT/decile-blueprint" && env -i PATH="$PATH" HOME="$HOME" \
     uv run --quiet python -c 'from baskfy_worker.options import options_flags
 f = options_flags(); print(f.dry_run, f.options_enabled, f.intraday_enabled, f.o1m_execution_enabled,
       f.o1w_execution_enabled, f.o2_execution_enabled, f.o3_execution_enabled)' 2>&1 | tail -1)"
-  [ "$WORKER_FLAGS" = "True False False False False False False" ] \
-    && ok "worker defaults: dry run, every options switch false" \
+  [ "$WORKER_FLAGS" = "False False False False False False False" ] \
+    && ok "worker defaults: live (DRY-LIVE), every options switch false" \
     || bad "worker defaults are not safe: $WORKER_FLAGS"
   # The dev stack's Postgres is the compose container (infra/docker/compose.yml); ask it directly,
   # so this needs no psql on the laptop. BASKFY_LOCAL_PG / BASKFY_LOCAL_DB override the names.

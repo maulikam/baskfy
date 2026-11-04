@@ -61,7 +61,7 @@ async fn one_int(conn: &mut Conn, sql: &str, params: &[Param]) -> i64 {
 }
 
 fn settings() -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = true;
     s.swing_execution_enabled = false;
     s.swing_auto_execute = false;

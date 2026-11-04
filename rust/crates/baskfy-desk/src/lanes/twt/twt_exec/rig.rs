@@ -45,7 +45,7 @@ pub const EXPLODING: &str = r#"{
 /// The desk's flags as a test sets them: `DRY_RUN`, `BASKFY_TWT_EXECUTION_ENABLED`,
 /// `BASKFY_TWT_AUTO_EXECUTE`, and the operator tenant.
 pub fn flags(dry_run: bool, execution: bool, auto: bool) -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = dry_run;
     s.twt_execution_enabled = execution;
     s.twt_auto_execute = auto;

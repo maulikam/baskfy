@@ -55,8 +55,8 @@ async fn desk_with(holdings: Vec<Value>, gtts: Vec<Value>, authed: bool) -> Desk
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::create_dir_all(root.join("data/outputs")).unwrap();
-    let mut settings = Settings::defaults().unwrap();
-    assert!(settings.dry_run, "DRY_RUN must default true");
+    let mut settings = Settings::dry_defaults().unwrap();
+    assert!(settings.dry_run, "the harness pins DRY_RUN on");
     settings.kite_api_key = "replay-test-key".to_owned();
     settings.db_backend = "sqlite".to_owned();
     settings.db_path = root.join("desk.db").display().to_string();

@@ -18,7 +18,7 @@ export default function OpportunitiesSwingPage() {
       <PageHeader
         title="Opportunities"
         blurb={PAGES["/opportunities/swing"].blurb}
-        meta="Research output from rule-based scans — not advice, and nothing here places an order."
+        meta="Research output from rule-based scans — not advice. Buy on a row sizes a desk plan; a second click confirms a live order through the desk, not through this app."
       />
       <SectionTabs section="opportunities" />
       <SwingWorkspace />

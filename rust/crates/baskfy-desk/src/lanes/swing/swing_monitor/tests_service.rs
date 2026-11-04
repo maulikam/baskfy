@@ -151,7 +151,7 @@ fn the_service_is_wired_and_its_flag_defaults_false() {
             "\"swing-monitor\" => Some(Box::pin(swing_monitor::service::run(state)).await)"
         )
     );
-    let s = crate::settings::Settings::defaults().unwrap();
+    let s = crate::settings::Settings::dry_defaults().unwrap();
     assert!(!s.swing_monitor_enabled && !s.swing_auto_execute && !s.swing_execution_enabled);
     assert!(s.dry_run);
     // `run` keeps Python's exit code 2.

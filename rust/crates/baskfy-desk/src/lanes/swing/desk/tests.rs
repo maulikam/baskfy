@@ -696,7 +696,7 @@ async fn morning_store(dir: &std::path::Path) -> PgSwingStore {
         schema: String::new(),
         broker_account_id: Some(1),
         live_level: None,
-        settings: crate::settings::Settings::defaults().unwrap(),
+        settings: crate::settings::Settings::dry_defaults().unwrap(),
         clock: std::sync::Arc::new(crate::clock::FixedClock::new(now)),
     }
 }
@@ -868,7 +868,7 @@ async fn a_store_without_the_sw_tables_is_an_error_the_page_turns_into_a_banner(
         schema: String::new(),
         broker_account_id: Some(1),
         live_level: None,
-        settings: crate::settings::Settings::defaults().unwrap(),
+        settings: crate::settings::Settings::dry_defaults().unwrap(),
         clock: std::sync::Arc::new(crate::clock::FixedClock::new(at(
             "2026-09-02T09:40:00+05:30",
         ))),

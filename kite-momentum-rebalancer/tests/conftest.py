@@ -13,7 +13,12 @@ evidence of anything, which is precisely the job it exists to do.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
+
+# The code default is live (DECISIONS-MERGE DRY-LIVE); set before app.config is imported.
+os.environ["DRY_RUN"] = "true"
 
 
 @pytest.fixture(autouse=True)

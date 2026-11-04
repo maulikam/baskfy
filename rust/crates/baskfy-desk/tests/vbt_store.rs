@@ -271,7 +271,7 @@ fn map(view: &Rec, key: &str) -> Rec {
 }
 
 fn settings() -> Settings {
-    Settings::defaults().unwrap()
+    Settings::dry_defaults().unwrap()
 }
 
 // =============================================================================================

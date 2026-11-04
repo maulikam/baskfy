@@ -9,9 +9,10 @@
 //! the default and the value after a reload with each of 18 probe strings; `tests/settings.rs`
 //! requires this module to agree on all of them and to know exactly the same set of variables.
 //!
-//! **The safety defaults are the point.** `DRY_RUN` is `true` unless the variable says exactly
-//! `false` (any case); every execution, auto-execute and product switch is `false` unless it
-//! says exactly `true`. The three auto-execute exceptions (non-negotiable 1) are
+//! **The safety defaults are the point.** `DRY_RUN` is `false` when unset (Maulik, 1 Nov 2026,
+//! DECISIONS-MERGE DRY-LIVE) and `true` for any set value but `false` (any case); every
+//! execution, auto-execute and product switch is `false` unless it says exactly `true`.
+//! Test harnesses build [`Settings::dry_defaults`], never the live default. The three auto-execute exceptions (non-negotiable 1) are
 //! [`Settings::swing_auto_execute`], [`Settings::twt_auto_execute`] and
 //! [`Settings::fno_f3_auto_exit`] — there is no fourth, and `tests/settings.rs` fails if one
 //! appears.
@@ -374,6 +375,14 @@ impl Settings {
         Self::from_lookup(&|_| None)
     }
 
+    /// Every default with `DRY_RUN` pinned on: what tests and fail-closed fallbacks build.
+    ///
+    /// # Errors
+    /// As [`Settings::defaults`].
+    pub fn dry_defaults() -> Result<Self, SettingsError> {
+        Self::from_lookup(&|k| (k == "DRY_RUN").then(|| "true".to_owned()))
+    }
+
     /// Set one attribute by its Python name (`app.analytics.settings.apply_to_config`'s
     /// `setattr(C, key, value)`).
     ///
@@ -496,7 +505,7 @@ pub const ENV_VARS: &[EnvVar] = &[
     EnvVar { key: "DESK_SMTP_PORT", module: "app.config", attrs: &["DESK_SMTP_PORT"], kind: Kind::IntOr(587), default: "587" },
     EnvVar { key: "DESK_SMTP_STARTTLS", module: "app.config", attrs: &["DESK_SMTP_STARTTLS"], kind: Kind::BoolNeFalse, default: "true" },
     EnvVar { key: "DESK_SMTP_USER", module: "app.config", attrs: &["DESK_SMTP_USER"], kind: Kind::Str, default: "" },
-    EnvVar { key: "DRY_RUN", module: "app.config", attrs: &["DRY_RUN"], kind: Kind::BoolNeFalse, default: "true" },
+    EnvVar { key: "DRY_RUN", module: "app.config", attrs: &["DRY_RUN"], kind: Kind::BoolNeFalse, default: "false" },
     EnvVar { key: "FORCE_IPV4", module: "app.config", attrs: &["FORCE_IPV4"], kind: Kind::BoolNeFalse, default: "true" },
     EnvVar { key: "FULLY_INVESTED", module: "app.config", attrs: &["FULLY_INVESTED"], kind: Kind::BoolEqTrue, default: "false" },
     EnvVar { key: "INCLUDE_UNTOUCHABLE_IN_NAV", module: "app.config", attrs: &["INCLUDE_UNTOUCHABLE_IN_NAV"], kind: Kind::BoolEqTrue, default: "false" },

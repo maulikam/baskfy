@@ -15,6 +15,7 @@
 //! **Routes:**
 //! * `GET /swing`
 //! * `GET /swing/data`
+//! * `POST /swing/analyze`
 //! * `POST /swing/execute`
 //! * `POST /swing/rearm`
 //! * `POST /swing/reconcile`
@@ -56,7 +57,7 @@ use axum::Router;
 
 use crate::app::AppState;
 
-/// The lane's routes: the swing desk's seven (`app.swing_desk.router`, lane swing_desk), and
+/// The lane's routes: the swing desk (`app.swing_desk.router`, lane swing_desk), and
 /// lane swing_monitor's harness-only `/__harness/swing-signal` (Starlette's 404 without
 /// `--harness`).
 pub fn routes() -> Router<AppState> {

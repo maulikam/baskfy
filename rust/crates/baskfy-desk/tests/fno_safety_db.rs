@@ -403,7 +403,7 @@ async fn the_flag_matrix_through_the_desk_reaches_no_broker() {
             let outcome = tokio::spawn(async move {
                 w.set(|s| all_off(s, true, false));
                 let (plan_id, issued) = raise_plan(&mut w, sleeve).await;
-                let mut s = Settings::defaults().unwrap();
+                let mut s = Settings::dry_defaults().unwrap();
                 let live = set_flags(&mut s, sleeve, dry_off, options, carry, execution, true);
                 w.set(|ws| {
                     set_flags(ws, sleeve, dry_off, options, carry, execution, true);
@@ -641,7 +641,7 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
                 "garbage" => garbage.clone(),
                 _ => own_id[..own_id.len() - 1].to_owned(),
             };
-            let mut s = Settings::defaults().unwrap();
+            let mut s = Settings::dry_defaults().unwrap();
             all_off(&mut s, dry_run, intraday);
             let now = issued + Duration::minutes(minutes);
             let desk = Desk::new(&task_desks, uid, &all_books(&w), now, s).await;

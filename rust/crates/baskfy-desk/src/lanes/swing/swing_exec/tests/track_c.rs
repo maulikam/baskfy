@@ -932,7 +932,11 @@ fn test_every_order_the_module_sends_is_cnc_on_nse_without_a_variety() {
         .collect();
     assert_eq!(places.len(), 2, "the buy and the sell");
     for call in places {
-        assert!(call.contains("product: \"CNC\".to_owned()"), "{call}");
+        assert!(
+            call.contains("product: \"CNC\".to_owned()")
+                || call.contains("product: cash_product(line.note.as_deref()).to_owned()"),
+            "{call}"
+        );
         assert!(call.contains("exchange: \"NSE\".to_owned()"), "{call}");
         assert!(
             call.contains("order_type: \"MARKET\".to_owned()")
@@ -944,7 +948,7 @@ fn test_every_order_the_module_sends_is_cnc_on_nse_without_a_variety() {
     assert_eq!(x::ENTRY_ORDER_TYPES, ["LIMIT", "MARKET"]);
     // ...and the module refuses anything else at run time rather than sending it.
     assert!(code.contains("if !ENTRY_ORDER_TYPES.contains(&order_type.as_str())"));
-    for word in ["\"MIS\"", "\"NFO\"", "\"BFO\"", "\"co\"", "\"bo\"", "MTF"] {
+    for word in ["\"MIS\"", "\"NFO\"", "\"BFO\"", "\"co\"", "\"bo\""] {
         assert!(!code.contains(word), "{word}");
     }
 }

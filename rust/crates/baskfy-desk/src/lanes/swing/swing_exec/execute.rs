@@ -48,6 +48,25 @@ pub const RAISE_GTT_STOP: &str = "RAISE_GTT_STOP";
 pub const PENDING_RANGE: &str = "PENDING_RANGE";
 /// `EXECUTABLE_KINDS`: the kinds a confirm may turn into an order. `PENDING_RANGE` is not one.
 pub const EXECUTABLE_KINDS: [&str; 3] = [BUY_ON_TRIGGER, SELL_AT_OPEN, RAISE_GTT_STOP];
+
+/// An Opportunities row Buy encodes product and rupee amount in the line note so the
+/// `sw_plan_line` schema stays put (Maulik, 2 Nov 2026).
+pub const OPPS_NOTE_PREFIX: &str = "OPPS ";
+
+/// Cash product the buy is sent as. Monitor-built lines have no prefix and stay CNC.
+#[must_use]
+pub fn cash_product(note: Option<&str>) -> &'static str {
+    match note {
+        Some(n) if n.starts_with(OPPS_NOTE_PREFIX) && n.contains("product=MTF") => "MTF",
+        _ => "CNC",
+    }
+}
+
+/// True when the line was sized from a rupee amount on Opportunities, not risk-per-trade.
+#[must_use]
+pub fn is_opps_buy(note: Option<&str>) -> bool {
+    note.is_some_and(|n| n.starts_with(OPPS_NOTE_PREFIX))
+}
 /// `ENTRY_ORDER_TYPES`: the only two order types the swing book can ever send (Track C).
 pub const ENTRY_ORDER_TYPES: [&str; 2] = ["LIMIT", "MARKET"];
 
@@ -990,42 +1009,54 @@ async fn buy(
             reasons.join("; ")
         )));
     }
-    let config = store.config().await?;
     let context = match context {
         Some(c) => c,
         None => store.session_context(session_day(&now)).await?,
     };
-    let multiplier = first_live_multiplier(
-        context.first_live_sessions_left,
-        !simulated,
-        &SwingConfig::default().sizing,
-    )
-    .unwrap_or(Decimal::ONE);
-    let sized = resize_buy(
-        line,
-        &context,
-        &sizing_config(&config, Decimal::ONE),
-        session_day(&now),
-        !simulated,
-    );
-    if !sized.refusal.is_empty() {
-        return Ok(blocked(format!(
-            "{}: {symbol} — {}",
-            sized.refusal, sized.detail
-        )));
-    }
-    if sized.changed {
-        store
-            .resize_line(
-                line.id,
-                sized.quantity,
-                sized.risk_inr,
-                sized.position_value,
-                &sized.detail,
-            )
-            .await?;
-    }
-    let qty = sized.quantity;
+    let (qty, multiplier) = if is_opps_buy(line.note.as_deref()) {
+        // Amount-sized: the user typed the rupees. Do not re-run risk-per-trade sizing
+        // (that path also refuses setups this scanner names that the evening book does not).
+        if !context.tier.new_entries_allowed {
+            return Ok(blocked(format!(
+                "GATE_RED: {symbol} — new entries are closed (rung {})",
+                context.tier.level
+            )));
+        }
+        (quantity, Decimal::ONE)
+    } else {
+        let multiplier = first_live_multiplier(
+            context.first_live_sessions_left,
+            !simulated,
+            &SwingConfig::default().sizing,
+        )
+        .unwrap_or(Decimal::ONE);
+        let config = store.config().await?;
+        let sized = resize_buy(
+            line,
+            &context,
+            &sizing_config(&config, Decimal::ONE),
+            session_day(&now),
+            !simulated,
+        );
+        if !sized.refusal.is_empty() {
+            return Ok(blocked(format!(
+                "{}: {symbol} — {}",
+                sized.refusal, sized.detail
+            )));
+        }
+        if sized.changed {
+            store
+                .resize_line(
+                    line.id,
+                    sized.quantity,
+                    sized.risk_inr,
+                    sized.position_value,
+                    &sized.detail,
+                )
+                .await?;
+        }
+        (sized.quantity, multiplier)
+    };
     let window = SwingConfig::default().opening_range;
     let adr = context
         .detected
@@ -1066,7 +1097,7 @@ async fn buy(
             symbol: symbol.clone(),
             qty,
             side: "BUY".to_owned(),
-            product: "CNC".to_owned(),
+            product: cash_product(line.note.as_deref()).to_owned(),
             order_type: order_type.clone(),
             price: if order_type == "LIMIT" {
                 Some(to_f(cap))

@@ -553,7 +553,7 @@ async fn page_shows_the_spread_the_held_exit_and_the_flag() {
         let day = before(nov(), 5);
         w.index_at("23970", "24200");
         w.tick(at(day, 11, 1)).await;
-        let settings = Settings::defaults().unwrap();
+        let settings = Settings::dry_defaults().unwrap();
         let src = PageSources {
             books: w.quotes.clone(),
             spot: Some(d("23970")),
@@ -620,7 +620,7 @@ async fn page_shows_the_spread_the_held_exit_and_the_flag() {
 
 #[test]
 fn the_flags_default_false_and_the_monitor_source_names_no_auto_flag() {
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     assert!(!f3_auto_exit_enabled(&s));
     assert_eq!(
         fno_gates(&s, FoSleeve::F3N).mode,

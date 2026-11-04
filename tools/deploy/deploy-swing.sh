@@ -27,8 +27,10 @@
 #   5. up -d api worker ingest-worker beat desk desk-daily swing-monitor web caddy (caddy recreated, since a
 #      bind-mounted Caddyfile is pinned by inode); prints `docker compose ps`.
 #      KEEP_MONITOR=1 leaves `swing-monitor` alone — see "sparing the monitor" below.
-# Flags: DRY_RUN=true and every BASKFY_SWING_* stay false — they are compose defaults, and this
-# script writes no override. Rollback: the three image lines back to the previous tag + `up -d`.
+# Flags: every BASKFY_SWING_* stays false — compose defaults, no override written. DRY_RUN's
+# compose default is live since 1 Nov 2026 (DECISIONS-MERGE DRY-LIVE), so step 2 pins
+# BASKFY_DRY_RUN/BASKFY_DESK_DRY_RUN=true in .env.staging.compose when the box names neither;
+# an explicit line already there is left as Maulik set it. Rollback: the three image lines back to the previous tag + `up -d`.
 # Override the sleeve with SWING_CAPITAL / SWING_RISK; the tag with TAG=<sha>.
 set -euo pipefail
 
@@ -186,6 +188,7 @@ box \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; for kv in BASKFY_WEB_IMAGE=$REG/baskfy-web:$TAG BASKFY_PY_IMAGE=$REG/baskfy-py:$TAG BASKFY_DESK_IMAGE=$REG/baskfy-desk:$TAG; do k=\${kv%%=*}; grep -q \"^\$k=\" \$F && sed -i \"s#^\$k=.*#\$kv#\" \$F || echo \"\$kv\" >> \$F; done; grep -E '^BASKFY_(WEB|PY|DESK)_IMAGE=' \$F" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; if ! grep -q '^BASKFY_DESK_PASSWORD=' \$F; then printf 'BASKFY_DESK_PASSWORD=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(16))')\" >> \$F; echo 'BASKFY_DESK_PASSWORD generated on the box (hex, 32 chars; read it in an SSM shell, never through box.sh)'; else echo 'BASKFY_DESK_PASSWORD present'; fi; chmod 0600 \$F" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; if ! grep -q '^REVALIDATE_SECRET=' \$F; then printf 'REVALIDATE_SECRET=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(32))')\" >> \$F; echo 'REVALIDATE_SECRET generated on the box (never printed)'; else echo 'REVALIDATE_SECRET present'; fi; chmod 0600 \$F" \
+  "set -e; cd /opt/baskfy; F=.env.staging.compose; for k in BASKFY_DRY_RUN BASKFY_DESK_DRY_RUN; do grep -q \"^\$k=\" \$F || { echo \"\$k=true\" >> \$F; echo \"\$k unset: pinned true (code default is live since DRY-LIVE)\"; }; done; grep -E '^BASKFY_(DESK_)?DRY_RUN=' \$F" \
   "$C config -q && echo 'compose config: ok'"
 
 # SSM runs the lines as one script WITHOUT set -e, so every step that must gate the next one

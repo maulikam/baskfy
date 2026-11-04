@@ -155,7 +155,7 @@ async fn a_second_confirm_of_a_held_session_is_busy_and_sends_nothing() {
             execute_line(
                 &mut b,
                 &NeverGateway,
-                &Settings::defaults().unwrap(),
+                &Settings::dry_defaults().unwrap(),
                 &plan_id,
                 line_id,
                 "true",

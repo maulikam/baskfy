@@ -42,7 +42,8 @@ GTT stop-losses placed for every position.
 3. Pledged shares SELL DIRECTLY on Zerodha (instant-sale, Oct-2024 feature) — no unpledge
    gate. Plan flags them only as info: collateral margin reduces when they're sold.
 4. Every buy gets a GTT stop the same session (vol-scaled 8–12%, `stop_from_vol()`).
-5. Product gates: rebalancer is CNC-only. MIS requires config.INTRADAY_ENABLED, NFO/BFO
+5. Product gates: cash equity is CNC or MTF (MTF is Maulik, 2 Nov 2026; Kite Connect
+   `product: "MTF"`). MIS requires config.INTRADAY_ENABLED, NFO/BFO
    requires config.OPTIONS_ENABLED — both enforced inside core/gateway.py, default OFF.
 6a. ALL order flow goes through core/gateway.py (guards → risk → rate-limits → journal).
    Never call kc.place_order from a strategy. guards.py blocks SGB*/G-sec at the lowest

@@ -288,8 +288,10 @@ def product_exchange_refusal(
 ) -> str:
     """Why this product/exchange pair is refused, or "" when the allow-list admits it.
 
-    Allow-list, not deny-list (AF 0.7): CNC on NSE/BSE is the only cash path; MIS needs
-    ``intraday_enabled``; any venue in ``DERIVATIVE_EXCHANGES`` needs ``options_enabled``.
+    Allow-list, not deny-list (AF 0.7): CNC or MTF on NSE/BSE is the cash path (MTF is
+    Maulik, 2 Nov 2026; Kite Connect ``product: "MTF"``); MIS needs ``intraday_enabled``;
+    any venue in ``DERIVATIVE_EXCHANGES`` needs ``options_enabled``. MIS/NFO are never
+    admitted silently.
     A deny-list of NFO/BFO alone let MCX/NRML and CDS through every guard.
 
     **A derivative venue admits MIS only, and MIS needs ``intraday_enabled`` there too** (OP2,
@@ -337,12 +339,15 @@ def product_exchange_refusal(
         if not intraday_enabled:
             return "MIS/intraday disabled (config.INTRADAY_ENABLED)"
         return ""
-    if product_u != "CNC":
-        return (
-            f"{product_u or product!r}: only CNC is allowed on cash equity unless "
-            f"INTRADAY_ENABLED (MIS)"
-        )
-    return ""
+    # CNC is delivery. MTF is Zerodha's margin trading facility on cash equity
+    # (Maulik, 2 Nov 2026; Kite Connect product code ``MTF``). Both overnight the
+    # shares; neither is MIS.
+    if product_u in ("CNC", "MTF"):
+        return ""
+    return (
+        f"{product_u or product!r}: only CNC or MTF is allowed on cash equity unless "
+        f"INTRADAY_ENABLED (MIS)"
+    )
 
 
 def filter_tradeable(symbols: list[str]) -> list[str]:

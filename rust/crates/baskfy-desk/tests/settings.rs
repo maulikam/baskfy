@@ -131,11 +131,15 @@ fn every_default_and_every_probe_parses_as_python_does() {
 }
 
 #[test]
-fn the_defaults_simulate_and_every_execution_switch_is_off() {
+fn the_defaults_are_live_and_every_execution_switch_is_off() {
     let s = Settings::defaults().unwrap();
     assert!(
-        s.dry_run,
-        "DRY_RUN must default true (non-negotiable 1, safety rail)"
+        !s.dry_run,
+        "DRY_RUN defaults false (Maulik, 1 Nov 2026, DECISIONS-MERGE DRY-LIVE)"
+    );
+    assert!(
+        Settings::dry_defaults().unwrap().dry_run,
+        "the test harness pins DRY_RUN on"
     );
     for (attr, value) in s.values() {
         let switch = attr.ends_with("_EXECUTION_ENABLED")
@@ -210,7 +214,7 @@ fn dry_run_is_off_only_for_the_word_false() {
 
 #[test]
 fn a_settings_page_override_round_trips_and_a_wrong_type_is_refused() {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.set("REGIME_BUFFER_BPS", ConfigValue::Int(175)).unwrap();
     assert_eq!(s.regime_buffer_bps, 175);
     assert!(

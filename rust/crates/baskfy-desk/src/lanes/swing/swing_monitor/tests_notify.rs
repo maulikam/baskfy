@@ -307,7 +307,7 @@ fn the_message_encoding_follows_set_contents_heuristic() {
 
 #[test]
 fn test_telegram_sender_is_not_constructed_unless_both_are_set() {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.desk_smtp_host = String::new();
     s.swing_telegram_bot_token = "123:abc".to_owned();
     s.swing_telegram_chat_id = String::new();
@@ -326,7 +326,7 @@ fn test_telegram_sender_is_not_constructed_unless_both_are_set() {
 
 #[test]
 fn test_the_process_default_is_no_channel_at_all() {
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     assert!(s.swing_telegram_bot_token.is_empty() && s.swing_telegram_chat_id.is_empty());
     assert!(s.desk_smtp_host.is_empty());
     assert!(build_senders(&s).is_empty());
@@ -603,7 +603,7 @@ async fn test_notifier_observe_sink_that_raises_is_dropped() {
 
 #[test]
 fn the_desk_settings_build_an_email_sender_over_the_relay() {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.desk_smtp_host = "127.0.0.1".to_owned();
     s.desk_notify_from = "desk@example.invalid".to_owned();
     s.desk_notify_to = "op@example.invalid".to_owned();

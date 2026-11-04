@@ -73,9 +73,8 @@ ENV PATH="/repo/.venv/bin:$PATH" \
     # (20:30) ... Everything schedules in Asia/Kolkata; nothing depends on machine-local time."
     # Set here as well as in the app so a bare `docker exec` sees the same clock the schedule does.
     BASKFY_ENVIRONMENT=staging \
-    # Root CLAUDE.md safety rail: "DRY_RUN=true is the default in every environment an agent
-    # creates." Baked into the image so that forgetting it in an env file cannot arm anything.
-    DRY_RUN=true
+    # Live by default (Maulik, 1 Nov 2026; DECISIONS-MERGE DRY-LIVE).
+    DRY_RUN=false
 
 WORKDIR /repo
 

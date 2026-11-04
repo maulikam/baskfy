@@ -108,7 +108,7 @@ fn make_state(tier: RegimeTier) -> RegimeState {
 }
 
 async fn view(c: &mut Conn) -> PyDict {
-    let s = baskfy_desk::Settings::defaults().unwrap();
+    let s = baskfy_desk::Settings::dry_defaults().unwrap();
     let k = DeskConstants::resolve(&s, &BTreeMap::new());
     rv::build(c, &s, &k, "desk", today()).await.unwrap()
 }

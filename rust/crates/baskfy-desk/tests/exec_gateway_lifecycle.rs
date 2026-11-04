@@ -436,7 +436,7 @@ fn adoption(sleeve: &str) -> Adoption {
 }
 
 fn settings() -> Settings {
-    Settings::defaults().unwrap()
+    Settings::dry_defaults().unwrap()
 }
 
 async fn run(

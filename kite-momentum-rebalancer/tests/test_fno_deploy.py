@@ -54,7 +54,7 @@ def test_compose_runs_the_monitor_from_the_desk_block_with_money_flags_false() -
             assert env[flag] == f"${{{flag}:-false}}", (name, flag)
         assert env["BASKFY_FNO_MONITOR_ENABLED"] == "${BASKFY_FNO_MONITOR_ENABLED:-false}"
         assert env["OPTIONS_ENABLED"] == "false" and env["INTRADAY_ENABLED"] == "false"
-        assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-true}"
+        assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-false}"  # DECISIONS-MERGE DRY-LIVE
 
 
 def test_the_only_fno_auto_variable_in_compose_is_f3s_exit_flag() -> None:

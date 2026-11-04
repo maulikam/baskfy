@@ -78,7 +78,7 @@ mod tests {
     use super::*;
 
     fn settings() -> Settings {
-        Settings::defaults().expect("the shipped defaults parse")
+        Settings::dry_defaults().expect("the shipped defaults parse")
     }
 
     fn set(s: &mut Settings, sleeve: FoSleeve, row: (bool, bool, bool, bool)) {

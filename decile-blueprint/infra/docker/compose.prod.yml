@@ -137,7 +137,9 @@ x-python-image: &python-image
     # `services/api` still has zero `.place(` / `place_order` / `place_gtt` calls, `routers/kite.py`
     # still has zero POST routes, and no execute route exists (D3-E authorises one; it is unbuilt
     # and its flag is off). Check those four things, not the secret, before trusting this.
-    DRY_RUN: "${BASKFY_DRY_RUN:-true}"
+    # Default false since 1 Nov 2026 (Maulik; DECISIONS-MERGE DRY-LIVE). deploy-swing.sh pins
+    # BASKFY_DRY_RUN/BASKFY_DESK_DRY_RUN=true on the box when its env file names neither.
+    DRY_RUN: "${BASKFY_DRY_RUN:-false}"
     BASKFY_PUBLIC_API_ENABLED: "false"
     BASKFY_FREE_TIER_ENABLED: "false"
   depends_on:
@@ -388,8 +390,9 @@ services:
       # box since M81/M82 — it unlocks one read-only holdings pull and nothing else (see the
       # api block above). The desk's DRY_RUN gates real order placement, so it must not ride the
       # same line: sharing `${BASKFY_DRY_RUN}` would have started the desk live the first time
-      # it was deployed. `BASKFY_DESK_DRY_RUN` is unset on the box; the default is the rail.
-      DRY_RUN: "${BASKFY_DESK_DRY_RUN:-true}"
+      # it was deployed. Default false since 1 Nov 2026 (Maulik; DECISIONS-MERGE DRY-LIVE);
+      # deploy-swing.sh pins it true on the box if unset, so the box never goes live by default.
+      DRY_RUN: "${BASKFY_DESK_DRY_RUN:-false}"
       BASKFY_SWING_EXECUTION_ENABLED: "${BASKFY_SWING_EXECUTION_ENABLED:-false}"
       BASKFY_SWING_MONITOR_ENABLED: "${BASKFY_SWING_MONITOR_ENABLED:-false}"
       # SW25 — AUTO-EXECUTE: the monitor confirms its own triggers, with nobody watching.

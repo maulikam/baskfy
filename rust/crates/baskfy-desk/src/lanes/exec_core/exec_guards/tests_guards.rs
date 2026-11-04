@@ -183,6 +183,7 @@ fn test_the_cash_venues_are_unchanged() {
     for (intraday, options) in SWITCHES {
         for exchange in ["NSE", "BSE"] {
             assert_eq!(refusal("CNC", exchange, intraday, options), "");
+            assert_eq!(refusal("MTF", exchange, intraday, options), "");
             assert_eq!(
                 refusal("MIS", exchange, intraday, options).is_empty(),
                 intraday
@@ -634,7 +635,7 @@ async fn test_a_gtt_on_a_derivative_venue_or_an_untouchable_is_refused() {
 
 #[test]
 fn test_config_defines_both_gates_and_both_default_off() {
-    let s = crate::settings::Settings::defaults().unwrap();
+    let s = crate::settings::Settings::dry_defaults().unwrap();
     assert!(!s.intraday_enabled);
     assert!(!s.options_enabled);
     assert!(s.dry_run, "DRY_RUN is the default");

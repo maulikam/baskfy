@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 
+import { OptionsBuyUnavailable } from "@/components/opportunities/buy-panel";
 import { PayoffChart } from "@/components/opportunities/payoff-chart";
 import { SortableHeader } from "@/components/opportunities/sortable-header";
 import { DataStatusBanner, ProviderUnavailable, WarningsList } from "@/components/opportunities/states";
@@ -116,6 +117,11 @@ function buildColumns(selected: readonly string[], toggle: (id: string) => void,
       id: "score",
       header: "Score",
       cell: (c) => formatNumber(c.getValue(), { decimals: 1 }),
+    }),
+    column.display({
+      id: "buy",
+      header: () => <span className="sr-only">Buy</span>,
+      cell: () => <OptionsBuyUnavailable />,
     }),
   ];
 }

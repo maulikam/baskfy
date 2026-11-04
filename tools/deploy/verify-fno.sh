@@ -62,8 +62,8 @@ if [ "${LOCAL:-0}" = "1" ]; then
 print(C.DRY_RUN, C.OPTIONS_ENABLED, C.INTRADAY_ENABLED, C.FNO_CARRY_ENABLED,
       C.FNO_F1_EXECUTION_ENABLED, C.FNO_F2_EXECUTION_ENABLED, C.FNO_F3_EXECUTION_ENABLED,
       C.FNO_F3_AUTO_EXIT, C.FNO_MONITOR_ENABLED)' 2>&1 | tail -1)"
-  [ "$DESK_FLAGS" = "True False False False False False False False False" ] \
-    && ok "desk defaults: DRY_RUN true, every FO switch false" \
+  [ "$DESK_FLAGS" = "False False False False False False False False False" ] \
+    && ok "desk defaults: DRY_RUN false (DRY-LIVE), every FO switch false" \
     || bad "desk defaults are not safe: $DESK_FLAGS"
   GATES="$(cd "$ROOT/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
     .venv/bin/python -c 'from baskfy_core.fno.config import FoSleeve

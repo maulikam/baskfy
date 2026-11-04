@@ -89,7 +89,7 @@ fn test_the_kite_client_pins_before_it_builds_a_session() {
     .unwrap();
     let kite =
         Arc::new(crate::fake_kite::ReplayKite::load(dir.path(), None, "test-api-key").unwrap());
-    let mut settings = Settings::defaults().unwrap();
+    let mut settings = Settings::dry_defaults().unwrap();
     settings.token_file = dir.path().join("token.json").display().to_string();
     assert!(settings.force_ipv4);
     let _client = super::super::kite_client::DeskKite::new(
@@ -122,7 +122,7 @@ fn test_the_switch_can_be_turned_off() {
 
 #[test]
 fn test_it_defaults_to_on() {
-    assert!(Settings::defaults().unwrap().force_ipv4);
+    assert!(Settings::dry_defaults().unwrap().force_ipv4);
 }
 
 #[tokio::test]
@@ -163,7 +163,7 @@ fn the_names_it_answers_to_default_to_loopback_and_are_configurable() {
 
 #[test]
 fn test_no_password_by_default_so_the_laptop_is_unchanged() {
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     assert_eq!(s.desk_password, "");
     assert_eq!(NO_AUTH, ["/status"]);
 }
@@ -295,7 +295,7 @@ const ORIGIN: &str = "http://testserver:8420";
 /// `crate::websec::layer` calls it. The settings are `app.config`'s defaults (allowed hosts
 /// `127.0.0.1,localhost,testserver`, port 8420) with the test's overrides.
 fn app(allowed: Option<&str>, password: &str) -> Router {
-    let defaults = Settings::defaults().unwrap();
+    let defaults = Settings::dry_defaults().unwrap();
     let allowed = allowed.map_or(defaults.desk_allowed_hosts, str::to_owned);
     let port = defaults.desk_port;
     let password = password.to_owned();
@@ -534,5 +534,5 @@ async fn a_non_ascii_credential_is_pythons_plain_500() {
 fn test_the_docs_are_closed_by_default() {
     // `/docs`, `/redoc` and `/openapi.json` answering 404 is graded over HTTP against Python by
     // `desk_cases/exec_guards.json`; the switch behind them is off by default.
-    assert!(!Settings::defaults().unwrap().desk_docs);
+    assert!(!Settings::dry_defaults().unwrap().desk_docs);
 }

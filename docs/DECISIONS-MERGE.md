@@ -8558,3 +8558,43 @@ staying unconnected (no holdings, no live marks).
 * No flag moved. Note: LOCAL-1 cited "no registered static IP" as a backstop; once the IP is
   whitelisted on the Kite app that backstop is gone — the money flags and DRY_RUN remain the guard.
 * Reverse: unset `BASKFY_KITE_PROXY_URL`.
+
+## DRY-LIVE — DRY_RUN's code default is false, system-wide (1 Nov 2026) ✅ decided by Maulik
+
+* Maulik, in session, after the consequences were stated: "I want DRY_RUN off from entire system,
+  i want to take real trades." Unset `DRY_RUN` now means live in the desk (`app/config.py`, Rust
+  `baskfy-desk` settings), the API/worker readers (Python + Rust), the three Dockerfiles and
+  `compose.prod.yml` (`${BASKFY_DRY_RUN:-false}`, `${BASKFY_DESK_DRY_RUN:-false}`). A set value is
+  still dry unless it says `false`.
+* Not changed: every execution/auto flag (default false; the local stack still forces them false),
+  and the struct-level fail-closed defaults (`ProductGates(dry_run=True)`, the core gating types) —
+  those are the fallback when no env is wired, not the env default.
+* Tests: every harness pins `DRY_RUN=true` (both conftests, `rust/.cargo/config.toml` `[env]`,
+  `Settings::dry_defaults()` in all desk tests). Default-asserting tests now assert false.
+* Local (`tools/deploy/local.sh`): live unless `$BASKFY_LOCAL_DIR/dry_run` says `true` (LOCAL-2's
+  `live|dry` switch, ported); `verify` fails on any money flag, reports DRY_RUN=false loudly.
+* AWS: the box's env names its DRY_RUN lines explicitly; `deploy-swing.sh` now also appends
+  `BASKFY_DRY_RUN=true`/`BASKFY_DESK_DRY_RUN=true` when absent, so a box never goes live by default.
+  `.env.staging.example` keeps `DRY_RUN=true`.
+* Reverse: `git revert` this commit; locally `bash tools/deploy/local.sh dry`.
+
+## LOCAL-3 — local desk has no password; Desk lives in the web shell (2 Nov 2026) ✅ decided by Maulik
+
+Maulik, in session: *"since everything is in local desk should also be non password based also desk should be incorporated in existing main ui"*
+
+* **Auth.** Local only: `tools/deploy/local.sh` writes `DESK_PASSWORD: ""` on the `desk` service in `compose.local.yml`. HTTP Basic is off when the password is empty (`app/core/websec.py`, `baskfy-desk` `websec.rs`). The copied box env still holds `BASKFY_DESK_PASSWORD` so compose.prod.yml interpolation (`:?`) still succeeds; that value is not what the local desk process reads. Caddy on the Mac never had `basic_auth` (M46.4). AWS/prod compose and the box password are unchanged.
+* **UI.** `/build/desk` in `decile-blueprint/apps/web` is the AppShell chrome around an iframe of same-origin `/desk` (Caddy already reverse-proxies it; `DESK_PATH_PREFIX=/desk`). Staff Build tab **Desk** and the Operator account menu both point there. CSP `frame-src` gained `'self'` so the iframe is allowed. The public web app gains **no** execute route; `POST /execute` stays on the desk origin.
+* **Sign-in.** Unchanged: "Continue on this Mac" (`BASKFY_LOCAL_SIGNIN_PUBLIC_ID`). The desk has no session of its own beyond optional Basic, which is now off locally.
+* Reverse: drop the `desk: {environment: {DESK_PASSWORD: ""}}` line in `local.sh` and recreate `desk`; remove `/build/desk` and the nav entries.
+
+## OPPS-MTF — Opportunities row Buy may send Zerodha MTF (2 Nov 2026) ✅ decided by Maulik
+
+Maulik, in session, 2 Nov 2026: the Opportunities row Buy UI must offer **not only CNC but also MTF**. He enters the rupee amount; if MTF is selected, the live order is Zerodha margin trading facility with that amount. DRY_RUN is already false on this local stack.
+
+* **Product toggle.** CNC | MTF. Default CNC. MTF is an explicit click. MIS stays behind `INTRADAY_ENABLED` and is not offered.
+* **Gateway.** Non-negotiable 5 is widened: cash equity admits **CNC or MTF** (`product_exchange_refusal` in Rust `baskfy-desk` guards and the Python `baskfy_execution` twin). Kite Connect product code is **`MTF`**. MIS still needs `INTRADAY_ENABLED`; NFO/BFO still need `OPTIONS_ENABLED`. Neither is admitted silently. Guards → risk → rate-limit → journal are unchanged.
+* **Plan.** `POST /desk/swing/analyze` writes a one-line SIGNAL `BUY_ON_TRIGGER` whose note is `OPPS product=CNC|MTF amount=…` (no schema migration). `execute_line` reads that note and sends `product: "CNC" | "MTF"` on `place`. Qty is `floor(amount / last_price / lot) * lot`, not risk-per-trade `size_position`. RED gate / drawdown lockout still refuse.
+* **GTT.** Same-session stop remains required (vol-scaled 8–12%). Kite GTT does not accept product MTF — the stop is still placed as a CNC cash trigger that sells the shares. The confirm panel names that restriction rather than skipping the stop.
+* **Confirm copy.** `Place LIVE MTF buy of {qty} {symbol} (~₹amount)` (or CNC; `SIMULATED` when the swing gates are dry). No auto-submit. Confirm is `POST /desk/swing/execute` with `confirm=true`. The public Next.js app gains **no** execute route.
+* **Options.** Not wired: desk `/fno/execute` is F3 credit spreads, not LONG_CALL/PUT/debit spreads.
+* **Reverse.** Refuse MTF again in `product_exchange_refusal`; drop `/swing/analyze` and the Opportunities Buy panel.

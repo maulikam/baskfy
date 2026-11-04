@@ -204,7 +204,7 @@ fn a_value_the_core_cannot_hold_is_refused_not_coerced() {
 
 #[test]
 fn the_default_mode_is_observe_and_never_enforce() {
-    let s = baskfy_desk::Settings::defaults().unwrap();
+    let s = baskfy_desk::Settings::dry_defaults().unwrap();
     let cfg = RegimeConfig::from_settings(&s).unwrap().to_core().unwrap();
     cfg.validate().unwrap();
     assert_eq!(cfg.mode, RegimeMode::Observe);

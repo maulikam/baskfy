@@ -275,6 +275,7 @@ describe("the primary consumer IA", () => {
       "/vbt",
       "/twt",
       "/options",
+      "/build/desk",
     ]);
     expect(staff.map((t) => t.label)).toEqual([
       "Screens",
@@ -287,6 +288,7 @@ describe("the primary consumer IA", () => {
       "Tight",
       // `docs/options/05` §1: Options is appended after Tight (OP5).
       "Options",
+      "Desk",
     ]);
     expect(buildSectionTabs("market", { isStaff: true }).map((t) => t.href)).toEqual(
       SECTION_TABS.market.map((t) => t.href),
@@ -336,6 +338,7 @@ describe("the sidebar IA", () => {
 
   it("lists operator sleeve hubs for staff", () => {
     expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
+      "/build/desk",
       "/swing",
       "/vbt",
       "/twt",

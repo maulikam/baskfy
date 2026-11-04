@@ -3637,7 +3637,7 @@
     "DRY_RUN"
    ],
    "default": {
-    "DRY_RUN": true
+    "DRY_RUN": false
    },
    "probes": {
     "": {

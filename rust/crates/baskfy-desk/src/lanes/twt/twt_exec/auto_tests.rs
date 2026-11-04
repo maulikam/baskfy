@@ -476,7 +476,7 @@ fn test_compose_runs_it_from_the_desk_block_with_the_flag_named_false() {
     );
     assert_eq!(
         get("DRY_RUN").as_deref(),
-        Some("${BASKFY_DESK_DRY_RUN:-true}"),
+        Some("${BASKFY_DESK_DRY_RUN:-false}"),
         "{env:?}"
     );
     // The desk's own flag only: the api/worker/beat block does not name it.

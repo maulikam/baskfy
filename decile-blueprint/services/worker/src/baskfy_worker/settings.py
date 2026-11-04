@@ -136,7 +136,7 @@ class WorkerSettings(BaseSettings):
     #: parsed the desk's way (``app/config.py``): DRY_RUN is on unless exactly ``false``; the two
     #: switches are on only when exactly ``true``. Strings, so pydantic's lenient bool parsing
     #: ("yes", "1", "on") cannot read a value as live that the desk reads as off.
-    options_desk_dry_run: str = Field(default="true", validation_alias="DRY_RUN")
+    options_desk_dry_run: str = Field(default="false", validation_alias="DRY_RUN")
     options_desk_options_enabled: str = Field(default="false", validation_alias="OPTIONS_ENABLED")
     options_desk_intraday_enabled: str = Field(default="false", validation_alias="INTRADAY_ENABLED")
     #: ``02`` "Ceilings". A setting may sit below them, never above; mirrored in the API.

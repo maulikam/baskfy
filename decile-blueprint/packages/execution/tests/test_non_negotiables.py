@@ -187,7 +187,7 @@ def test_non_negotiable_4b_a_stop_can_be_armed_through_the_gateway(
         ("NRML", "NFO", {"options_enabled": False}, "F&O/derivatives disabled"),
         ("NRML", "BFO", {"options_enabled": False}, "F&O/derivatives disabled"),
         ("NRML", "MCX", {"options_enabled": False}, "F&O/derivatives disabled"),
-        ("NRML", "NSE", {}, "only CNC is allowed"),
+        ("NRML", "NSE", {}, "only CNC or MTF is allowed"),
     ],
 )
 def test_non_negotiable_5_product_gates_block_inside_the_gateway(

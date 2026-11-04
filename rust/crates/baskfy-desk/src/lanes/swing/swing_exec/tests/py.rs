@@ -2276,7 +2276,7 @@ async fn test_two_partials_keep_a_running_share_weighted_exit_avg() {
 
 #[test]
 fn test_the_swing_gtt_limit_fraction_is_a_config_constant_read_from_env() {
-    let settings = Settings::defaults().unwrap();
+    let settings = Settings::dry_defaults().unwrap();
     assert_eq!(settings.swing_gtt_limit_fraction, 0.97);
     assert!(
         0.0 < settings.swing_gtt_limit_fraction && settings.swing_gtt_limit_fraction < 0.995,

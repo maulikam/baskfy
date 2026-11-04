@@ -414,13 +414,28 @@ def swing_gates() -> ProductGates:
     ``dry_run`` is true unless BOTH the desk's ``DRY_RUN`` is off AND
     ``BASKFY_SWING_EXECUTION_ENABLED`` is on — the flag is the swing book's own dry-run and it
     defaults false (``02`` Track B). Intraday and options are false unconditionally, not read
-    from config: the swing book is CNC-only (Track C §1) whatever the weekly desk is allowed.
+    from config: MIS/NFO stay off. Cash buys are CNC, or MTF when the plan line says so
+    (Maulik, 2 Nov 2026; Kite Connect ``product: "MTF"``).
     """
     return ProductGates(
         dry_run=C.DRY_RUN or not C.SWING_EXECUTION_ENABLED,
         intraday_enabled=False,
         options_enabled=False,
     )
+
+
+OPPS_NOTE_PREFIX = "OPPS "
+
+
+def cash_product(note: str | None) -> str:
+    """CNC unless an Opportunities line named MTF (Maulik, 2 Nov 2026)."""
+    if note and note.startswith(OPPS_NOTE_PREFIX) and "product=MTF" in note:
+        return "MTF"
+    return "CNC"
+
+
+def is_opps_buy(note: str | None) -> bool:
+    return bool(note and note.startswith(OPPS_NOTE_PREFIX))
 
 
 def swing_stop_band() -> StopBand:
@@ -834,32 +849,44 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
         # `test_swing_desk`); the reconciler records them as NAKED issues on its next pass and
         # the block follows from that record (DECISIONS-LV LV2.2, amended).
         return ExecOutcome("BLOCKED", _reconcile.refusal(unresolved), None, None, None, simulated)
-    config = store.config()
     if context is None:
         context = store.session_context(_session_day(now))
     # A9: half risk at plan time, and only for real money. `entries_now` scales the risk
     # budget from the context's countdown when `live`; the quantity that comes out IS the
     # quantity sent. (Scaling `sizing_config` here as well would halve twice — the defect the
     # `..._is_applied_once` test pins.)
-    multiplier = first_live_multiplier(
-        sessions_left=context.first_live_sessions_left, execution_enabled=not simulated,
-        config=DEFAULT_SWING_CONFIG.sizing,
-    )
-    sized = resize_buy(line, context, sizing_config(config), day=_session_day(now),
-                       live=not simulated)
-    if sized.refusal:
-        # A5: the book as it is now does not have room for this line. Nothing is sent; the
-        # reason leads with the skip code so the row and the page say exactly why.
-        return ExecOutcome("BLOCKED", f"{sized.refusal}: {symbol} — {sized.detail}",
-                           None, None, None, simulated)
-    if sized.changed:
-        # Fewer shares than the plan said: the row is rewritten with the risk and the value
-        # re-derived for the size actually sent, and the note says what was done and why, so
-        # the journal and the fill agree with the line.
-        store.resize_line(line["id"], quantity=sized.quantity, risk_inr=sized.risk_inr,
-                          position_value=sized.position_value, note=sized.detail)
-        log.info("swing BUY %s %s", symbol, sized.detail)
-    qty = sized.quantity
+    if is_opps_buy(line.get("note")):
+        # Amount-sized from Opportunities: keep the rupee qty. The evening book's
+        # risk-per-trade resize also refuses scanner setups this book does not trade.
+        if not context.tier.new_entries_allowed:
+            return ExecOutcome(
+                "BLOCKED",
+                f"GATE_RED: {symbol} — new entries are closed (rung {context.tier.level})",
+                None, None, None, simulated,
+            )
+        qty = quantity
+        multiplier = _ONE
+    else:
+        config = store.config()
+        multiplier = first_live_multiplier(
+            sessions_left=context.first_live_sessions_left, execution_enabled=not simulated,
+            config=DEFAULT_SWING_CONFIG.sizing,
+        )
+        sized = resize_buy(line, context, sizing_config(config), day=_session_day(now),
+                           live=not simulated)
+        if sized.refusal:
+            # A5: the book as it is now does not have room for this line. Nothing is sent; the
+            # reason leads with the skip code so the row and the page say exactly why.
+            return ExecOutcome("BLOCKED", f"{sized.refusal}: {symbol} — {sized.detail}",
+                               None, None, None, simulated)
+        if sized.changed:
+            # Fewer shares than the plan said: the row is rewritten with the risk and the value
+            # re-derived for the size actually sent, and the note says what was done and why, so
+            # the journal and the fill agree with the line.
+            store.resize_line(line["id"], quantity=sized.quantity, risk_inr=sized.risk_inr,
+                              position_value=sized.position_value, note=sized.detail)
+            log.info("swing BUY %s %s", symbol, sized.detail)
+        qty = sized.quantity
     # THE ENTRY CAP IS STILL A8'S; HOW IT IS ENFORCED IS NOT (Maulik, 4 Sep 2026).
     #
     # `marketable_limit` is unchanged and still the most this setup is worth paying. What
@@ -908,7 +935,8 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
                            f"for today, not cheaper later",
                            None, None, None, simulated)
     order = await gw.place(
-        symbol=symbol, qty=qty, side="BUY", product="CNC", order_type=order_type,
+        symbol=symbol, qty=qty, side="BUY", product=cash_product(line.get("note")),
+        order_type=order_type,
         price=float(cap) if order_type == "LIMIT" else None,
         market_protection=None if protection is None else float(protection),
         # What the risk layer values a MARKET order at — it has no price of its own, and a

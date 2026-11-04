@@ -29,7 +29,7 @@ const KITE: &str = r#"{"session": {"authed": true}, "routes": {}, "quotes": {}, 
 const DEAD: &str = "postgres://baskfy:rs-test-only@127.0.0.1:55432/rsd_nowhere";
 
 fn flag_on() -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.options_enabled = true;
     s
 }
@@ -154,7 +154,7 @@ fn form(path: &str, body: &str) -> Request<Body> {
 #[tokio::test]
 async fn a_confirm_that_is_not_true_is_400_before_any_read() {
     let dir = tempfile::tempdir().unwrap();
-    let state = state(Settings::defaults().unwrap(), "postgres", dir.path()).await;
+    let state = state(Settings::dry_defaults().unwrap(), "postgres", dir.path()).await;
     let app = baskfy_desk::lanes::options::routes().with_state(state);
     for (path, field) in [
         ("/nifty-options/execute", "plan_id"),

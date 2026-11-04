@@ -581,7 +581,7 @@ class TestTheLoop:
         compose = yaml.safe_load(text)
         env = compose["services"]["twt-auto"]["environment"]
         assert env["BASKFY_TWT_AUTO_EXECUTE"] == "${BASKFY_TWT_AUTO_EXECUTE:-false}"
-        assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-true}"
+        assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-false}"  # DECISIONS-MERGE DRY-LIVE
         # The desk's own flag only: the api/worker/beat block does not name it.
         common = compose["x-python-image"].get("environment", {})
         assert "BASKFY_TWT_AUTO_EXECUTE" not in common

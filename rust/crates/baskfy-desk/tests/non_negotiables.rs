@@ -107,7 +107,7 @@ fn a_plan_for_another_tenant_is_refused_and_ids_must_be_positive() {
 fn product_gates_fail_closed() {
     let g = ProductGates::default();
     assert!(g.dry_run && !g.intraday_enabled && !g.options_enabled && !g.fno_carry_enabled);
-    let from = ProductGates::from_settings(&baskfy_desk::Settings::defaults().unwrap());
+    let from = ProductGates::from_settings(&baskfy_desk::Settings::dry_defaults().unwrap());
     assert_eq!(from, g);
     assert_eq!(
         FAILED_STATUSES,

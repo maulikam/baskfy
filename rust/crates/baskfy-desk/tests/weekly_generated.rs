@@ -361,7 +361,10 @@ fn both_paths_produce_the_same_plan() {
 fn the_upload_path_still_works_without_generate_for() {
     // The route half is desk_diff's ("analyze the sample scan", source "upload"); the default
     // that keeps it the default:
-    assert_eq!(Settings::defaults().unwrap().scan_source_default, "upload");
+    assert_eq!(
+        Settings::dry_defaults().unwrap().scan_source_default,
+        "upload"
+    );
     let cfg = ScoringConfig::default();
     assert!(load_scan(&generated("scan_fixture").to_csv(), &cfg).is_ok());
 }
@@ -371,7 +374,7 @@ fn neither_path_is_reachable_with_no_scan_at_all() {
     // With no file, no date and the flag off, /analyze answers 400 before reading anything
     // (desk_diff: "analyze with neither a file nor a date is 400"). The flag is off by default.
     assert_ne!(
-        Settings::defaults().unwrap().scan_source_default,
+        Settings::dry_defaults().unwrap().scan_source_default,
         "generated"
     );
 }
@@ -450,7 +453,10 @@ fn a_generated_ids_inputs_are_named_not_hashed_away() {
 
 #[test]
 fn generating_requires_an_explicit_date() {
-    assert_eq!(Settings::defaults().unwrap().scan_source_default, "upload");
+    assert_eq!(
+        Settings::dry_defaults().unwrap().scan_source_default,
+        "upload"
+    );
 }
 
 #[test]
@@ -822,7 +828,7 @@ fn the_book_binds_app_config_where_it_scores() {
     cfg.momentum_blend.reverse();
     let scan = generate(&c, &cfg).unwrap();
     assert_eq!(scan.frame.names, cfg.required());
-    let settings = Settings::defaults().unwrap();
+    let settings = Settings::dry_defaults().unwrap();
     let mut overrides = std::collections::BTreeMap::new();
     overrides.insert(
         "STOP_MAX".to_owned(),
@@ -1086,7 +1092,7 @@ fn todays_settings_short_circuit_the_band_entirely() {
     // Python asserts the operator's environment (`FULLY_INVESTED=true` in the desk's .env; the
     // code default is false, so the Python test fails under a clean environment). Ported as the
     // property: with the desk's `FULLY_INVESTED` on, breadth decides nothing.
-    let mut settings = Settings::defaults().unwrap();
+    let mut settings = Settings::dry_defaults().unwrap();
     settings.fully_invested = true;
     let cfg = weekly_config(&settings, &std::collections::BTreeMap::new());
     assert!(cfg.fully_invested);
@@ -1096,7 +1102,10 @@ fn todays_settings_short_circuit_the_band_entirely() {
 
 #[test]
 fn the_flag_is_off() {
-    assert_eq!(Settings::defaults().unwrap().scan_source_default, "upload");
+    assert_eq!(
+        Settings::dry_defaults().unwrap().scan_source_default,
+        "upload"
+    );
 }
 
 #[test]

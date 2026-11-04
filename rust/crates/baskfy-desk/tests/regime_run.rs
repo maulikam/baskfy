@@ -166,7 +166,7 @@ fn review(sym: &str, qty: i64, l: &[tl::Lot]) -> TaxReview {
 
 #[test]
 fn the_config_knobs_are_the_desks_defaults() {
-    let k = PlanKnobs::from_settings(&baskfy_desk::Settings::defaults().unwrap());
+    let k = PlanKnobs::from_settings(&baskfy_desk::Settings::dry_defaults().unwrap());
     assert_eq!(k, PlanKnobs::default());
 }
 
@@ -651,7 +651,7 @@ async fn bed() -> Bed {
         .unwrap(),
     );
     let gates = ProductGates::default();
-    assert!(gates.dry_run, "DRY_RUN is the gateway's default");
+    assert!(gates.dry_run, "the harness pins DRY_RUN on");
     let core = OrderGateway::new(
         kite.clone(),
         risk,
@@ -666,7 +666,7 @@ async fn bed() -> Bed {
         },
     )
     .unwrap();
-    let settings = Arc::new(RwLock::new(baskfy_desk::Settings::defaults().unwrap()));
+    let settings = Arc::new(RwLock::new(baskfy_desk::Settings::dry_defaults().unwrap()));
     Bed {
         _dir: dir,
         kite,

@@ -184,7 +184,7 @@ async fn two_tabs_at_once_take_one_entry_between_them() {
         let mut a = PgVbtStore::new(db.connect().await.unwrap(), uid, "public", None);
         let mut b = PgVbtStore::new(db.connect().await.unwrap(), uid, "public", None);
         let gw = SlowGateway::default();
-        let settings = Settings::defaults().unwrap();
+        let settings = Settings::dry_defaults().unwrap();
         let (ra, rb) = tokio::join!(
             execute_line(
                 &mut a,

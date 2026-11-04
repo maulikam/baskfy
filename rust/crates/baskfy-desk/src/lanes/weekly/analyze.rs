@@ -1467,7 +1467,7 @@ mod tests {
         let mut o = std::collections::BTreeMap::new();
         o.insert("STOP_MAX".to_owned(), SVal::Float(0.10));
         o.insert("STOP_MIN".to_owned(), SVal::Float(0.07));
-        let cfg = weekly_config(&Settings::defaults().unwrap(), &o);
+        let cfg = weekly_config(&Settings::dry_defaults().unwrap(), &o);
         assert!((cfg.scoring.stop_max - 0.10).abs() < 1e-12);
         assert!((cfg.scoring.stop_min - 0.07).abs() < 1e-12);
     }

@@ -71,7 +71,7 @@ class TestTheService:
             assert env[name] == f"${{{name}:-false}}", name
         assert env["BASKFY_OPTIONS_MONITOR_ENABLED"] == "${BASKFY_OPTIONS_MONITOR_ENABLED:-false}"
         assert env["OPTIONS_ENABLED"] == "false" and env["INTRADAY_ENABLED"] == "false"
-        assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-true}"
+        assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-false}"  # DECISIONS-MERGE DRY-LIVE
 
     def test_no_options_auto_execute_variable_anywhere_in_compose(self) -> None:
         assert re.search(r"OPTIONS\w*AUTO", COMPOSE.read_text()) is None

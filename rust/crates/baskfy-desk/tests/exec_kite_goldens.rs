@@ -266,7 +266,7 @@ async fn every_broker_reply_shape_answers_as_pythons_kite_does() {
         let live = field(case, "live") == &PyValue::Bool(true);
 
         let dir = tempfile::tempdir().unwrap();
-        let mut st = Settings::defaults().unwrap();
+        let mut st = Settings::dry_defaults().unwrap();
         st.dry_run = !live;
         st.force_ipv4 = false;
         st.shared_read_limits = false;

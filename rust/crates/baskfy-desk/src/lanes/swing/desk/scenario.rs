@@ -308,7 +308,7 @@ impl Scenario {
             schema: String::new(),
             broker_account_id: (user == USER).then_some(1),
             live_level: None,
-            settings: Settings::defaults().unwrap(),
+            settings: Settings::dry_defaults().unwrap(),
             clock: Arc::new(FixedClock::new(now())),
         }
     }
@@ -817,7 +817,7 @@ impl Client {
         prices: &[(&str, i64, f64)],
         orders: &serde_json::Value,
     ) -> Self {
-        let mut settings = Settings::defaults().unwrap();
+        let mut settings = Settings::dry_defaults().unwrap();
         settings.dry_run = true;
         settings.swing_execution_enabled = false;
         settings.swing_monitor_enabled = false;

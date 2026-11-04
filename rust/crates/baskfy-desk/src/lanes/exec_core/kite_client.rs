@@ -980,6 +980,17 @@ impl DeskKite {
         Ok(PyValue::Map(py_dict(&raw)?))
     }
 
+    /// One basket-margin calculation. The caller chooses `product` (`MTF` or `CNC`). Never an order.
+    ///
+    /// # Errors
+    /// As [`DeskKite::ready`]; the read.
+    pub async fn order_margin_basket(&self, params: &[PyValue]) -> Result<PyValue, ClientError> {
+        self.ready()?;
+        self.refresh()?;
+        self.slot("general").await;
+        Ok(self.kc.basket_order_margins(params, false, None).await?)
+    }
+
     /// `orders()`.
     ///
     /// # Errors

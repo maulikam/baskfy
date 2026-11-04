@@ -7,6 +7,7 @@ import { decodeJwt } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { localSignInPublicId, signInLocally } from "@/lib/auth/api-auth";
+import { localContinueHref, localDestination } from "@/lib/auth/local-entry";
 
 /**
  * Local sign-in (Maulik, 29 Oct 2026: "since it is on localhost, no google login required").
@@ -34,6 +35,24 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+describe("local entry", () => {
+  it("sends a signed-out visitor home when nothing else was asked for", () => {
+    expect(localDestination(null)).toBe("/home");
+    expect(localDestination("")).toBe("/home");
+    expect(localContinueHref(undefined, false)).toBe("/login/continue?next=%2Fhome");
+  });
+
+  it("keeps a same-site path and refuses an open redirect", () => {
+    expect(localDestination("/build?tab=filters")).toBe("/build?tab=filters");
+    expect(localDestination("https://evil.example")).toBe("/home");
+    expect(localDestination("//evil.example")).toBe("/home");
+  });
+
+  it("stays on the login page after a failed attempt", () => {
+    expect(localContinueHref("/home", true)).toBeNull();
+  });
 });
 
 describe("localSignInPublicId", () => {

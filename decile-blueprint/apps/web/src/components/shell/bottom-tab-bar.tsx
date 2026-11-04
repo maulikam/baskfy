@@ -12,7 +12,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { PRIMARY_NAV, SECTION_LABEL, primarySection } from "@/lib/nav";
+import { DeskMenu } from "@/components/shell/desk-menu";
+import { PRIMARY_NAV, primaryNavLabel } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /*
@@ -34,9 +35,9 @@ const ICONS: Record<string, LucideIcon> = {
  * Safe-area padded; active tab tinted. Five is what the observed product carries too — the row
  * is `justify-around` on a flex track, so the tabs narrow rather than overflow.
  */
-export function BottomTabBar() {
+export function BottomTabBar({ showDesk = true }: { showDesk?: boolean }) {
   const pathname = usePathname();
-  const section = primarySection(pathname);
+  const label = primaryNavLabel(pathname, showDesk);
 
   return (
     <nav
@@ -47,9 +48,7 @@ export function BottomTabBar() {
     >
       <ul className="mx-auto flex h-14 max-w-[104rem] items-stretch justify-around px-2">
         {PRIMARY_NAV.map((item) => {
-          // One record, shared with `TopNav` — the copy that lived here had gone stale against
-          // the Discover rename and silently stopped lighting that tab.
-          const active = section !== null && item.label === SECTION_LABEL[section];
+          const active = label !== null && item.label === label;
           const Icon = ICONS[item.label] ?? Store;
           return (
             <li key={item.href} className="flex min-w-0 flex-1">
@@ -82,6 +81,11 @@ export function BottomTabBar() {
             </li>
           );
         })}
+        {showDesk ? (
+          <li className="flex min-w-0 flex-1">
+            <DeskMenu variant="tab" align="end" />
+          </li>
+        ) : null}
       </ul>
     </nav>
   );

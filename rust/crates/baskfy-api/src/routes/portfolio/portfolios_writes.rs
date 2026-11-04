@@ -18,6 +18,9 @@ use sqlx::PgConnection;
 
 use super::graph::{self, GraphError, MAX_DEPTH};
 use super::model::{self, Bounds, Errors, PyInt};
+use super::screen_invest::{
+    attach_if_screen, parse_create_link, sized_holdings_for_create,
+};
 use super::multipart::{self, FormValue};
 use super::portfolio_csv::{
     self, MAX_IMPORT_ROWS, MatchStatus, ParseFailure, ParsedCsv, ParsedHolding, RowIssue,
@@ -95,22 +98,34 @@ pub(crate) struct ImportReportOut {
 /// `PortfolioWriteDetailOut`.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct PortfolioWriteDetailOut {
-    portfolio: PortfolioDetailOut,
-    report: ImportReportOut,
+    pub(crate) portfolio: PortfolioDetailOut,
+    pub(crate) report: ImportReportOut,
 }
 
 /// `HoldingIn`.
-struct HoldingIn {
+#[derive(Debug, Clone)]
+pub(crate) struct HoldingIn {
     symbol: String,
     quantity: Option<WideDecimal>,
     avg_price: Option<WideDecimal>,
+}
+
+impl HoldingIn {
+    /// A filled paper line from screen-invest sizing.
+    pub(crate) fn sized(symbol: String, quantity: WideDecimal, avg_price: WideDecimal) -> Self {
+        Self {
+            symbol,
+            quantity: Some(quantity),
+            avg_price: Some(avg_price),
+        }
+    }
 }
 
 fn refuse(e: &GraphError) -> Problem {
     Problem::new(ProblemType::InvalidScreenDefinition, e.to_string())
 }
 
-fn too_many(n: usize) -> Problem {
+pub(crate) fn too_many(n: usize) -> Problem {
     Problem::new(
         ProblemType::InvalidScreenDefinition,
         format!("A portfolio may hold at most {MAX_IMPORT_ROWS} names; {n} were sent."),
@@ -172,7 +187,7 @@ fn path_id(raw: &str, errors: &mut Errors) -> Option<PyInt> {
 }
 
 /// `_rows_from_body(holdings)`: the JSON array through the CSV's shape rules.
-fn rows_from_body(holdings: &[HoldingIn]) -> ParsedCsv {
+pub(crate) fn rows_from_body(holdings: &[HoldingIn]) -> ParsedCsv {
     let mut parsed = ParsedCsv::default();
     let mut seen: Vec<String> = Vec::new();
     for (index, holding) in holdings.iter().enumerate() {
@@ -209,7 +224,7 @@ fn rows_from_body(holdings: &[HoldingIn]) -> ParsedCsv {
 }
 
 /// `_apply(session, portfolio, parsed)`: resolve, replace the holdings, report.
-async fn apply(
+pub(crate) async fn apply(
     conn: &mut PgConnection,
     portfolio: &OwnedPortfolio,
     parsed: &ParsedCsv,
@@ -286,12 +301,13 @@ async fn apply(
 }
 
 /// `_portfolio_out(session, portfolio)`.
-async fn portfolio_out(
+pub(crate) async fn portfolio_out(
     conn: &mut PgConnection,
     portfolio: &OwnedPortfolio,
 ) -> Result<PortfolioDetailOut, Problem> {
     let (nodes, _) = graph_rows(conn, portfolio.user_id).await?;
     let depth = graph::depth_of(&nodes, portfolio.id).map_err(|e| refuse(&e))?;
+    let screens = super::screen_invest::screen_links(conn, portfolio.user_id).await?;
     Ok(PortfolioDetailOut {
         id: portfolio.id,
         name: portfolio.name.clone(),
@@ -305,6 +321,7 @@ async fn portfolio_out(
             .filter(|n| n.parent_id == Some(portfolio.id))
             .map(|n| n.id)
             .collect(),
+        screen_public_id: screens.get(&portfolio.id).cloned(),
     })
 }
 
@@ -351,7 +368,7 @@ async fn replayed(
 }
 
 /// `_broker_account_for`: the caller's own account, or `No broker account with id '9'.`
-async fn broker_account_for(
+pub(crate) async fn broker_account_for(
     conn: &mut PgConnection,
     id: Option<PyInt>,
     user_id: i64,
@@ -373,22 +390,24 @@ async fn broker_account_for(
 }
 
 /// `INSERT INTO portfolio` for a holding group the user assembled; the new row.
-async fn insert_portfolio(
+pub(crate) async fn insert_portfolio(
     conn: &mut PgConnection,
     user_id: i64,
     name: &str,
     parent_id: Option<i64>,
     broker_account_id: Option<i64>,
+    source: &str,
 ) -> Result<OwnedPortfolio, Problem> {
     let row = sqlx::query(
         "INSERT INTO portfolio (user_id, name, parent_id, broker_account_id, kind, source, \
-         started_on) VALUES ($1, $2, $3, $4, 'CAPITAL', 'HOLDING_GROUP', $5) \
+         started_on) VALUES ($1, $2, $3, $4, 'CAPITAL', $5, $6) \
          RETURNING id, created_at",
     )
     .bind(user_id)
     .bind(name)
     .bind(parent_id)
     .bind(broker_account_id)
+    .bind(source)
     .bind(today_ist())
     .fetch_one(&mut *conn)
     .await
@@ -435,20 +454,30 @@ pub async fn create_portfolio(
             Bounds::default(),
             &mut errors,
         );
+        let link = parse_create_link(entries, &mut errors);
         model::forbid_extra(
             entries,
-            &["name", "holdings", "parent_id", "broker_account_id"],
+            &[
+                "name",
+                "holdings",
+                "parent_id",
+                "broker_account_id",
+                "screen_public_id",
+                "amount",
+                "mtf",
+                "leverage",
+            ],
             "",
             &mut errors,
         );
-        if let (Some(name), Some(holdings), Ok(parent_id), Ok(broker)) =
-            (name, holdings, parent_id, broker)
+        if let (Some(name), Some(holdings), Ok(parent_id), Ok(broker), Ok(link)) =
+            (name, holdings, parent_id, broker, link)
         {
-            body = Some((name, holdings, parent_id, broker));
+            body = Some((name, holdings, parent_id, broker, link));
         }
     }
     errors.finish()?;
-    let Some((name, holdings, parent_id, broker)) = body else {
+    let Some((name, holdings, parent_id, broker, link)) = body else {
         return Err(crate::problems::internal_error());
     };
     let user_id = principal.require_user()?;
@@ -481,9 +510,27 @@ pub async fn create_portfolio(
                     ));
                 }
             }
+            let sized = sized_holdings_for_create(conn, &principal, &link).await?;
+            let (source, holdings) = match &sized {
+                Some((_, _, sized_holdings)) if link.amount.is_some() => {
+                    ("MY_SCREEN", sized_holdings.clone())
+                }
+                Some(_) => ("MY_SCREEN", holdings),
+                None => ("HOLDING_GROUP", holdings),
+            };
             let portfolio =
-                insert_portfolio(conn, user_id, &name, parent, broker_account_id).await?;
+                insert_portfolio(conn, user_id, &name, parent, broker_account_id, source).await?;
             let report = apply(conn, &portfolio, &rows_from_body(&holdings)).await?;
+            if let Some((screen, book, _)) = &sized {
+                attach_if_screen(
+                    conn,
+                    portfolio.id,
+                    screen,
+                    link.amount.is_some().then_some(book),
+                    holdings.len(),
+                )
+                .await?;
+            }
             idempotency::remember(
                 &state.settings.redis_url,
                 &scope,
@@ -613,7 +660,8 @@ pub async fn import_csv(
                     Some(n) => n,
                     None => name_from(&filename),
                 };
-                let portfolio = insert_portfolio(conn, user_id, &chosen, None, None).await?;
+                let portfolio =
+                    insert_portfolio(conn, user_id, &chosen, None, None, "HOLDING_GROUP").await?;
                 idempotency::remember(
                     &state.settings.redis_url,
                     &scope,

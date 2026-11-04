@@ -7,8 +7,9 @@
  * `/home` reachable only through the wordmark is a page most people never find. Five is what the
  * observed product's bottom bar carries too, and it still fits the 768px tab bar. The argument
  * and how to reverse it are `docs/DECISIONS-MERGE.md` HOME1.
- * Section tabs inside each hub carry the old ten flat links. Desk "Real money" pages and
- * Account/Help stay in the user menu — they are operator surfaces, not the Gen Z consumer IA.
+ * Section tabs inside each hub carry the old ten flat links. Account and Help stay in the
+ * user menu. Staff get Desk on the primary bar — the read-only desk pages and the strategy
+ * hubs, each with its submenu. Civilians do not.
  *
  * The fifth destination was "Me", and PORTFOLIO_REDESIGN.md §2 took it apart: the money became
  * its own hub (`Portfolio → Overview | Portfolios | Holdings | Activity | Watchlist`) and Me kept
@@ -333,6 +334,56 @@ export const OPTIONS_SUBNAV: readonly SectionTab[] = [
   { href: "/options/fno", label: "Stock F&O" },
 ];
 
+/**
+ * The desk console, which Caddy serves at `/desk` on this same host. These are that site's own
+ * sections, not the web app's read-only pages. `/desk` must not be matched with a bare includes,
+ * or a path that merely contains the letters would light this item.
+ */
+export interface DeskMenuLink {
+  readonly label: string;
+  readonly href: string;
+  readonly children?: readonly { readonly label: string; readonly href: string }[];
+}
+
+export const DESK_MENU: readonly (readonly DeskMenuLink[])[] = [
+  [
+    { label: "Desk", href: "/desk/" },
+    { label: "Indices", href: "/desk/indices" },
+    { label: "Performance", href: "/desk/performance" },
+    {
+      label: "Regime",
+      href: "/desk/regime",
+      children: [
+        { label: "Regime", href: "/desk/regime" },
+        { label: "Backtest", href: "/desk/regime/backtest" },
+      ],
+    },
+    { label: "Tradebook", href: "/desk/tradebook" },
+    { label: "Stops", href: "/desk/stops" },
+    { label: "Reconcile", href: "/desk/reconcile" },
+    { label: "Lifecycle", href: "/desk/lifecycle" },
+  ],
+  [
+    { label: "Swing", href: "/desk/swing" },
+    { label: "NIFTY Options", href: "/desk/nifty-options" },
+    { label: "F&O Overnight", href: "/desk/fno" },
+  ],
+  [
+    { label: "Operations", href: "/desk/ops" },
+    { label: "Settings", href: "/desk/settings" },
+    { label: "Status", href: "/desk/status" },
+  ],
+];
+
+export function deskMenuLinks(): readonly DeskMenuLink[] {
+  return DESK_MENU.flat();
+}
+
+/** True on the desk console (`/desk` and everything under it). */
+export function isDeskSection(pathname: string): boolean {
+  return pathname === "/desk" || pathname.startsWith("/desk/");
+}
+
 /** Vocabulary titles for VBT / TWT are too long for the tab row; keep these short. */
 const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/swing", label: "Swing" },
@@ -341,11 +392,18 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   /* `docs/options/05` §1: appended after Tight. The Overlap matrix gains no Options column — an
      option contract is never an equity name several sleeves hold. */
   { href: "/options", label: "Options" },
+  { href: "/opportunities", label: "Opportunities" },
 ];
 
-/** The four operator sleeves that live under Build for staff. */
+/** Operator surfaces that live under Build for staff. */
 export function isSleeveSection(section: SectionKey): boolean {
-  return section === "swing" || section === "vbt" || section === "twt" || section === "options";
+  return (
+    section === "swing" ||
+    section === "vbt" ||
+    section === "twt" ||
+    section === "options" ||
+    section === "opportunities"
+  );
 }
 
 /**
@@ -426,8 +484,21 @@ export function primarySection(pathname: string): SectionKey | null {
 }
 
 /**
- * Full nav groups: primary four first, then Real money (desk read-only), Account, Help.
- * User menu still draws Account/Help (+ Real money); TopNav draws PRIMARY_NAV only.
+ * Which primary label lights for this path.
+ *
+ * A viewer who has the Desk item lights it on `/desk`. The web app's own Swing and Options
+ * pages still light Build.
+ */
+export function primaryNavLabel(pathname: string, deskVisible: boolean): string | null {
+  if (deskVisible && isDeskSection(pathname)) return "Desk";
+  const section = primarySection(pathname);
+  if (!section) return null;
+  return SECTION_LABEL[section];
+}
+
+/**
+ * Full nav groups: primary five first, then the desk record and operator hubs (command palette),
+ * then Account and Help. The user menu draws Account and Help only. Desk is the primary bar.
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {

@@ -32,10 +32,15 @@ describe("AFH 5.5–5.7 / 5.12 nav and build copy", () => {
     expect(SECTION_TABS.discover.map((t) => t.label)).not.toContain("Saved");
   });
 
-  it("gates Real money and Operator user-menu groups on isStaff", () => {
-    const source = readFileSync(join(__dirname, "..", "user-menu.tsx"), "utf8");
-    expect(source).toContain("STAFF_ONLY_GROUPS");
-    expect(source).toContain("Real money");
-    expect(source).toContain("Operator");
+  it("keeps Desk off the account menu and on the primary bar", () => {
+    const menu = readFileSync(join(__dirname, "..", "user-menu.tsx"), "utf8");
+    expect(menu).not.toContain("Real money");
+    expect(menu).not.toContain("Operator");
+    const top = readFileSync(join(__dirname, "..", "top-nav.tsx"), "utf8");
+    expect(top).toContain("<DeskMenu />");
+    expect(top).not.toContain("signedIn ?");
+    const desk = readFileSync(join(__dirname, "..", "desk-menu.tsx"), "utf8");
+    expect(desk).toContain("DESK_MENU");
+    expect(desk).not.toContain("if (!signedIn)");
   });
 });

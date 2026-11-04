@@ -41,17 +41,10 @@ export interface UserMenuProps {
   isStaff?: boolean;
 }
 
-/** Real money + Operator sleeves + Account + Help — secondary chrome since Tree 6.
- * AFH 5.12: Real money and Operator groups render only when `isStaff` is true. */
+/** Account + Help. Desk lives on the primary bar. */
 const MENU_GROUPS = NAV_GROUPS.filter(
-  (group) =>
-    group.label === "Real money" ||
-    group.label === "Operator" ||
-    group.label === "Account" ||
-    group.label === "Help",
+  (group) => group.label === "Account" || group.label === "Help",
 );
-
-const STAFF_ONLY_GROUPS = new Set(["Real money", "Operator"]);
 
 export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
   if (!email) {
@@ -64,10 +57,6 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
       </Button>
     );
   }
-
-  const groups = MENU_GROUPS.filter(
-    (group) => !group.label || !STAFF_ONLY_GROUPS.has(group.label) || isStaff,
-  );
 
   return (
     <DropdownMenu>
@@ -83,7 +72,7 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
 
-        {groups.map((group) => (
+        {MENU_GROUPS.map((group) => (
           <div key={group.label}>
             <DropdownMenuLabel className="pt-1 text-[11px] font-medium tracking-[0.04em]">
               {group.label}

@@ -66,7 +66,12 @@ ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
 # branches apart, and a build directory that is not `.next` would put the standalone output
 # somewhere the COPY lines below do not look.
 WORKDIR /repo/apps/web
-RUN pnpm exec next build
+# The deps stage already activated pnpm. This stage is a fresh image, and `pnpm exec` would
+# otherwise download pnpm again in the same step as `next build` — a dropped socket then throws
+# away the whole compile. Prepare it first, and keep the tarball in the corepack cache.
+RUN --mount=type=cache,target=/root/.cache/node/corepack,sharing=locked \
+    corepack prepare pnpm@11.22.0 --activate \
+ && pnpm exec next build
 
 # ---------------------------------------------------------------------------- runtime
 FROM node:22-slim AS runtime

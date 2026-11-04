@@ -66,6 +66,8 @@ pub struct PortfolioNodeOut {
     pub broker_account_id: Option<i64>,
     /// `depth`.
     pub depth: usize,
+    /// Screen this book was invested from, when a screen sleeve exists.
+    pub screen_public_id: Option<String>,
     /// `children`.
     pub children: Vec<PortfolioNodeOut>,
 }
@@ -122,6 +124,8 @@ pub struct PortfolioDetailOut {
     pub depth: usize,
     /// `child_ids`.
     pub child_ids: Vec<i64>,
+    /// Screen this book was invested from, when a screen sleeve exists.
+    pub screen_public_id: Option<String>,
 }
 
 /// `TotalsOut`.
@@ -313,13 +317,14 @@ fn node_out(
     node: &TreeNode,
     counts: &HashMap<i64, i64>,
     created: &HashMap<i64, DateTime<Utc>>,
+    screens: &HashMap<i64, String>,
 ) -> Result<PortfolioNodeOut, Problem> {
     let created_at = *created
         .get(&node.portfolio.id)
         .ok_or_else(crate::problems::internal_error)?;
     let mut children = Vec::with_capacity(node.children.len());
     for child in &node.children {
-        children.push(node_out(child, counts, created)?);
+        children.push(node_out(child, counts, created, screens)?);
     }
     Ok(PortfolioNodeOut {
         id: node.portfolio.id,
@@ -329,11 +334,12 @@ fn node_out(
         parent_id: node.portfolio.parent_id,
         broker_account_id: node.portfolio.broker_account_id,
         depth: node.depth,
+        screen_public_id: screens.get(&node.portfolio.id).cloned(),
         children,
     })
 }
 
-async fn holdings_out(
+pub(crate) async fn holdings_out(
     conn: &mut PgConnection,
     portfolio_id: i64,
 ) -> Result<Vec<HoldingOut>, Problem> {
@@ -402,14 +408,15 @@ pub async fn list_portfolios(
             db::get::<i64>(row, "holdings")?,
         );
     }
+    let screens = self::portfolio::screen_invest::screen_links(&mut conn, user_id).await?;
     let forest = graph::assemble_tree(&nodes).map_err(|e| refuse(&e))?;
     let mut data = Vec::new();
     for root in &forest.roots {
-        data.push(node_out(root, &counts, &created)?);
+        data.push(node_out(root, &counts, &created, &screens)?);
     }
     let mut orphans = Vec::new();
     for orphan in &forest.orphans {
-        orphans.push(node_out(&orphan.subtree, &counts, &created)?);
+        orphans.push(node_out(&orphan.subtree, &counts, &created, &screens)?);
     }
     Ok(wire::json(&PortfolioForestOut { data, orphans }))
 }
@@ -432,6 +439,7 @@ pub async fn get_portfolio(
     let portfolio = load(&mut conn, portfolio_id.unwrap_or_default(), user_id).await?;
     let (nodes, _) = graph_rows(&mut conn, portfolio.user_id).await?;
     let depth = graph::depth_of(&nodes, portfolio.id).map_err(|e| refuse(&e))?;
+    let screens = self::portfolio::screen_invest::screen_links(&mut conn, user_id).await?;
     let out = PortfolioDetailOut {
         id: portfolio.id,
         name: portfolio.name,
@@ -445,6 +453,7 @@ pub async fn get_portfolio(
             .filter(|n| n.parent_id == Some(portfolio.id))
             .map(|n| n.id)
             .collect(),
+        screen_public_id: screens.get(&portfolio.id).cloned(),
     };
     Ok(wire::json(&out))
 }
@@ -779,5 +788,9 @@ pub fn router() -> Router<AppState> {
         .route(
             "/portfolios/{portfolio_id}/rebalance",
             axum::routing::MethodRouter::new(),
+        )
+        .route(
+            "/portfolios/{portfolio_id}/from-screen",
+            post(self::portfolio::screen_invest::rebalance_from_screen),
         )
 }

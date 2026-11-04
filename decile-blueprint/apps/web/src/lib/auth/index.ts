@@ -166,6 +166,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("The accounts service rejected the local sign-in.");
         }
         claims.publicId = local.publicId;
+        claims.email = local.email;
+        claims.name = local.name;
         claims.accessToken = local.accessToken;
         claims.accessTokenExpiresAt = local.accessTokenExpiresAt;
         claims.sessionEpoch = local.sessionEpoch;

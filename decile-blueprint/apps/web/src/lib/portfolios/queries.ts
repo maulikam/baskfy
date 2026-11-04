@@ -184,6 +184,8 @@ export interface CreatePortfolioInput {
   /** Omit for a root. Supplying one files the new portfolio under an existing portfolio. */
   parentId?: number;
   brokerAccountId?: number;
+  /** Ties the new book to a screen so later rebalance can find it. */
+  screenPublicId?: string;
 }
 
 export function useCreatePortfolio() {
@@ -198,12 +200,38 @@ export function useCreatePortfolio() {
           ...(input.brokerAccountId === undefined
             ? {}
             : { broker_account_id: input.brokerAccountId }),
+          ...(input.screenPublicId === undefined
+            ? {}
+            : { screen_public_id: input.screenPublicId }),
         },
       });
       if (!data) throw ApiError.from(error, "The portfolio could not be created.");
       return data;
     },
     onSuccess: () => void client.invalidateQueries({ queryKey: portfolioKeys.list }),
+  });
+}
+
+export interface ReplaceHoldingsInput {
+  portfolioId: number;
+  holdings: CreatePortfolioInput["holdings"];
+}
+
+export function useReplaceHoldings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ReplaceHoldingsInput): Promise<PortfolioWriteDetailOut> => {
+      const { data, error } = await browserApi().PUT("/api/v1/portfolios/{portfolio_id}/holdings", {
+        params: { path: { portfolio_id: input.portfolioId } },
+        body: { holdings: input.holdings },
+      });
+      if (!data) throw ApiError.from(error, "The portfolio could not be updated.");
+      return data;
+    },
+    onSuccess: (_result, input) => {
+      void client.invalidateQueries({ queryKey: portfolioKeys.list });
+      void client.invalidateQueries({ queryKey: portfolioKeys.one(input.portfolioId) });
+    },
   });
 }
 

@@ -209,6 +209,7 @@ pub fn product_exchange_refusal(
     options_enabled: bool,
     fno_carry_enabled: bool,
     fo_plan: bool,
+    screen_mtf: bool,
 ) -> String {
     let product_u = norm(product);
     let exchange_u = norm(exchange);
@@ -254,6 +255,10 @@ pub fn product_exchange_refusal(
         if !intraday_enabled {
             return "MIS/intraday disabled (config.INTRADAY_ENABLED)".to_owned();
         }
+        return String::new();
+    }
+    // Screen invest confirm only. Swing, TWT and the weekly book stay CNC.
+    if product_u == "MTF" && screen_mtf {
         return String::new();
     }
     if product_u != "CNC" {
@@ -572,5 +577,6 @@ pub fn fo_gtt_refusal(
         options_enabled,
         fno_carry_enabled,
         true,
+        false,
     )
 }

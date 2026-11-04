@@ -215,6 +215,18 @@ Disallow: /
 			}
 		}
 
+		# Screen invest is served by the screen-invest API. The main API keeps
+		# POST /screens/preview, which this binary does not.
+		handle /api/v1/screens/*/invest-preview {
+			reverse_proxy api-invest:8000
+		}
+		handle /api/v1/screens/*/invest {
+			reverse_proxy api-invest:8000
+		}
+		handle /api/v1/portfolios/*/from-screen {
+			reverse_proxy api-invest:8000
+		}
+
 		handle /api/v1/* {
 			reverse_proxy api:8000 {
 				# docs/08 §5: "the backtest SSE stream goes to api.baskfy.com directly on the ALB (idle

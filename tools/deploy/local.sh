@@ -44,6 +44,21 @@ compose() {
   [ -s "$HOME_DIR/compose.rust.yml" ] && f+=(-f "$HOME_DIR/compose.rust.yml")
   docker compose -p "$P" --project-directory "$HOME_DIR" "${f[@]}" --env-file "$HOME_DIR/.env.staging.compose" "$@"
 }
+# Refuses to recreate the stack while a nightly chain holds its advisory lock
+# (orchestrator PIPELINE_CHAIN_LOCK_KEY 0x0BA5C1FA): a SIGKILLed worker leaves the run unpublished
+# and rolled back (7 Nov 2026). A killed run frees the lock, so a stale `running` row never blocks.
+# BASKFY_LOCAL_FORCE=1 overrides.
+pipeline_guard() {
+  [ "${BASKFY_LOCAL_FORCE:-0}" = 1 ] && return 0
+  local pg held; pg="$(compose ps -q postgres 2>/dev/null)"
+  [ -n "$pg" ] || return 0
+  held="$(docker exec "$pg" psql -U baskfy -d baskfy -At -c \
+    "select 'pid '||l.pid||' since '||to_char(a.xact_start,'HH24:MI') from pg_locks l
+       join pg_stat_activity a using (pid)
+     where l.locktype='advisory' and l.classid=0 and l.objid=195412474 and l.objsubid=1 and l.granted" 2>/dev/null || true)"
+  [ -z "$held" ] && return 0
+  die "a nightly pipeline is running ($held); wait for it or BASKFY_LOCAL_FORCE=1"
+}
 # Every name that can let an order out. Matched by shape, so a flag added later is caught too.
 MONEY='(EXECUTION_ENABLED|AUTO_EXECUTE|AUTO_EXIT|_AUTO|CARRY_ENABLED|INTRADAY_ENABLED|OPTIONS_ENABLED)='
 
@@ -144,6 +159,7 @@ switch() {
     grep -vxF -f <(printf '%s\n' $want) "$HOME_DIR/rust.services" > "$HOME_DIR/rust.services.tmp" || true
   fi
   mv "$HOME_DIR/rust.services.tmp" "$HOME_DIR/rust.services"
+  pipeline_guard
   stage
   compose up -d --no-deps $want
   if ! verify; then
@@ -230,6 +246,7 @@ restore)
   else die "row counts differ from the box (diff above) — do NOT tear down AWS"; fi
   ;;
 up)
+  pipeline_guard
   stage
   compose up -d --wait postgres redis
   compose run --rm migrate
@@ -255,10 +272,11 @@ tailscale)
   else exec bash "$0" up; fi
   ;;
 stage)   stage ;;
-down)    compose stop ;;
+down)    pipeline_guard; compose stop ;;
 verify)  verify ;;
 live|dry)
   # Recreates every service so all read the new DRY_RUN; execution/auto flags stay false.
+  pipeline_guard
   [ "$1" = live ] && DRY=false || DRY=true
   echo "$DRY" > "$HOME_DIR/dry_run"
   stage

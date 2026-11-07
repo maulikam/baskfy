@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import {
   analyzeDeskBuy,
   DeskBuyError,
   executeDeskBuy,
+  fetchDeskTicket,
   fetchOrderStatus,
   STATUS_LABEL,
   TERMINAL_STATUSES,
@@ -100,6 +101,27 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
   const [lines, setLines] = useState<Record<string, Line>>({});
   const [busy, setBusy] = useState<"review" | "place" | null>(null);
   const placing = useRef(false);
+  const [leverage, setLeverage] = useState<Record<string, number | null>>({});
+
+  // MTF: each stock's Zerodha leverage, so "my capital" turns into a real order value before Review.
+  useEffect(() => {
+    if (product !== "MTF") return;
+    let live = true;
+    for (const symbol of symbols) {
+      if (symbol in leverage) continue;
+      fetchDeskTicket(symbol)
+        .then((t) => {
+          const lev = t.mtf.eligible && t.mtf.leverage ? Number(t.mtf.leverage) : null;
+          if (live) setLeverage((prev) => ({ ...prev, [symbol]: lev && lev > 0 ? lev : null }));
+        })
+        .catch(() => {
+          if (live) setLeverage((prev) => ({ ...prev, [symbol]: null }));
+        });
+    }
+    return () => {
+      live = false;
+    };
+  }, [product, symbols, leverage]);
 
   const priced = rows.map((r) => {
     const price = live.marks[r.symbol] ?? live.quotes[r.symbol]?.lastPrice ?? r.close ?? r.entry.price;
@@ -119,6 +141,28 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
     })),
     mode,
   );
+  const ownBasis = product === "MTF" && basis === "own";
+  // Per row: the order value, own funds, quantity, and loss/profit from that quantity. After Review the desk's
+  // own numbers replace the estimate.
+  const sized = priced.map((p, i) => {
+    const amount = split[i]?.amount ?? 0;
+    const plan = lines[p.row.symbol]?.plan;
+    const lev = product === "MTF" ? (leverage[p.row.symbol] ?? null) : 1;
+    const price = plan ? Number(plan.order_price) : p.price;
+    // "My capital" buys capital × leverage of stock; "order value" is the stock bought.
+    const budget = ownBasis ? (lev ? amount * lev : null) : amount;
+    const quantity = plan ? plan.quantity : budget !== null && price > 0 ? Math.floor(budget / price) : null;
+    const orderValue = plan ? Number(plan.order_value) : quantity !== null ? quantity * price : null;
+    const own = plan?.own_contribution
+      ? Number(plan.own_contribution)
+      : orderValue !== null && lev
+        ? orderValue / lev
+        : null;
+    const target = p.row.targets[0]?.price ?? null;
+    const loss = quantity !== null && p.stop !== null && p.stop < price ? quantity * (price - p.stop) : null;
+    const profit = quantity !== null && target !== null && target > price ? quantity * (target - price) : null;
+    return { price, orderValue, own, quantity, loss, profit };
+  });
   const reviewed = Object.keys(lines).length > 0;
   const confirmable = priced.filter((p) => lines[p.row.symbol]?.plan?.confirmable && !lines[p.row.symbol]?.sent);
   const simulated = Object.values(lines).some((l) => l.plan?.simulated === true);
@@ -207,9 +251,12 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
   }
 
   const totalNum = Number(total);
-  const allocated = split.reduce((s, l) => s + l.amount, 0);
-  const risk = split.reduce((s, l) => s + (l.riskInr ?? 0), 0);
-  const reward = split.reduce((s, l) => s + (l.rewardInr ?? 0), 0);
+  const sum = (f: (r: (typeof sized)[number]) => number | null) => sized.reduce((acc, r) => acc + (f(r) ?? 0), 0);
+  const totalOrder = sum((r) => r.orderValue);
+  const totalOwn = sum((r) => r.own);
+  const risk = sum((r) => r.loss);
+  const reward = sum((r) => r.profit);
+  const levPending = product === "MTF" && symbols.some((sym) => !(sym in leverage));
 
   return (
     <>
@@ -334,7 +381,8 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
             <tr>
               <th className="py-1 pr-2">Stock</th>
               <th className="pr-2 text-right">Weight</th>
-              <th className="pr-2 text-right">Amount</th>
+              <th className="pr-2 text-right">Order value</th>
+              {product === "MTF" ? <th className="pr-2 text-right">Own funds</th> : null}
               <th className="pr-2 text-right">Price</th>
               <th className="pr-2 text-right">Qty</th>
               <th className="pr-2 text-right">Loss at stop</th>
@@ -345,6 +393,7 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
           <tbody>
             {priced.map((p, i) => {
               const s = split[i];
+              const z = sized[i];
               const line = lines[p.row.symbol];
               const plan = line?.plan;
               const status = line?.order?.status;
@@ -355,11 +404,12 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
                     <SeriesFlag series={p.row.series} />
                   </td>
                   <td className="pr-2 text-right">{s ? `${(s.weight * 100).toFixed(1)}%` : "—"}</td>
-                  <td className="pr-2 text-right">{inr(s?.amount)}</td>
-                  <td className="pr-2 text-right">{inr(plan?.order_price ?? p.price)}</td>
-                  <td className="pr-2 text-right">{plan ? plan.quantity : (s?.quantity ?? "—")}</td>
-                  <td className="pr-2 text-right text-negative">{s?.riskInr != null ? inr(s.riskInr) : "—"}</td>
-                  <td className="pr-2 text-right text-positive">{s?.rewardInr != null ? inr(s.rewardInr) : "—"}</td>
+                  <td className="pr-2 text-right">{inr(z?.orderValue)}</td>
+                  {product === "MTF" ? <td className="pr-2 text-right">{inr(z?.own)}</td> : null}
+                  <td className="pr-2 text-right">{inr(z?.price)}</td>
+                  <td className="pr-2 text-right">{z?.quantity ?? "—"}</td>
+                  <td className="pr-2 text-right text-negative">{z?.loss != null ? inr(z.loss) : "—"}</td>
+                  <td className="pr-2 text-right text-positive">{z?.profit != null ? inr(z.profit) : "—"}</td>
                   <td className="pr-2">
                     {status ? (
                       <span>{STATUS_LABEL[status]}</span>
@@ -380,7 +430,8 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
             <tr className="border-t border-border font-medium tabular-nums">
               <td className="py-1 pr-2">Total</td>
               <td />
-              <td className="pr-2 text-right">{inr(allocated)}</td>
+              <td className="pr-2 text-right">{inr(totalOrder)}</td>
+              {product === "MTF" ? <td className="pr-2 text-right">{inr(totalOwn)}</td> : null}
               <td />
               <td />
               <td className="pr-2 text-right text-negative">{risk > 0 ? inr(risk) : "—"}</td>
@@ -394,7 +445,11 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
         Quantities round down, so a little of the amount stays unspent. Loss at stop uses each setup&rsquo;s
         invalidation and profit at target its first target, both from today&rsquo;s price; the desk sets the actual
         GTT stop (vol-scaled 8–12%) and places no target order.
+        {product === "MTF"
+          ? " With MTF, “my capital” buys capital × each stock’s Zerodha leverage, so quantity, loss and profit scale up with it; own funds are estimated as order value ÷ leverage until Review gives Zerodha’s exact margin. Profit is before MTF interest."
+          : ""}
       </p>
+      {levPending ? <p className="text-xs text-muted-foreground">Reading each stock&rsquo;s MTF leverage from the desk…</p> : null}
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button

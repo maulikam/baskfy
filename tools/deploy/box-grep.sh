@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # Count files inside a container on the box that contain a fixed string.
 #
 #     AWS_PROFILE=baskfy-poc bash tools/deploy/box-grep.sh web /app "No session has been read"

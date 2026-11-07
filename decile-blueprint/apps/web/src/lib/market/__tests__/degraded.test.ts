@@ -24,9 +24,9 @@ vi.mock("@/lib/api/config", () => ({
   serverApiOrigin: () => "http://api.test",
 }));
 
-const { fetchIndexDashboard, fetchIndexDashboardOrDegraded, MarketDataUnavailable } = await import(
-  "@/lib/market/fetch"
-);
+const { readJson, readJsonOrDegraded, MarketDataUnavailable } = await import("@/lib/market/fetch");
+const fetchIndexDashboard = (): Promise<unknown> => readJson("/market-health");
+const fetchIndexDashboardOrDegraded = (): Promise<unknown> => readJsonOrDegraded("/market-health");
 
 function answer(status: number, body: unknown = {}): void {
   vi.stubGlobal(

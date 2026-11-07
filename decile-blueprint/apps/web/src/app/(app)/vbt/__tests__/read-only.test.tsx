@@ -4,43 +4,30 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * `docs/vbt/05` §2's read-only assertion, VB8 — restated for the one control that now exists.
+ * `docs/vbt/05` §2's census, restated for the desk port (6 Nov 2026, Option A).
  *
- * **What this file used to say, and why it no longer can.** Until 12 Sep 2026 this tree had no
- * server action at all, and this test asserted exactly that. `05` §2 had sketched a per-row
- * *Dismiss* note; it was not built, because `03`'s data model has no table to put a note in and
- * inventing one to hold a mock-up's affordance would have been a migration in service of a
- * drawing (DECISIONS-VB VB8.4). "No action at all" was therefore the strongest true claim
- * available, and the test made it.
- *
- * Maulik asked for **"Scan now"** on this page (`PLAN-SCAN-SYNC.md`, leaf 5), so that claim is no
- * longer available. It is replaced by the swing hub's census, which is a stronger guarantee than
- * a prose promise ever was: the file walk enumerates **every export of every `use server` module
- * under the tree**, and the set must be exactly `["scanNow"]`. An action added in a new file
- * fails here the moment it exists, not the moment somebody notices.
- *
- * **Why a scan is allowed where an order is not.** A scan queues the detector — bars in,
- * detection rows out — and cannot reach the gateway: the write helper's path type is a closed
- * union of one string, not a pattern, and a pattern that admitted `/vbt/scan` would admit the
- * desk's confirm route too. `docs/vbt/02` Track C §4 is unchanged: the web app gets no route
- * under `/vbt` that can reach the gateway, and a volume-breakout line becomes an order in the
- * desk console, on a click Maulik makes, and nowhere else. DECISIONS-VB VB14.
- *
- * Structural, like `services/api/tests/test_vbt_readonly.py` on the other side of the wire.
+ * One server action (`scanNow`). Staff additionally get the desk console's sections; the only
+ * order path is `lib/vbt/desk.ts`'s `confirmVbtLine` — the desk's own same-origin
+ * `/desk/vbt/execute`, one line, with the desk-issued plan_id and confirm=true, on a second
+ * click. The web app gains no order route, and VBT has no auto-confirm.
  */
 
 const APP = join(__dirname, "..", "..");
 const TREE = join(APP, "vbt");
 const LIB = join(__dirname, "..", "..", "..", "..", "lib", "vbt");
+const COMPONENTS = join(__dirname, "..", "..", "..", "..", "components", "vbt");
+/** The one file that may name the desk's confirm route (same-origin `/desk`, via `lib/desk-actions/client`). */
+const DESK_FILE = join(LIB, "desk.ts");
+const PANEL_FILE = join(COMPONENTS, "desk-panel.tsx");
 
 /** The exact set. Adding to it is a deliberate act with a diff on it — and a `05` §2 edit. */
 const ALLOWED_ACTIONS = ["scanNow"];
 
+/** Desk routes allowed only in `DESK_FILE`: the confirm stays on the desk, one line per POST. */
+const DESK_ROUTE_WORDS = ['"/desk/', "`/desk/", "/vbt/execute", "/execute", "confirm=true"];
+
 /** The routes and the verbs that reach an order, in either codebase's spelling. */
 const FORBIDDEN_WORDS = [
-  "/desk/",
-  "/vbt/execute",
-  "/execute",
   "/reconcile",
   "place_order",
   "placeorder",
@@ -52,7 +39,6 @@ const FORBIDDEN_WORDS = [
   "kite_client",
   "ordergateway",
   "baskfy_execution",
-  "confirm=true",
   "confirm all",
   "confirm-all",
   "auto_execute",
@@ -66,7 +52,7 @@ function filesUnder(dir: string): string[] {
   });
 }
 
-const SOURCES = [...filesUnder(TREE), ...filesUnder(LIB)].filter(
+const SOURCES = [...filesUnder(TREE), ...filesUnder(LIB), ...filesUnder(COMPONENTS)].filter(
   (path) =>
     (path.endsWith(".ts") || path.endsWith(".tsx")) &&
     !path.includes("__tests__"),
@@ -82,7 +68,7 @@ function exportsOf(source: string): string[] {
   );
 }
 
-describe("the volume-breakout hub can queue a scan and can do nothing else", () => {
+describe("the volume-breakout hub: one scan action, and staff confirm desk lines on the desk", () => {
   it("finds the pages", () => {
     expect(SOURCES.length).toBeGreaterThanOrEqual(6);
   });
@@ -150,7 +136,38 @@ describe("the volume-breakout hub can queue a scan and can do nothing else", () 
       for (const word of FORBIDDEN_WORDS) {
         expect(source, `${path} mentions ${word}`).not.toContain(word);
       }
+      if (path === DESK_FILE) continue;
+      for (const word of DESK_ROUTE_WORDS) {
+        expect(source, `${path} names a desk route outside lib/vbt/desk.ts`).not.toContain(word);
+      }
     }
+  });
+
+  it("sends a confirm only to the desk, same-origin, one line with its plan_id and confirm=true", () => {
+    const source = readFileSync(DESK_FILE, "utf8");
+    expect(source).not.toContain('"use server"');
+    expect(source).toContain('from "@/lib/desk-actions/client"');
+    expect(source, "desk.ts calls fetch itself").not.toMatch(/\bfetch\s*\(/);
+    expect(source).toMatch(
+      /confirmVbtLine\(planId: string, lineId: number\)[\s\S]*?"\/vbt\/execute"[\s\S]*?plan_id: planId[\s\S]*?confirm: "true"/,
+    );
+    // Exactly one confirm route, and no batch form of it.
+    expect([...source.matchAll(/"\/vbt\/execute"/g)]).toHaveLength(1);
+    expect(source).not.toMatch(/lineIds|line_ids/);
+  });
+
+  it("gates the desk console to staff on both sides, and confirms only on a second click", () => {
+    const page = readFileSync(join(TREE, "page.tsx"), "utf8");
+    expect(page).toContain("fetchMe()");
+    expect(page).toMatch(/me\?\.is_staff \? <VbtDeskPanel \/> : null/);
+    const panel = readFileSync(PANEL_FILE, "utf8");
+    expect(panel).toContain("useIsStaff()");
+    expect(panel).toContain("if (!isStaff) return null;");
+    expect(panel).toContain("onClick={() => setArmed(true)}");
+    // The confirm call is reached only from the armed button's `send`, never from an effect.
+    expect([...panel.matchAll(/confirmVbtLine\(/g)]).toHaveLength(1);
+    expect(panel).toMatch(/async function send\(\)[\s\S]*?confirmVbtLine\(line\.plan_id, line\.id\)/);
+    expect(panel).toContain("if (sent) return;");
   });
 
   /**
@@ -178,7 +195,7 @@ describe("the volume-breakout hub can queue a scan and can do nothing else", () 
     expect(submits, "the hub grew a second submit button").toBe(1);
   });
 
-  it("reaches the API only through the two server-only helpers", () => {
+  it("reaches the API only through the lib helpers", () => {
     for (const path of SOURCES) {
       if (path.startsWith(LIB)) continue;
       const source = readFileSync(path, "utf8");
@@ -213,9 +230,9 @@ describe("the volume-breakout hub can queue a scan and can do nothing else", () 
     }
   });
 
-  it("still says on the page that nothing here can place an order", () => {
+  it("says on the page that an order is sent only on Place Buy Order", () => {
     const page = readFileSync(join(TREE, "page.tsx"), "utf8");
-    expect(page).toContain("can place an order");
+    expect(page).toContain("Place Buy Order");
     expect(page).toContain("desk console");
   });
 });

@@ -10,6 +10,7 @@ use axum::routing::{get, post};
 use super::get_only;
 use crate::app::AppState;
 use crate::lanes::analytics::analytics_views::corporate_actions as ca;
+use crate::lanes::analytics::desk_json;
 use crate::lanes::analytics::web::{self, MultiDict};
 use crate::lanes::weekly::analyze::{Part, parse_multipart};
 use crate::lanes::weekly::weekly_books::{pyconv, snapshot_db, tradebook as tb};
@@ -144,7 +145,7 @@ async fn open(state: &AppState) -> Result<Conn, StorageError> {
 }
 
 /// `GET /tradebook?imported=&error=`.
-async fn page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+async fn page(State(state): State<AppState>, headers: HeaderMap, uri: Uri) -> Response<Body> {
     let q = MultiDict::from_query(&uri);
     let positions = snapshot_positions(&state).await;
     let today = state.clock.now_ist().date_naive();
@@ -160,22 +161,21 @@ async fn page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
         Err(e) => return web::storage_500(&e),
     };
     let fills = st.get("fills").cloned().unwrap_or(PyValue::None);
-    web::render(
-        &state,
-        uri.path(),
-        "tradebook.html",
-        dict([
-            ("s", PyValue::Map(st)),
-            ("f", fills),
-            (
-                "actions",
-                PyValue::List(actions.into_iter().map(PyValue::Map).collect()),
-            ),
-            ("imported", PyValue::Str(q.str_or_empty("imported"))),
-            ("error", PyValue::Str(q.str_or_empty("error"))),
-            ("have_snapshot", PyValue::Bool(!positions.is_empty())),
-        ]),
-    )
+    let ctx = dict([
+        ("s", PyValue::Map(st)),
+        ("f", fills),
+        (
+            "actions",
+            PyValue::List(actions.into_iter().map(PyValue::Map).collect()),
+        ),
+        ("imported", PyValue::Str(q.str_or_empty("imported"))),
+        ("error", PyValue::Str(q.str_or_empty("error"))),
+        ("have_snapshot", PyValue::Bool(!positions.is_empty())),
+    ]);
+    if desk_json::wants_json(&headers) {
+        return desk_json::context(ctx);
+    }
+    web::render(&state, uri.path(), "tradebook.html", ctx)
 }
 
 /// `GET /tradebook/data`.
@@ -265,9 +265,14 @@ async fn upload(State(state): State<AppState>, headers: HeaderMap, body: Bytes) 
             {
                 msg.push_str(&format!(" — {} unmatched sells", u.len()));
             }
-            web::redirect_303(&format!("/tradebook?imported={msg}"))
+            desk_json::outcome(&headers, true, &format!("/tradebook?imported={msg}"), &msg)
         }
-        Err(tb::ImportError::Tradebook(e)) => web::redirect_303(&format!("/tradebook?error={e}")),
+        Err(tb::ImportError::Tradebook(e)) => desk_json::outcome(
+            &headers,
+            false,
+            &format!("/tradebook?error={e}"),
+            &e.to_string(),
+        ),
         Err(e) => web::internal_error(&e.to_string()),
     }
 }
@@ -292,7 +297,14 @@ async fn record_action(
         &fields[0], &fields[1], &fields[2], &fields[3], &fields[4], &note, today,
     ) {
         Ok(a) => a,
-        Err(e) => return web::redirect_303(&format!("/tradebook?error={e}")),
+        Err(e) => {
+            return desk_json::outcome(
+                &headers,
+                false,
+                &format!("/tradebook?error={e}"),
+                &e.to_string(),
+            );
+        }
     };
     let now_iso = web::now_iso_seconds(&state);
     let result = async {
@@ -302,12 +314,15 @@ async fn record_action(
     }
     .await;
     match result {
-        Ok(res) => web::redirect_303(&format!(
-            "/tradebook?imported={}: {} · rebuilt to {} open lots",
-            action.symbol,
-            action.describe(),
-            res.open_lots
-        )),
+        Ok(res) => {
+            let msg = format!(
+                "{}: {} · rebuilt to {} open lots",
+                action.symbol,
+                action.describe(),
+                res.open_lots
+            );
+            desk_json::outcome(&headers, true, &format!("/tradebook?imported={msg}"), &msg)
+        }
         Err(e) => web::storage_500(&e),
     }
 }
@@ -336,9 +351,10 @@ async fn delete_action(
     }
     .await;
     match result {
-        Ok(_) => web::redirect_303(&format!(
-            "/tradebook?imported=removed, {symbol} lots rebuilt"
-        )),
+        Ok(_) => {
+            let msg = format!("removed, {symbol} lots rebuilt");
+            desk_json::outcome(&headers, true, &format!("/tradebook?imported={msg}"), &msg)
+        }
         Err(e) => web::storage_500(&e),
     }
 }

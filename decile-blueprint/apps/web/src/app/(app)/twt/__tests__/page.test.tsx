@@ -40,6 +40,9 @@ vi.mock("@/lib/twt/fetch", () => ({
    its own `../actions`. */
 vi.mock("../actions", () => ({ scanNow: vi.fn() }));
 
+/* Not staff: the desk console is not rendered (it has its own census in read-only.test). */
+vi.mock("@/lib/auth/me", () => ({ fetchMe: vi.fn().mockResolvedValue(null) }));
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/twt",
   useRouter: () => ({ refresh: vi.fn() }),
@@ -171,12 +174,13 @@ describe("Scan now is on the hub, and it is the only control there", () => {
     await renderHub();
 
     const names = screen.getAllByRole("button").map((node) => node.textContent?.trim());
-    expect(names).toEqual(["Scan now"]);
+    // Regime column: "Green only" filter and the sortable heading only reorder rows client-side.
+    expect(names).toEqual(["Scan now", "Green only", "Regime", "Buy"]);
   });
 
-  it("still tells the reader, in the page's own words, that nothing here can place an order", async () => {
+  it("still tells the reader, in the page's own words, that an order is sent only on Place Buy Order", async () => {
     await renderHub();
 
-    expect(document.body.textContent).toContain("nothing on this page can place an order");
+    expect(document.body.textContent).toContain("an order is sent only when you press Place Buy Order");
   });
 });

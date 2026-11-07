@@ -1041,7 +1041,9 @@ fn run_with_timeout(
     use std::io::Read as _;
     use std::process::{Command, Stdio};
     let argv = exec_argv(args);
-    let (program, rest) = argv.split_first().ok_or_else(|| RunError::Start("empty argv".to_owned()))?;
+    let (program, rest) = argv
+        .split_first()
+        .ok_or_else(|| RunError::Start("empty argv".to_owned()))?;
     let mut child = Command::new(program)
         .args(rest)
         .current_dir(root)
@@ -1230,7 +1232,9 @@ mod tests {
     fn every_operation_runs_as_a_desk_service() {
         let root = Path::new("/nonexistent");
         for o in OPERATIONS {
-            let args = o.args(&[], root).unwrap_or_else(|_| o.build_args(&Vec::new()));
+            let args = o
+                .args(&[], root)
+                .unwrap_or_else(|_| o.build_args(&Vec::new()));
             let argv = exec_argv(&args);
             let at = argv.iter().position(|a| a == "service").unwrap();
             assert_ne!(argv[at + 1], "unknown", "{}", o.name);

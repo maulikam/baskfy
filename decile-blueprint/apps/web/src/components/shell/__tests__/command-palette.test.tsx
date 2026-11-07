@@ -135,7 +135,7 @@ describe("the ⌘K palette searches the whole catalog", () => {
   it("navigates to the indices dashboard, filtered, when an index is chosen", async () => {
     const user = await openAndType(QUERY);
     await user.click(await screen.findByText("NIFTY MIDCAP 150"));
-    expect(push).toHaveBeenCalledWith("/market/today?q=nifty-midcap-150");
+    expect(push).toHaveBeenCalledWith("/market/indices?q=nifty-midcap-150");
   });
 
   it("opens onto the nav when the box is empty, without asking the API", async () => {

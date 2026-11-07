@@ -1609,6 +1609,12 @@ async fn swing_execute(State(state): State<AppState>, body: Bytes) -> Response<B
         )
         .response();
     }
+    if confirm == "true"
+        && let Some(l) = &line
+        && let Some(detail) = opps_ticket::revalidate(&state, l).await
+    {
+        return HttpError::new(409, detail).response();
+    }
     let price = match &line {
         Some(l) => last_price(&state, &l.symbol).await,
         None => None,
@@ -1820,6 +1826,8 @@ pub fn routes() -> Router<AppState> {
         .route("/swing", get(swing_page))
         .route("/swing/data", get(swing_data))
         .route("/swing/analyze", post(opps_analyze::swing_analyze))
+        .route("/swing/ticket", get(opps_ticket::swing_ticket))
+        .route("/swing/order-status", get(opps_ticket::swing_order_status))
         .route("/swing/execute", post(swing_execute))
         .route("/swing/scan", post(swing_scan))
         .route("/swing/reconcile", post(swing_reconcile))
@@ -1828,6 +1836,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 mod opps_analyze;
+mod opps_ticket;
 #[cfg(test)]
 mod scenario;
 #[cfg(test)]

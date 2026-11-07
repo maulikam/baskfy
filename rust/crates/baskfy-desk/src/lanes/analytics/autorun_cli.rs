@@ -80,9 +80,8 @@ pub fn is_trading_day(holidays: &BTreeSet<NaiveDate>, day: NaiveDate) -> bool {
 /// # Errors
 /// Python's exception text: a missing file, no `session`, or a date that does not parse.
 pub fn extra_holidays(path: &Path) -> Result<Vec<NaiveDate>, String> {
-    let text = std::fs::read_to_string(path).map_err(|_| {
-        format!("[Errno 2] No such file or directory: '{}'", path.display())
-    })?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|_| format!("[Errno 2] No such file or directory: '{}'", path.display()))?;
     let strip = |l: &str| -> String {
         let mut quote: Option<char> = None;
         let mut out = String::new();
@@ -104,10 +103,16 @@ pub fn extra_holidays(path: &Path) -> Result<Vec<NaiveDate>, String> {
         .filter(|l| !l.trim().is_empty() && l.trim() != "---")
         .map(|l| (l.len() - l.trim_start().len(), l.trim_start().to_owned()))
         .collect();
-    let Some(at) = lines.iter().position(|(ind, l)| *ind == 0 && l.starts_with("session:")) else {
+    let Some(at) = lines
+        .iter()
+        .position(|(ind, l)| *ind == 0 && l.starts_with("session:"))
+    else {
         return Err("'session'".to_owned());
     };
-    let block: Vec<&(usize, String)> = lines[at + 1..].iter().take_while(|(ind, _)| *ind > 0).collect();
+    let block: Vec<&(usize, String)> = lines[at + 1..]
+        .iter()
+        .take_while(|(ind, _)| *ind > 0)
+        .collect();
     let Some(child) = block.first().map(|(ind, _)| *ind) else {
         return Err("'NoneType' object has no attribute 'get'".to_owned());
     };
@@ -205,8 +210,18 @@ fn run_captured(argv: &[String], timeout: u64) -> Result<Option<(i32, String, St
             s
         })
     };
-    let out = reader(child.stdout.take().map(|p| Box::new(p) as Box<dyn std::io::Read + Send>));
-    let err = reader(child.stderr.take().map(|p| Box::new(p) as Box<dyn std::io::Read + Send>));
+    let out = reader(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+    );
+    let err = reader(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+    );
     let deadline = Instant::now() + StdDuration::from_secs(timeout);
     let status = loop {
         if let Some(s) = child.try_wait().map_err(|e| e.to_string())? {
@@ -304,8 +319,13 @@ pub async fn main(state: &AppState, argv: &[String]) -> i32 {
                 say(&e.to_string());
                 return 1;
             }
-            match ar::needed(&mut conn, now, trading, state.settings_snapshot().options_enabled)
-                .await
+            match ar::needed(
+                &mut conn,
+                now,
+                trading,
+                state.settings_snapshot().options_enabled,
+            )
+            .await
             {
                 Ok(i) => i,
                 Err(e) => {
@@ -340,7 +360,11 @@ pub async fn main(state: &AppState, argv: &[String]) -> i32 {
     if check || items.is_empty() {
         head.insert(
             "status",
-            str_v(if items.is_empty() { "NOTHING_DUE" } else { "CHECKED" }),
+            str_v(if items.is_empty() {
+                "NOTHING_DUE"
+            } else {
+                "CHECKED"
+            }),
         );
         say(&dumps_indent2(&PyValue::Map(head)));
         return 0;
@@ -433,7 +457,11 @@ mod tests {
         let p = dir.join("s.yaml");
         std::fs::write(&p, "session:\n  extra_holidays: []  # none\n").unwrap();
         assert!(extra_holidays(&p).unwrap().is_empty());
-        std::fs::write(&p, "session:\n  extra_holidays:\n    - 2026-11-09\n    - '2026-11-10'\ntiming:\n").unwrap();
+        std::fs::write(
+            &p,
+            "session:\n  extra_holidays:\n    - 2026-11-09\n    - '2026-11-10'\ntiming:\n",
+        )
+        .unwrap();
         assert_eq!(extra_holidays(&p).unwrap(), vec![d(11, 9), d(11, 10)]);
         assert!(extra_holidays(&dir.join("missing.yaml")).is_err());
         std::fs::write(&p, "other:\n  extra_holidays: [2026-01-01]\nsession:\n  open: 1\n  extra_holidays: [2026-11-09, '2026-11-10']  # x\n").unwrap();
@@ -446,7 +474,10 @@ mod tests {
     #[test]
     fn args_parse() {
         assert_eq!(parse_args(&[]).unwrap(), (false, 900));
-        let a: Vec<String> = ["--check", "--timeout", "5"].iter().map(|s| (*s).to_owned()).collect();
+        let a: Vec<String> = ["--check", "--timeout", "5"]
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect();
         assert_eq!(parse_args(&a).unwrap(), (true, 5));
         assert!(parse_args(&["--nope".to_owned()]).is_err());
     }

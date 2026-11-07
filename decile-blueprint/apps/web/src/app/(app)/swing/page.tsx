@@ -3,11 +3,16 @@ import Link from "next/link";
 
 import { SleeveStateBadge } from "@/components/screens/sleeve-state";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { SeriesFlag } from "@/components/regime-signal/series-flag";
+import { RegimeDot } from "@/components/regime-signal/regime-dot";
+import { RegimeRows, RegimeSortHeader, RegimeTable } from "@/components/regime-signal/regime-table";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { CatalystLink } from "@/components/swing/catalyst-link";
+import { SwingDeskConsole } from "@/components/swing/desk-console";
+import { fetchMe } from "@/lib/auth/me";
 import { formatTradeDate } from "@/lib/format";
 import {
   fetchBars,
@@ -21,6 +26,8 @@ import {
   type SwingWatchRow,
 } from "@/lib/swing/fetch";
 import { PAGES } from "@/lib/vocabulary";
+
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 
 import { scanNow, watchAdd, watchDismiss } from "./actions";
 import { RowActionForm } from "./_components/forms";
@@ -38,9 +45,9 @@ import { breadthLine, gateCopy, tierLine } from "./copy";
  * list, because a list of setups above a red gate is a list of trades not to take.
  *
  * Two row actions, and only two (SW14): **Watch** puts a candidate on `sw_watch`, **Dismiss**
- * marks the row that is already there DISMISSED. Neither moves money (`02` Track A). A swing
- * line becomes an order in the desk console, on a click, and nowhere else (Track C §4);
- * `__tests__/read-only.test.tsx` asserts it over every action this tree can name.
+ * marks the row that is already there DISMISSED. Neither moves money (`02` Track A). Orders are
+ * staff-only: Buy (ticket) and the desk console section (triggers, plan, book) post one line at a
+ * time, after a confirm, to the desk's own endpoints same-origin; the web app has no order route.
  *
  * One page action (SW15): **Scan now** queues the detectors. During the session the worker
  * builds today's bar from live Kite quotes and every row it writes is labelled provisional —
@@ -158,18 +165,22 @@ function SetupTable({
   watched,
   charts,
   tradeable,
+  isStaff,
 }: {
   rows: SwingSetup[];
   shapeLabel: string;
   watched: Map<number, SwingWatchRow>;
   charts: Map<number, SwingBar[]>;
   tradeable: boolean;
+  isStaff: boolean;
 }) {
   return (
+    <RegimeTable>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[64rem] border-collapse text-sm">
+      <table className="w-full min-w-[66rem] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <RegimeSortHeader />
             <th className="py-2 pr-3 font-medium">Stock</th>
             <th className="py-2 pr-3 font-medium">Status</th>
             <th className="py-2 pr-3 font-medium">Score</th>
@@ -183,16 +194,20 @@ function SetupTable({
             <th className="py-2 pr-3 font-medium">Sector</th>
             <th className="py-2 pr-3 font-medium">Chart</th>
             <th className="py-2 pr-3 font-medium">Catalyst</th>
-            {tradeable ? <th className="py-2 pr-3 font-medium">Action</th> : null}
+            <th className="py-2 pr-3 font-medium">Action</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          <RegimeRows
+            colSpan={15}
+            rows={rows.map((row) => {
             const watch = watched.get(row.instrument_id);
             const bars = charts.get(row.instrument_id);
-            return (
+            return {
+              key: `${row.setup}-${row.instrument_id}`,
+              signal: row.regime_signal,
+              node: (
               <tr
-                key={`${row.setup}-${row.instrument_id}`}
                 className={
                   watch?.focus
                     ? "border-b border-border/40 bg-muted/40"
@@ -200,6 +215,9 @@ function SetupTable({
                 }
                 data-focus={watch?.focus ? "true" : undefined}
               >
+                <td className="py-2 pr-2">
+                  <RegimeDot signal={row.regime_signal} />
+                </td>
                 <td className="py-2 pr-3">
                   {watch?.focus ? (
                     <span
@@ -210,7 +228,8 @@ function SetupTable({
                       ★
                     </span>
                   ) : null}
-                  <InstrumentLink symbol={row.symbol} />
+                  <InstrumentLink symbol={row.symbol} flag={false} />
+                  <SeriesFlag series={row.series} />
                   <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
                   {row.locked_upper_circuit ? (
                     <span
@@ -258,9 +277,22 @@ function SetupTable({
                 <td className="py-2 pr-3 text-xs text-muted-foreground">
                   <CatalystLink feed={row.catalyst_feed} />
                 </td>
-                {tradeable ? (
-                  <td className="py-2 pr-3">
-                    {watch ? (
+                <td className="py-2 pr-3">
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                  {isStaff ? (
+                  <BuyTicketButton
+                    symbol={row.symbol}
+                    name={row.name}
+                    instrumentId={row.instrument_id}
+                    price={row.last_price ?? row.close ?? null}
+                    source="swing"
+                    setup={row.setup}
+                    entry={row.trigger}
+                    stop={row.stop_ref}
+                    disabledReason={tradeable ? null : "Parabolic short — record only; NSE delivery cannot short it."}
+                  />
+                  ) : null}
+                  {!tradeable ? null : watch ? (
                       <span className="inline-flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted-foreground">
                           watching
@@ -290,14 +322,17 @@ function SetupTable({
                         title="Put this name on the watchlist with these levels. Moves no money."
                       />
                     )}
-                  </td>
-                ) : null}
+                  </span>
+                </td>
               </tr>
-            );
+              ),
+            };
           })}
+          />
         </tbody>
       </table>
     </div>
+    </RegimeTable>
   );
 }
 
@@ -325,11 +360,13 @@ export default async function SwingSetupsPage(props: {
     ? (params.status ?? "")
     : "";
 
-  const [setups, sectors, watchlist] = await Promise.all([
+  const [setups, sectors, watchlist, me] = await Promise.all([
     fetchSetups(status ? { status } : {}),
     fetchSectors(),
     fetchWatchlist(),
+    fetchMe(),
   ]);
+  const isStaff = me?.is_staff ?? false;
   const asOf = setups?.as_of ?? null;
   const [marketDays, charts] = await Promise.all([
     asOf ? fetchMarket({ from: asOf, to: asOf }) : Promise.resolve(null),
@@ -370,8 +407,13 @@ export default async function SwingSetupsPage(props: {
             ? "Detected on today's bar so far, built from live quotes — provisional until the " +
               "nightly scan replaces it. "
             : "Detected from published end-of-day bars. ") +
-          "Nothing here is advice, and nothing on this page can place an order — a line " +
-          "becomes an order in the desk console, on a click."
+          "Nothing here is advice. " +
+          (isStaff
+            ? "Buy opens an order ticket and Confirm opens a plan line; an order is sent only when " +
+              "you press Place Buy Order or the confirm button in the dialog, through the desk " +
+              "console's gateway, guards and market gate."
+            : "For your account nothing on this page can place an order; the operator trades " +
+              "from the desk console.")
         }
       >
         {gate ? (
@@ -406,6 +448,8 @@ export default async function SwingSetupsPage(props: {
           ) : null}
         </p>
       ) : null}
+
+      {isStaff ? <SwingDeskConsole /> : null}
 
       {sectors && sectors.data.length > 0 ? (
         <section aria-label="Sectors" className="space-y-2">
@@ -471,6 +515,7 @@ export default async function SwingSetupsPage(props: {
                 watched={watched}
                 charts={charts}
                 tradeable={section.key !== "PARABOLIC_SHORT"}
+                isStaff={isStaff}
               />
             ) : (
               <p className="text-sm text-muted-foreground">

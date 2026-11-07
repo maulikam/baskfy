@@ -609,8 +609,9 @@ fn check(value: &OrderedJson, ty: &Ty, loc: &[Loc], ctx: &mut Ctx) -> Result<Opt
         }),
         Ty::Dec(bounds) => decimal(value, loc, ctx)
             .and_then(|d| bounded(&d, bounds, loc, ctx).then_some(PV::Dec(d))),
-        Ty::Float(bounds) => float(value, loc, ctx)
-            .and_then(|d| bounded(&d, bounds, loc, ctx).then_some(PV::Dec(d))),
+        Ty::Float(bounds) => {
+            float(value, loc, ctx).and_then(|d| bounded(&d, bounds, loc, ctx).then_some(PV::Dec(d)))
+        }
         Ty::BoundedList(inner, min, max) => {
             let n = match value {
                 OrderedJson::Array(items) => Some(items.len()),
@@ -621,7 +622,10 @@ fn check(value: &OrderedJson, ty: &Ty, loc: &[Loc], ctx: &mut Ctx) -> Result<Opt
                 (Some(n), _, Some(max)) if n > *max => {
                     ctx.push(
                         loc,
-                        format!("List should have at most {max} {} after validation, not {n}", item(*max)),
+                        format!(
+                            "List should have at most {max} {} after validation, not {n}",
+                            item(*max)
+                        ),
                         "too_long",
                     );
                     None

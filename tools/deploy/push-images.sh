@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # Build the three images for the deployment host (arm64) and push them to ECR: web, python, and
 # since SW13 the desk (`baskfy-desk`, built from the REPO ROOT — Dockerfile.desk copies both trees).
 #

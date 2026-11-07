@@ -58899,6 +58899,38 @@
           "billing"
         ]
       }
+    },
+    "/api/v1/meta/series-flags": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Non-EQ series (BE, BZ, SM, ST...) by symbol",
+        "operationId": "get_series_flags",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

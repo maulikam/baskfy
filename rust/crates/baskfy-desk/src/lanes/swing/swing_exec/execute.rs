@@ -62,6 +62,15 @@ pub fn cash_product(note: Option<&str>) -> &'static str {
     }
 }
 
+/// One `key=value` field of an Opportunities line note.
+#[must_use]
+pub fn opps_note_field(note: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    note.strip_prefix(OPPS_NOTE_PREFIX)?
+        .split_whitespace()
+        .find_map(|kv| kv.strip_prefix(prefix.as_str()).map(str::to_owned))
+}
+
 /// True when the line was sized from a rupee amount on Opportunities, not risk-per-trade.
 #[must_use]
 pub fn is_opps_buy(note: Option<&str>) -> bool {
@@ -1063,8 +1072,13 @@ async fn buy(
         .get(&symbol)
         .map_or(Decimal::ZERO, |(a, _, _)| *a);
     let range_high = store.range_high_for(line.id).await?;
-    let cap = marketable_limit(trigger, range_high, adr, &window);
-    let order_type = window.entry_order_type.clone();
+    let opps = is_opps_buy(line.note.as_deref());
+    let note = line.note.clone().unwrap_or_default();
+    let mut cap = marketable_limit(trigger, range_high, adr, &window);
+    let mut order_type = window.entry_order_type.clone();
+    if opps {
+        order_type = opps_note_field(&note, "order").unwrap_or_else(|| "MARKET".to_owned());
+    }
     if !ENTRY_ORDER_TYPES.contains(&order_type.as_str()) {
         return Ok(blocked(format!(
             "{symbol}: entry_order_type {} is not one of ['LIMIT', 'MARKET']",
@@ -1081,16 +1095,31 @@ async fn buy(
         }
         None => trigger,
     };
-    let protection = market_protection_pct(cap, reference, &window);
-    if protection.is_none() && !simulated {
-        return Ok(blocked(format!(
-            "{symbol}: the price has run past the entry cap — {} is at or above {} (trigger {}). \
-             Not chased; the setup is gone for today, not cheaper later",
-            py_dec(reference),
-            py_dec(cap),
-            py_dec(trigger)
-        )));
-    }
+    let protection = if opps && order_type == "LIMIT" {
+        let Some(limit) = opps_note_field(&note, "price")
+            .and_then(|p| p.parse::<Decimal>().ok())
+            .filter(|p| *p > Decimal::ZERO)
+        else {
+            return Ok(blocked(format!("{symbol}: a LIMIT line has no limit price")));
+        };
+        cap = limit;
+        None
+    } else if opps {
+        cap = reference * Decimal::new(102, 2);
+        market_protection_pct(cap, reference, &window)
+    } else {
+        let protection = market_protection_pct(cap, reference, &window);
+        if protection.is_none() && !simulated {
+            return Ok(blocked(format!(
+                "{symbol}: the price has run past the entry cap — {} is at or above {} (trigger {}). \
+                 Not chased; the setup is gone for today, not cheaper later",
+                py_dec(reference),
+                py_dec(cap),
+                py_dec(trigger)
+            )));
+        }
+        protection
+    };
     let to_f = |d: Decimal| -> f64 { d.to_string().parse().unwrap_or(0.0) };
     let order = gw
         .place(PlaceOrder {

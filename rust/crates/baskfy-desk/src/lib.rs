@@ -35,6 +35,7 @@ pub mod pyfmt;
 pub mod settings;
 pub mod storage;
 pub mod templates;
+pub mod web_ui;
 pub mod websec;
 pub mod wire;
 

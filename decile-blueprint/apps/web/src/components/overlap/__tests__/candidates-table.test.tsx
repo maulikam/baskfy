@@ -559,8 +559,8 @@ describe("CandidatesTable sorting (OV12)", () => {
     render(<CandidatesTable candidates={payload} scope="all" />);
     expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
     const headers = screen.getAllByRole("columnheader");
-    expect(headers).toHaveLength(8);
-    for (const header of headers) expect(header).toHaveAttribute("aria-sort", "none");
+    expect(headers).toHaveLength(9);
+    for (const header of headers.slice(0, 8)) expect(header).toHaveAttribute("aria-sort", "none");
     expect(headers.map((h) => h.textContent?.replace(/[▲▼]/g, "").trim())).toEqual([
       "Name",
       "On",
@@ -570,6 +570,7 @@ describe("CandidatesTable sorting (OV12)", () => {
       "Filing",
       "Laya",
       "Screens",
+      "Action",
     ]);
   });
 

@@ -175,6 +175,7 @@ pub async fn vbt_detect_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let signals =
         run_detect_vbt_for(&mut tx, &mut outcome, day, user_id, None, None, false).await?;
     tx.commit().await?;
+    super::swing_live::regime_jobs::after_scan(ctx, Some(day)).await;
     Ok(object([
         ("date", s(iso(day))),
         ("signals", int(signals)),
@@ -291,6 +292,7 @@ pub async fn vbt_rescan_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let mut tx = ctx.db.begin().await?;
     let out = rescan::run_vbt_rescan(ctx, &mut tx, run_id, deps.vbt_execution_enabled).await?;
     tx.commit().await?;
+    super::swing_live::regime_jobs::after_scan(ctx, Some(ctx.today_ist())).await;
     Ok(out)
 }
 

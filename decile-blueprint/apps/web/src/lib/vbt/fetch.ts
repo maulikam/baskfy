@@ -10,6 +10,7 @@ import {
   sleeveUnavailable,
 } from "@/lib/api/sleeve-read";
 import { auth } from "@/lib/auth";
+import type { RegimeSignal } from "@/lib/regime-signal/types";
 
 /**
  * Server-side reads for the `/vbt` hub — VB8, `docs/vbt/05` §2.
@@ -58,6 +59,9 @@ export interface VbtCandidate {
   rank_key: number;
   /** Kite last_price when a session exists. `close` stays the signal bar. */
   last_price?: number | null;
+  /** Per-stock market regime; absent until the backend serves it. */
+  regime_signal?: RegimeSignal | null;
+  series?: string | null;
 }
 
 /** The counts `05` §2's empty state is written from, as `vb_breadth_daily.detail` stores them. */

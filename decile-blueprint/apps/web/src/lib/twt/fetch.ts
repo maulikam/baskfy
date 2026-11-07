@@ -10,6 +10,7 @@ import {
   sleeveUnavailable,
 } from "@/lib/api/sleeve-read";
 import { auth } from "@/lib/auth";
+import type { RegimeSignal } from "@/lib/regime-signal/types";
 
 /**
  * Server-side reads for `/twt` — TW8, `docs/twt/05` §1 and §3.
@@ -107,6 +108,9 @@ export interface TwtTightName {
    */
   turnover_avg_20: number | null;
   locked_upper_circuit: boolean;
+  /** Per-stock market regime; absent until the backend serves it. */
+  regime_signal?: RegimeSignal | null;
+  series?: string | null;
 }
 
 /** One `OPEN` row of `03` §5, marked live. */

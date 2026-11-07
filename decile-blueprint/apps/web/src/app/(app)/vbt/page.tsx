@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 
 import { SleeveStateBadge } from "@/components/screens/sleeve-state";
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { SeriesFlag } from "@/components/regime-signal/series-flag";
+import { RegimeDot } from "@/components/regime-signal/regime-dot";
+import { RegimeRows, RegimeSortHeader, RegimeTable } from "@/components/regime-signal/regime-table";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
+import { VbtDeskPanel } from "@/components/vbt/desk-panel";
+import { fetchMe } from "@/lib/auth/me";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { formatTradeDate } from "@/lib/format";
@@ -31,11 +37,10 @@ import { breadthLine, funnelLine, gateCopy, shutLine } from "./copy";
  * comes first because a list of candidates above a shut gate is a list of trades not to take, and
  * `01` §3's ablation says the gate is worth more than any single filter.
  *
- * **Nothing on this page can place an order.** There is exactly one server action under this
- * tree — "Scan now", which queues the detector and moves no money — and `docs/vbt/02` Track C §4
- * still gives the web app no route under `/vbt` that can reach the gateway: this sleeve confirms
- * every order by hand in the desk console. `__tests__/read-only.test.tsx` is the census that
- * keeps the set at exactly one (DECISIONS-VB VB14, which supersedes VB8.4's "no action at all").
+ * One server action ("Scan now"). Staff also get the desk console's sections (plan, passed over,
+ * working orders, book, re-detect) via `components/vbt/desk-panel`, whose confirm posts the
+ * desk's own same-origin route one line at a time — the web app gains no order route.
+ * `__tests__/read-only.test.tsx` is the census.
  *
  * `05` §2 also sketched a per-row **Dismiss** note. It is not built: the data model (`03`) has no
  * table to put a note in, and inventing one to hold a UI affordance nobody has asked for would
@@ -85,15 +90,19 @@ async function chartsFor(
 function CandidateTable({
   rows,
   charts,
+  gate,
 }: {
   rows: VbtCandidate[];
   charts: Map<number, ChartBar[]>;
+  gate: string | null;
 }) {
   return (
+    <RegimeTable>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[72rem] border-collapse text-sm">
+      <table className="w-full min-w-[74rem] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <RegimeSortHeader />
             <th className="py-2 pr-3 font-medium">Stock</th>
             <th className="py-2 pr-3 font-medium">Price</th>
             <th className="py-2 pr-3 font-medium">Limit</th>
@@ -105,13 +114,23 @@ function CandidateTable({
             <th className="py-2 pr-3 font-medium">Turnover</th>
             <th className="py-2 pr-3 font-medium">Above 200-DMA</th>
             <th className="py-2 pr-3 font-medium">Chart</th>
+            <th className="py-2 pr-3 font-medium">Action</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.instrument_id} className="border-b border-border/40">
+          <RegimeRows
+            colSpan={13}
+            rows={rows.map((row) => ({
+              key: String(row.instrument_id),
+              signal: row.regime_signal,
+              node: (
+            <tr className="border-b border-border/40">
+              <td className="py-2 pr-2">
+                <RegimeDot signal={row.regime_signal} />
+              </td>
               <td className="py-2 pr-3">
-                <InstrumentLink symbol={row.symbol} />
+                <InstrumentLink symbol={row.symbol} flag={false} />
+                <SeriesFlag series={row.series} />
                 {row.locked_upper_circuit ? (
                   <span
                     title="Locked at the upper circuit — no plan line is placed for it (04 §7.4)"
@@ -161,11 +180,27 @@ function CandidateTable({
                   label={`${row.symbol}: 130 sessions of adjusted closes, with its limit and stop`}
                 />
               </td>
+              <td className="py-2 pr-3">
+                <BuyTicketButton
+                  symbol={row.symbol}
+                  name={row.name}
+                  instrumentId={row.instrument_id}
+                  price={row.last_price ?? row.close}
+                  source="vbt"
+                  setup="VBT"
+                  entry={row.limit_price}
+                  stop={row.stop_price}
+                  disabledReason={gate === "OPEN" ? null : `Volume-breakout gate is ${gate ?? "unread"}: no new entries.`}
+                />
+              </td>
             </tr>
-          ))}
+              ),
+            }))}
+          />
         </tbody>
       </table>
     </div>
+    </RegimeTable>
   );
 }
 
@@ -200,13 +235,16 @@ function RejectTable({
   );
   return (
     <>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm" data-testid="rejects">
+      <div className="mt-3">
+      <RegimeTable>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[46rem] text-sm" data-testid="rejects">
           <caption className="sr-only">
             Scan hits that failed a trend filter: which filters said no, and which said yes.
           </caption>
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
+              <RegimeSortHeader className="pl-3 text-left font-normal" />
               <th scope="col" className="px-3 py-2 text-left font-normal">
                 Stock
               </th>
@@ -222,10 +260,19 @@ function RejectTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {rows.map((row) => (
-              <tr key={row.instrument_id} data-testid="reject-row">
+            <RegimeRows
+              colSpan={5}
+              rows={rows.map((row) => ({
+                key: String(row.instrument_id),
+                signal: row.regime_signal,
+                node: (
+              <tr data-testid="reject-row">
+                <td className="py-2 pl-3">
+                  <RegimeDot signal={row.regime_signal} />
+                </td>
                 <th scope="row" className="px-3 py-2 text-left font-medium">
-                  <InstrumentLink symbol={row.symbol} />
+                  <InstrumentLink symbol={row.symbol} flag={false} />
+                  <SeriesFlag series={row.series} />
                 </th>
                 <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                   {row.failed_filters.length > 0 ? row.failed_filters.join(", ") : "—"}
@@ -258,9 +305,13 @@ function RejectTable({
                   ) : null}
                 </td>
               </tr>
-            ))}
+                ),
+              }))}
+            />
           </tbody>
         </table>
+      </div>
+      </RegimeTable>
       </div>
 
       {used.length > 0 ? (
@@ -293,10 +344,11 @@ function RejectTable({
 export default async function VbtTodayPage() {
   const today = await fetchToday();
   const asOf = today?.as_of ?? null;
-  const [breadth, charts, lastScan] = await Promise.all([
+  const [breadth, charts, lastScan, me] = await Promise.all([
     fetchBreadth(),
     chartsFor(today?.candidates ?? [], asOf),
     fetchLastScan(today),
+    fetchMe(),
   ]);
 
   const candidates = today?.candidates ?? [];
@@ -326,8 +378,8 @@ export default async function VbtTodayPage() {
       <Answer
         footnote={
           "Detected from published end-of-day bars — a daily bar is a closed day, so this is the " +
-          "last completed session and not today. Nothing here is advice, and nothing on this " +
-          "page can place an order: a line becomes an order in the desk console, on a click."
+          "last completed session and not today. Nothing here is advice. Buy opens an order " +
+          "ticket; an order is sent only when you press Place Buy Order, through the desk's gateway."
         }
       >
         {gate ? (
@@ -344,6 +396,8 @@ export default async function VbtTodayPage() {
           </>
         )}
       </Answer>
+
+      {me?.is_staff ? <VbtDeskPanel /> : null}
 
       {today ? (
         <p
@@ -372,7 +426,7 @@ export default async function VbtTodayPage() {
           // while the market is open; the breakout, limit and stop stay on the scanned session.
           <LiveMarksProvider symbols={candidates.map((row) => row.symbol)}>
             <LiveStatus asOf={asOf} />
-            <CandidateTable rows={candidates} charts={charts} />
+            <CandidateTable rows={candidates} charts={charts} gate={gate} />
           </LiveMarksProvider>
         ) : (
           <p

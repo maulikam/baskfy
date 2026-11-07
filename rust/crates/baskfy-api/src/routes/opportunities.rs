@@ -76,7 +76,12 @@ fn swing_defaults() -> J {
 fn pairs(rows: Vec<(String, String)>) -> J {
     J::Arr(
         rows.into_iter()
-            .map(|(slug, name)| Obj::new().put("slug", J::Str(slug)).put("name", J::Str(name)).done())
+            .map(|(slug, name)| {
+                Obj::new()
+                    .put("slug", J::Str(slug))
+                    .put("name", J::Str(name))
+                    .done()
+            })
             .collect(),
     )
 }
@@ -103,16 +108,28 @@ pub async fn get_meta(
     let body = Obj::new()
         .put("universes", pairs(universes))
         .put("sectors", pairs(sectors))
-        .put("setups", J::Arr(SetupType::ALL.iter().map(|s| J::s(s.value())).collect()))
-        .put("strategies", J::Arr(strategies.iter().map(|s| J::s(s.value())).collect()))
+        .put(
+            "setups",
+            J::Arr(SetupType::ALL.iter().map(|s| J::s(s.value())).collect()),
+        )
+        .put(
+            "strategies",
+            J::Arr(strategies.iter().map(|s| J::s(s.value())).collect()),
+        )
         .put("swing_defaults", swing_defaults())
-        .put("quote_rules_defaults", views::quote_rules_json(&Default::default()))
+        .put(
+            "quote_rules_defaults",
+            views::quote_rules_json(&Default::default()),
+        )
         .put("options_provider", views::provider_json(&provider))
         .put("limits", views::limits())
         .put(
             "options_params",
             Obj::new()
-                .put("max_expiries", J::Int(OptionsParams::default().max_expiries))
+                .put(
+                    "max_expiries",
+                    J::Int(OptionsParams::default().max_expiries),
+                )
                 .done(),
         )
         .done();
@@ -134,7 +151,23 @@ pub async fn post_swing_scan(
     let scan = service::run_swing_scan(state.db.pool(), &body.universe, &body.filters(), now, None)
         .await
         .map_err(scan_problem)?;
-    Ok(canonical_response(&views::scan_json(&scan)))
+    let mut out = views::scan_json(&scan);
+    with_regime_signal(state.db.pool(), scan.freshness.data_as_of, &mut out).await?;
+    Ok(canonical_response(&out))
+}
+
+/// `regime_signal` on each of the scan's `opportunities` rows.
+async fn with_regime_signal(
+    pool: &sqlx::PgPool,
+    on: Option<chrono::NaiveDate>,
+    out: &mut J,
+) -> Result<(), Problem> {
+    if let J::Obj(fields) = out
+        && let Some((_, J::Arr(rows))) = fields.iter_mut().find(|(k, _)| k == "opportunities")
+    {
+        super::regime_signal::attach(pool, on, rows).await?;
+    }
+    Ok(())
 }
 
 /// `POST /opportunities/swing/scan/stream`: the scan with server-sent progress.
@@ -153,9 +186,19 @@ pub async fn post_swing_scan_stream(
     tokio::spawn(async move {
         let now = crate::entitlements::utc_now();
         let result =
-            service::run_swing_scan(db.pool(), &body.universe, &body.filters(), now, Some(&tx)).await;
+            service::run_swing_scan(db.pool(), &body.universe, &body.filters(), now, Some(&tx))
+                .await;
         let frame = match result {
-            Ok(scan) => views::sse("result", &views::scan_json(&scan)),
+            Ok(scan) => {
+                let mut out = views::scan_json(&scan);
+                if with_regime_signal(db.pool(), scan.freshness.data_as_of, &mut out)
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+                views::sse("result", &out)
+            }
             Err(ScanError::Unavailable(msg)) => views::sse(
                 "error",
                 &Obj::new()
@@ -223,7 +266,10 @@ pub async fn post_options_analyze(
     let now = crate::entitlements::utc_now();
     let analysis =
         service::run_options_analysis(&body.request(), now, body.rules.max_quote_age_s).await?;
-    Ok(canonical_response(&views::options_json(&body.symbol, &analysis)?))
+    Ok(canonical_response(&views::options_json(
+        &body.symbol,
+        &analysis,
+    )?))
 }
 
 /// `POST /opportunities/agui`: an AG-UI run (conversational, read-only scanning).
@@ -238,7 +284,10 @@ pub async fn post_agui(
     require_authenticated(&principal)?;
     let (_, bytes) = super::sleeves::writes::read_body(request).await?;
     let run = agui::parse_run_input(&bytes).map_err(|e| {
-        Problem::new(ProblemType::BadRequest, format!("Invalid AG-UI RunAgentInput: {e}"))
+        Problem::new(
+            ProblemType::BadRequest,
+            format!("Invalid AG-UI RunAgentInput: {e}"),
+        )
     })?;
     let user_id = principal.require_user()?;
     if !agui::claim_thread(&run.thread_id, user_id) {
@@ -254,7 +303,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/opportunities/meta", get(get_meta))
         .route("/opportunities/swing/scan", post(post_swing_scan))
-        .route("/opportunities/swing/scan/stream", post(post_swing_scan_stream))
+        .route(
+            "/opportunities/swing/scan/stream",
+            post(post_swing_scan_stream),
+        )
         .route("/opportunities/swing/validate", post(post_swing_validate))
         .route("/opportunities/options/analyze", post(post_options_analyze))
         .route("/opportunities/agui", post(post_agui))

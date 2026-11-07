@@ -144,7 +144,7 @@ export default async function LandingPage() {
               Get started
             </FloodButton>
             <Link
-              href="/market/today"
+              href="/market/indices"
               className="vaaya-pill flex h-11 items-center px-6 text-[15px] text-foreground/70 transition-colors hover:text-foreground"
             >
               See today&rsquo;s market

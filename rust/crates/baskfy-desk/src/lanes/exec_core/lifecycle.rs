@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
-use axum::http::{Response, Uri};
+use axum::http::{HeaderMap, Response, Uri};
 use axum::routing::{get, post};
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate};
 use rust_decimal::Decimal;
@@ -1399,7 +1399,11 @@ fn adopt_failed(e: &AdoptError) -> Response<Body> {
     }
 }
 
-async fn lifecycle_adopt(State(state): State<AppState>, body: Bytes) -> Response<Body> {
+async fn lifecycle_adopt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response<Body> {
     let mut form = Form {
         pairs: parse_form(&body),
         errors: Vec::new(),
@@ -1471,7 +1475,12 @@ async fn lifecycle_adopt(State(state): State<AppState>, body: Bytes) -> Response
     )
     .await
     {
-        Ok(_) => crate::lanes::analytics::web::redirect_303("/lifecycle"),
+        Ok(_) => crate::lanes::analytics::desk_json::outcome(
+            &headers,
+            true,
+            "/lifecycle",
+            &format!("{} adopted into {}", adoption.symbol, adoption.sleeve),
+        ),
         Err(e) => adopt_failed(&e),
     }
 }

@@ -3,7 +3,6 @@ import "server-only";
 import { cache } from "react";
 
 import type {
-  IndexDashboardOut,
   ListingsPage,
   MarketHealthHistoryOut,
   MarketHealthOut,
@@ -50,7 +49,7 @@ export class MarketDataUnavailable extends Error {}
  */
 const DEGRADED_STATUS = 503;
 
-async function readJson(path: string, search: Record<string, string> = {}): Promise<unknown> {
+export async function readJson(path: string, search: Record<string, string> = {}): Promise<unknown> {
   const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
   for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
 
@@ -77,7 +76,7 @@ async function readJson(path: string, search: Record<string, string> = {}): Prom
  * reason to exist is the data may reasonably fail. This is for the pages that can say something
  * useful without it.
  */
-async function readJsonOrDegraded(
+export async function readJsonOrDegraded(
   path: string,
   search: Record<string, string> = {},
 ): Promise<unknown> {
@@ -90,24 +89,6 @@ async function readJsonOrDegraded(
     throw error;
   }
 }
-
-export const fetchIndexDashboard = cache(async function fetchIndexDashboard(): Promise<IndexDashboardOut> {
-  return (await readJson("/indices/dashboard")) as IndexDashboardOut;
-});
-
-/**
- * The index dashboard, or `null` while the pipeline has published nothing.
- *
- * `/market/today` used to call the throwing variant, so a brand-new deployment — where no
- * pipeline has ever run — answered a full-page "Application error: a server-side exception has
- * occurred", digest and all. The API was behaving correctly and saying so precisely; the page
- * turned a 503 into a 500.
- */
-export const fetchIndexDashboardOrDegraded = cache(
-  async function fetchIndexDashboardOrDegraded(): Promise<IndexDashboardOut | null> {
-    return (await readJsonOrDegraded("/indices/dashboard")) as IndexDashboardOut | null;
-  },
-);
 
 export const fetchMarketHealth = cache(async function fetchMarketHealth(
   universe: string,

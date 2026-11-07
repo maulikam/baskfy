@@ -46,19 +46,19 @@ describe("hrefFor", () => {
   });
 
   it("routes an index to the dashboard filtered to that index", () => {
-    /* There is no index detail page; `/market/today` is the ~145-row table and its search box is
+    /* There is no index detail page; `/market/indices` is the ~145-row table and its search box is
        URL state, so `?q=` lands on that index's row. DECISIONS-MERGE M46.2. */
     expect(hrefFor({ kind: "index", id: "nifty-midcap-150" })).toBe(
-      "/market/today?q=nifty-midcap-150",
+      "/market/indices?q=nifty-midcap-150",
     );
-    expect(existsSync(join(APP_DIR, "market", "today", "page.tsx"))).toBe(true);
+    expect(existsSync(join(APP_DIR, "market", "indices", "page.tsx"))).toBe(true);
   });
 
   it("escapes an id rather than pasting it into the path", () => {
     /* A slug is well-behaved today. A symbol with a slash or a space would silently build a
        different route, and that is a bug worth failing on rather than discovering in production. */
     expect(hrefFor({ kind: "instrument", id: "M&M" })).toBe("/instruments/M%26M");
-    expect(hrefFor({ kind: "index", id: "NIFTY 50" })).toBe("/market/today?q=NIFTY%2050");
+    expect(hrefFor({ kind: "index", id: "NIFTY 50" })).toBe("/market/indices?q=NIFTY%2050");
   });
 
   it("labels and orders every kind the API can return", () => {

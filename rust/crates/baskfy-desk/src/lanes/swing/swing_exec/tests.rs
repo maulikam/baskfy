@@ -512,6 +512,7 @@ impl SwingStore for MemoryStore {
             reserved: Vec::new(),
             first_live_sessions_left: config.first_live_sessions_left,
             live: None,
+            per_stock: None,
         })
     }
 

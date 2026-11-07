@@ -172,7 +172,10 @@ fn ist() -> FixedOffset {
 }
 
 /// `expected_session(now, trading_days)`.
-pub(crate) fn expected_session(now: DateTime<Utc>, trading_days: &[NaiveDate]) -> Option<NaiveDate> {
+pub(crate) fn expected_session(
+    now: DateTime<Utc>,
+    trading_days: &[NaiveDate],
+) -> Option<NaiveDate> {
     let local = now.with_timezone(&ist());
     let mut cutoff = local.date_naive();
     if local.time() < NaiveTime::from_hms_opt(SESSION_DATA_READY_HOUR, 0, 0).unwrap_or_default() {
@@ -231,7 +234,11 @@ pub(crate) async fn sectors(pool: &PgPool) -> Result<Vec<(String, String)>, Prob
         .map_err(db)
 }
 
-async fn trading_days(pool: &PgPool, start: NaiveDate, end: NaiveDate) -> Result<Vec<NaiveDate>, Problem> {
+async fn trading_days(
+    pool: &PgPool,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<Vec<NaiveDate>, Problem> {
     let rows: Vec<(NaiveDate,)> = sqlx::query_as(
         "SELECT date FROM trading_day WHERE exchange_id = $1::SMALLINT AND is_trading_day IS true \
          AND date >= $2 AND date <= $3 ORDER BY date",
@@ -245,7 +252,10 @@ async fn trading_days(pool: &PgPool, start: NaiveDate, end: NaiveDate) -> Result
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
 
-async fn latest_bar_date(pool: &PgPool, on_or_before: NaiveDate) -> Result<Option<NaiveDate>, Problem> {
+async fn latest_bar_date(
+    pool: &PgPool,
+    on_or_before: NaiveDate,
+) -> Result<Option<NaiveDate>, Problem> {
     let (v,): (Option<NaiveDate>,) =
         sqlx::query_as("SELECT max(date) FROM ohlcv_daily WHERE date <= $1")
             .bind(on_or_before)
@@ -256,7 +266,10 @@ async fn latest_bar_date(pool: &PgPool, on_or_before: NaiveDate) -> Result<Optio
 }
 
 /// `current_freshness(session, now)`.
-pub(crate) async fn current_freshness(pool: &PgPool, now: DateTime<Utc>) -> Result<Freshness, Problem> {
+pub(crate) async fn current_freshness(
+    pool: &PgPool,
+    now: DateTime<Utc>,
+) -> Result<Freshness, Problem> {
     let today = now.with_timezone(&ist()).date_naive();
     let days = trading_days(pool, today - Days::days(15), today).await?;
     let as_of = latest_bar_date(pool, today).await?;
@@ -279,7 +292,10 @@ async fn index_id(pool: &PgPool, slug: &str) -> Result<Option<i64>, Problem> {
 /// `members_on(session, slug, on)`.
 async fn members_on(pool: &PgPool, slug: &str, on: NaiveDate) -> Result<BTreeSet<i64>, ScanError> {
     let Some(id) = index_id(pool, slug).await? else {
-        return Err(ScanError::Unavailable(format!("Universe {} is not defined.", repr(slug))));
+        return Err(ScanError::Unavailable(format!(
+            "Universe {} is not defined.",
+            repr(slug)
+        )));
     };
     let (latest,): (Option<NaiveDate>,) = sqlx::query_as(
         "SELECT max(date) FROM index_member_daily WHERE index_id = $1 AND date <= $2",
@@ -314,7 +330,10 @@ async fn membership_history(
     end: NaiveDate,
 ) -> Result<BTreeMap<NaiveDate, BTreeSet<i64>>, ScanError> {
     let Some(id) = index_id(pool, slug).await? else {
-        return Err(ScanError::Unavailable(format!("Universe {} is not defined.", repr(slug))));
+        return Err(ScanError::Unavailable(format!(
+            "Universe {} is not defined.",
+            repr(slug)
+        )));
     };
     let (first,): (Option<NaiveDate>,) = sqlx::query_as(
         "SELECT max(date) FROM index_member_daily WHERE index_id = $1 AND date <= $2",
@@ -356,7 +375,18 @@ struct Bars {
     adj_factor: Vec<f64>,
 }
 
-type BarRow = (i64, String, NaiveDate, f64, f64, f64, f64, f64, Option<f64>, f64);
+type BarRow = (
+    i64,
+    String,
+    NaiveDate,
+    f64,
+    f64,
+    f64,
+    f64,
+    f64,
+    Option<f64>,
+    f64,
+);
 
 async fn load_bars(
     pool: &PgPool,
@@ -547,7 +577,11 @@ async fn contexts(
     let mut recent: HashMap<i64, Vec<(NaiveDate, String)>> = HashMap::new();
     let mut upcoming: HashMap<i64, Vec<(NaiveDate, String)>> = HashMap::new();
     for (id, ex_date, kind) in actions {
-        let target = if ex_date > as_of { &mut upcoming } else { &mut recent };
+        let target = if ex_date > as_of {
+            &mut upcoming
+        } else {
+            &mut recent
+        };
         target.entry(id).or_default().push((ex_date, kind));
     }
     let bans = fno_bans(pool, as_of).await?;
@@ -602,7 +636,9 @@ pub(crate) type Progress<'a> = Option<&'a mpsc::Sender<String>>;
 
 async fn report(progress: Progress<'_>, stage: &str, done: i64, total: i64) {
     if let Some(tx) = progress {
-        let _ = tx.send(super::views::progress_frame(stage, done, total)).await;
+        let _ = tx
+            .send(super::views::progress_frame(stage, done, total))
+            .await;
     }
 }
 
@@ -656,7 +692,10 @@ pub(crate) async fn run_swing_scan(
             warnings: Vec::new(),
         }));
     };
-    let permit = SCAN_SLOTS.acquire().await.map_err(|_| ScanError::Failed(internal_error()))?;
+    let permit = SCAN_SLOTS
+        .acquire()
+        .await
+        .map_err(|_| ScanError::Failed(internal_error()))?;
     let started = Instant::now();
     step(progress, "Resolving universe", 1, total).await?;
     let mut ids = members_on(pool, universe, as_of).await?;
@@ -672,7 +711,8 @@ pub(crate) async fn run_swing_scan(
     let bars = load_bars(pool, &ids, start, as_of).await?;
     let bench = load_benchmark(pool, start, as_of).await?;
     match &bench {
-        None => warnings.push("No benchmark series stored; relative-strength setup unavailable.".to_owned()),
+        None => warnings
+            .push("No benchmark series stored; relative-strength setup unavailable.".to_owned()),
         Some((slug, _)) if *slug != BENCHMARK_SLUGS[0] => {
             warnings.push(format!("Benchmark fell back to {slug}."));
         }
@@ -683,14 +723,19 @@ pub(crate) async fn run_swing_scan(
     step(progress, "Computing indicators", 3, total).await?;
     let frame = bar_frame(bars)?;
     let bench_frame = bench.map(|(_, f)| f);
-    let indicated = blocking(move || {
-        with_indicators(&frame, bench_frame.as_ref(), &DEFAULT_SWING_PARAMS)
-    })
-    .await?;
+    let indicated =
+        blocking(move || with_indicators(&frame, bench_frame.as_ref(), &DEFAULT_SWING_PARAMS))
+            .await?;
     step(progress, "Evaluating setups", 4, total).await?;
     let filters_owned = filters.clone();
     let result = blocking(move || {
-        scan(&indicated, as_of, &ctx, &filters_owned, &DEFAULT_SWING_PARAMS)
+        scan(
+            &indicated,
+            as_of,
+            &ctx,
+            &filters_owned,
+            &DEFAULT_SWING_PARAMS,
+        )
     })
     .await?;
     drop(permit);
@@ -727,7 +772,10 @@ pub(crate) async fn run_validation(
     filters: SwingFilters,
     slippage_bps: f64,
 ) -> Result<ValidationResult, ScanError> {
-    let _permit = SCAN_SLOTS.acquire().await.map_err(|_| ScanError::Failed(internal_error()))?;
+    let _permit = SCAN_SLOTS
+        .acquire()
+        .await
+        .map_err(|_| ScanError::Failed(internal_error()))?;
     let history = membership_history(pool, universe, start, end).await?;
     let mut ids: BTreeSet<i64> = history.values().flatten().copied().collect();
     if ids.is_empty() {
@@ -823,7 +871,10 @@ async fn read_provider() -> Result<KiteProvider, String> {
     crate::live_prices::kite_provider(key).await
 }
 
-async fn contracts_for(provider: &KiteProvider, underlying: &str) -> Result<Arc<Vec<ContractQuote>>, String> {
+async fn contracts_for(
+    provider: &KiteProvider,
+    underlying: &str,
+) -> Result<Arc<Vec<ContractQuote>>, String> {
     if let Some(hit) = cache_get(&CONTRACT_CACHE, underlying) {
         return Ok(hit);
     }
@@ -852,11 +903,19 @@ async fn contracts_for(provider: &KiteProvider, underlying: &str) -> Result<Arc<
             })
             .collect(),
     );
-    cache_put(&CONTRACT_CACHE, underlying.to_owned(), Arc::clone(&contracts));
+    cache_put(
+        &CONTRACT_CACHE,
+        underlying.to_owned(),
+        Arc::clone(&contracts),
+    );
     Ok(contracts)
 }
 
-type Quoted = (Option<Decimal>, Option<DateTime<FixedOffset>>, Vec<ContractQuote>);
+type Quoted = (
+    Option<Decimal>,
+    Option<DateTime<FixedOffset>>,
+    Vec<ContractQuote>,
+);
 
 /// `_quote_contracts(request, now)`; `Err` is the text of the failure.
 async fn quote_contracts(request: &OptionsRequest, now: DateTime<Utc>) -> Result<Quoted, String> {
@@ -891,13 +950,25 @@ async fn quote_contracts(request: &OptionsRequest, now: DateTime<Utc>) -> Result
     let each_side = usize::try_from(DEFAULT_OPTIONS_PARAMS.strikes_each_side + 1).unwrap_or(0);
     let mut wanted: Vec<&ContractQuote> = Vec::new();
     for expiry in expiries.into_iter().take(max_expiries) {
-        let pool: Vec<&ContractQuote> = contracts.iter().copied().filter(|c| c.expiry == expiry).collect();
-        let mut strikes: Vec<Decimal> = pool.iter().map(|c| c.strike).collect::<BTreeSet<_>>().into_iter().collect();
+        let pool: Vec<&ContractQuote> = contracts
+            .iter()
+            .copied()
+            .filter(|c| c.expiry == expiry)
+            .collect();
+        let mut strikes: Vec<Decimal> = pool
+            .iter()
+            .map(|c| c.strike)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
         strikes.sort_by_key(|a| ((*a - spot).abs(), *a));
         let keep: HashSet<Decimal> = strikes.into_iter().take(2 * each_side + 1).collect();
         wanted.extend(pool.into_iter().filter(|c| keep.contains(&c.strike)));
     }
-    let keys: Vec<String> = wanted.iter().map(|c| format!("NFO:{}", c.tradingsymbol)).collect();
+    let keys: Vec<String> = wanted
+        .iter()
+        .map(|c| format!("NFO:{}", c.tradingsymbol))
+        .collect();
     let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
     let quotes: HashMap<String, _> = provider
         .option_quotes(&key_refs)
@@ -960,7 +1031,9 @@ pub(crate) async fn run_options_analysis(
     let mut warnings = Vec::new();
     let mut status = DataStatus::Fresh;
     let stale = spot_ts.is_none_or(|ts| {
-        (now - ts.with_timezone(&Utc)).num_microseconds().unwrap_or(i64::MAX)
+        (now - ts.with_timezone(&Utc))
+            .num_microseconds()
+            .unwrap_or(i64::MAX)
             > max_quote_age_s.saturating_mul(1_000_000)
     });
     if stale {

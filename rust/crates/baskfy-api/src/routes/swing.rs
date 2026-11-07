@@ -16,6 +16,7 @@
 
 use std::collections::HashMap;
 
+pub(crate) mod candidates;
 pub(crate) mod writes;
 
 use axum::Router;
@@ -397,6 +398,7 @@ pub async fn get_setups(
         );
     }
     overlay_last_price(&mut data).await?;
+    super::regime_signal::attach(state.db.pool(), Some(as_of), &mut data).await?;
 
     let market = sqlx::query(
         "SELECT gate, exposure_level::bigint AS exposure_level, \
@@ -1705,6 +1707,7 @@ pub fn router() -> Router<AppState> {
         .route("/swing/positions", get(get_positions))
         .route("/swing/config", get(get_config).patch(writes::patch_config))
         .route("/swing/journal", get(get_journal))
+        .route("/swing/candidates", get(candidates::get_candidates))
 }
 
 #[cfg(test)]

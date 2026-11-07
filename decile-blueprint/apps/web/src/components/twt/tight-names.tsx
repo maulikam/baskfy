@@ -1,4 +1,8 @@
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { SeriesFlag } from "@/components/regime-signal/series-flag";
+import { RegimeDot } from "@/components/regime-signal/regime-dot";
+import { RegimeRows, RegimeSortHeader, RegimeTable } from "@/components/regime-signal/regime-table";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { formatTradeDate } from "@/lib/format";
 import { ENTRY_TODAY, WATCH_ONLY, pointInTimeLine } from "@/lib/twt/copy";
@@ -25,9 +29,11 @@ import { FigureValue } from "./figure";
 export function TightNames({
   rows,
   session,
+  gateOpen = false,
 }: {
   rows: readonly TightNameView[];
   session: string | null;
+  gateOpen?: boolean;
 }) {
   const entries = rows.filter((row) => row.entry !== "WATCH_ONLY");
   const watchOnly = rows.filter((row) => row.entry === "WATCH_ONLY");
@@ -71,7 +77,7 @@ export function TightNames({
         // the published session.
         <LiveMarksProvider symbols={entries.map((row) => row.symbol)}>
           <LiveStatus asOf={session} className="mb-2" />
-          <NameTable rows={entries} />
+          <NameTable rows={entries} gateOpen={gateOpen} />
         </LiveMarksProvider>
       )}
 
@@ -113,7 +119,9 @@ export function TightNames({
           <ul className="space-y-1.5">
             {watchOnly.map((row) => (
               <li key={row.instrumentId} data-testid="twt-watch-only-row">
-                <InstrumentLink symbol={row.symbol} />{" "}
+                <RegimeDot signal={row.regimeSignal} />
+                <InstrumentLink symbol={row.symbol} flag={false} />
+                <SeriesFlag series={row.series} />{" "}
                 <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                   {WATCH_ONLY}
                 </span>
@@ -128,15 +136,17 @@ export function TightNames({
   );
 }
 
-function NameTable({ rows }: { rows: readonly TightNameView[] }) {
+function NameTable({ rows, gateOpen }: { rows: readonly TightNameView[]; gateOpen: boolean }) {
   return (
+    <RegimeTable>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[56rem] border-collapse text-sm">
+      <table className="w-full min-w-[58rem] border-collapse text-sm">
         <caption className="sr-only">
           Names holding the three-weeks-tight pattern, most heavily traded first
         </caption>
         <thead>
           <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <RegimeSortHeader />
             <th scope="col" className="py-2 pr-3 font-medium">
               Stock
             </th>
@@ -161,17 +171,28 @@ function NameTable({ rows }: { rows: readonly TightNameView[] }) {
             <th scope="col" className="py-2 pr-3 font-medium">
               Traded a day
             </th>
+            <th scope="col" className="py-2 pr-3 font-medium">
+              Action
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          <RegimeRows
+            colSpan={10}
+            rows={rows.map((row) => ({
+              key: String(row.instrumentId),
+              signal: row.regimeSignal,
+              node: (
             <tr
-              key={row.instrumentId}
               className="border-b border-border/40"
               data-testid="twt-tight-row"
             >
+              <td className="py-2 pr-2">
+                <RegimeDot signal={row.regimeSignal} />
+              </td>
               <td className="py-2 pr-3">
-                <InstrumentLink symbol={row.symbol} />
+                <InstrumentLink symbol={row.symbol} flag={false} />
+                <SeriesFlag series={row.series} />
                 {row.lockedUpperCircuit ? (
                   <span
                     className="ml-1.5 text-warning"
@@ -219,10 +240,30 @@ function NameTable({ rows }: { rows: readonly TightNameView[] }) {
               <td className="py-2 pr-3">
                 <FigureValue figure={row.turnoverCrore} />
               </td>
+              <td className="py-2 pr-3">
+                <BuyTicketButton
+                  symbol={row.symbol}
+                  name={row.name}
+                  instrumentId={row.instrumentId}
+                  price={row.price}
+                  source="twt"
+                  setup="THREE_WEEKS_TIGHT"
+                  disabledReason={
+                    !gateOpen
+                      ? "Three-weeks-tight gate is not open: no new entries."
+                      : row.lockedUpperCircuit
+                        ? "Locked at its upper circuit — no seller to buy from."
+                        : null
+                  }
+                />
+              </td>
             </tr>
-          ))}
+              ),
+            }))}
+          />
         </tbody>
       </table>
     </div>
+    </RegimeTable>
   );
 }

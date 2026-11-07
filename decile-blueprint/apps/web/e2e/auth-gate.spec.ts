@@ -34,7 +34,7 @@ const GATED = [
   "/portfolio/holdings",
   "/portfolio/activity",
   "/portfolio/watchlist",
-  "/market/today",
+  "/market/indices",
   "/market/mood",
   "/market/listings",
   "/instruments/CUPID",
@@ -44,7 +44,7 @@ const GATED = [
 
 /** Old URL → where `next.config.ts` sends it, so the gate quotes the destination in `?next=`. */
 const LEGACY = [
-  ["/dashboard", "/market/today"],
+  ["/dashboard", "/market/indices"],
   ["/market-health", "/market/mood"],
   ["/listings", "/market/listings"],
   ["/explore", "/discover"],

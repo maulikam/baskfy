@@ -108,50 +108,16 @@ impl IndexReading {
     }
 }
 
-/// CPython 3.12's built-in `sum()` over floats: Neumaier's compensated summation, the
-/// compensation added at the end only when it is non-zero and finite (`builtin_sum_impl`).
+/// CPython 3.12's built-in `sum()` over floats (lives in `baskfy_core::swing::market`).
+#[cfg(test)]
 pub(crate) fn py_sum(values: &[f64]) -> f64 {
-    let mut total = 0.0_f64;
-    let mut c = 0.0_f64;
-    for &x in values {
-        let t = total + x;
-        if total.abs() >= x.abs() {
-            c += (total - t) + x;
-        } else {
-            c += (x - t) + total;
-        }
-        total = t;
-    }
-    if c != 0.0 && c.is_finite() {
-        total += c;
-    }
-    total
+    baskfy_core::swing::market::py_sum(values)
 }
 
-/// `sum(values) / len(values)`.
-fn mean(values: &[f64]) -> f64 {
-    let total = py_sum(values);
-    #[allow(clippy::cast_precision_loss)]
-    let n = values.len() as f64;
-    total / n
-}
-
-/// `ema(values, length)`: TradingView's `ta.ema`, seeded with the simple average of the first
-/// `length` values; with no more than `length` values, their simple average.
+/// `ema(values, length)`: the swing gate's EMA (`baskfy_core::swing::market::gate_ema`).
 pub(crate) fn ema(values: &[f64], length: usize) -> Result<f64, WorkerError> {
-    if values.is_empty() {
-        return Err(WorkerError::python("ValueError", "an EMA of no values"));
-    }
-    if values.len() <= length {
-        return Ok(mean(values));
-    }
-    #[allow(clippy::cast_precision_loss)]
-    let alpha = 2.0 / (length as f64 + 1.0);
-    let mut value = mean(values.get(..length).unwrap_or(&[]));
-    for x in values.get(length..).unwrap_or(&[]) {
-        value = alpha * x + (1.0 - alpha) * value;
-    }
-    Ok(value)
+    baskfy_core::swing::market::gate_ema(values, length)
+        .ok_or_else(|| WorkerError::python("ValueError", "an EMA of no values"))
 }
 
 /// `index_reading`: the newest level and its two EMAs; `None` with fewer than `index_ma_slow`

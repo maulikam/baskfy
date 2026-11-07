@@ -15,6 +15,7 @@ mod common;
 #[cfg(test)]
 mod db_tests;
 mod options;
+pub mod regime;
 mod swing;
 mod swing_core;
 mod twt;

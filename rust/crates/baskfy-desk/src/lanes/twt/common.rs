@@ -861,6 +861,12 @@ impl FormFields {
         self.errors.push(PyValue::Map(e));
     }
 
+    /// `name: str | None = Form(None)`.
+    #[must_use]
+    pub fn opt(&self, name: &str) -> Option<String> {
+        self.raw(name)
+    }
+
     /// `name: str = Form(...)`.
     pub fn str(&mut self, name: &str) -> String {
         if let Some(v) = self.raw(name) {

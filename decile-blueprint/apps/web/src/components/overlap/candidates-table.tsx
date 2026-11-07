@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition, type ReactNode } from "react";
 
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FilingsScanButton } from "@/components/overlap/filings-scan-button";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
@@ -56,7 +57,7 @@ import { cn } from "@/lib/utils";
  * two sets are what the model is fine-tuned on. Both are labels on display context — each
  * reaches one table and no rank, size or order.
  *
- * **Nothing here can place an order**, queue a scan, or change a setting. The table reads one
+ * **Buy opens the shared order ticket; nothing is sent until Place Buy Order**. Otherwise nothing here can queue a scan, or change a setting. The table reads one
  * GET and renders it; the sleeve pages it links to are where a person acts.
  */
 export function CandidatesTable({
@@ -211,6 +212,7 @@ export function CandidatesTable({
                       </th>
                     );
                   })}
+                  <th scope="col" className="py-2 pl-2 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -369,6 +371,17 @@ function CandidateRow({
             ))}
           </ul>
         )}
+      </td>
+      <td className="py-2 pl-2 align-top">
+        <BuyTicketButton
+          symbol={row.symbol}
+          name={row.name}
+          instrumentId={row.instrument_id}
+          price={row.last_price ?? row.close}
+          source="overlap"
+          setup={row.strategies.find((hit) => hit.actionable)?.strategy ?? null}
+          disabledReason={row.actionable ? null : "No strategy's plan builder could take this name today."}
+        />
       </td>
     </tr>
   );

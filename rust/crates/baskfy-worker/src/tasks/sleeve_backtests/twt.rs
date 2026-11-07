@@ -342,7 +342,7 @@ fn stats_payload(
     Ok(OrderedJson::Object(p))
 }
 
-fn universe_rule(config: &TwtConfig) -> UniverseRule<'_> {
+pub(super) fn universe_rule(config: &TwtConfig) -> UniverseRule<'_> {
     UniverseRule {
         instrument_type: &config.data.instrument_type,
         series_allowed: &config.data.series_allowed,

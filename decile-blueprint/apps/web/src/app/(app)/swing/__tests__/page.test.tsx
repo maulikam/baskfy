@@ -44,6 +44,9 @@ vi.mock("../actions", () => ({
   scanNow: vi.fn(),
 }));
 
+// Orders are staff-only; these tests render the staff view of the setups.
+vi.mock("@/lib/auth/me", () => ({ fetchMe: vi.fn(() => Promise.resolve({ is_staff: true })) }));
+
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/swing",
@@ -260,7 +263,9 @@ describe("the setups header says why the gate is what it is", () => {
       }),
     ).toBeInTheDocument();
     const row = screen.getByText("VERTCO").closest("tr");
-    expect(row?.querySelector("button")).toBeNull();
+    const buttons = [...(row?.querySelectorAll("button") ?? [])];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Buy"]);
+    expect(buttons[0]?.hasAttribute("disabled")).toBe(true);
     expect(row).toHaveTextContent("7 up");
   });
 });
@@ -290,7 +295,8 @@ describe("the row actions are Watch and Dismiss, and nothing else", () => {
   it("renders no other button on the page but Scan now", async () => {
     await renderWith([setup()], { watch: [watchRow()] });
     const names = screen.getAllByRole("button").map((button) => button.textContent?.trim());
-    expect(new Set(names)).toEqual(new Set(["Dismiss", "Scan now"]));
+    // Regime column: "Green only" filter and the sortable heading only reorder rows client-side.
+    expect(new Set(names)).toEqual(new Set(["Buy", "Dismiss", "Green only", "Regime", "Scan now"]));
   });
 });
 

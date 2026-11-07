@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # Export the volume-breakout backtest tables from the AWS Phase-A box's Postgres
 # (i-086986250704e4392, /opt/baskfy compose stack) via SSM, park them in S3 under
 # backtests/volume-breakout/<stamp>/, and sync them down beside this script into ./aws/.

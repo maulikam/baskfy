@@ -124,6 +124,7 @@ pub async fn swing_detect_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult
     )
     .await?;
     tx.commit().await?;
+    super::swing_live::regime_jobs::after_scan(ctx, Some(day)).await;
     Ok(object([
         ("date", s(iso(day))),
         ("candidates", int(written)),
@@ -286,6 +287,7 @@ pub async fn swing_check_detect_fresh_task(ctx: &TaskContext, args: BoundArgs) -
         }
     };
     tx.commit().await?;
+    super::swing_live::regime_jobs::after_detect(ctx, published).await;
     let published_text = published.map(iso);
     if ran {
         return Ok(object([

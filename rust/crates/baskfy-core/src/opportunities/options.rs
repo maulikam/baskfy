@@ -279,7 +279,11 @@ impl OptionCandidate {
     /// `STRATEGY|SYM1|SYM2`.
     pub fn id(&self) -> String {
         std::iter::once(self.strategy.value())
-            .chain(self.legs.iter().map(|l| l.quote.contract.tradingsymbol.as_str()))
+            .chain(
+                self.legs
+                    .iter()
+                    .map(|l| l.quote.contract.tradingsymbol.as_str()),
+            )
             .collect::<Vec<_>>()
             .join("|")
     }
@@ -405,7 +409,9 @@ fn shape(kind: StrategyKind) -> &'static [(OptionType, Side)] {
     match kind {
         StrategyKind::LongCall => &[(OptionType::Ce, Side::Buy)],
         StrategyKind::LongPut => &[(OptionType::Pe, Side::Buy)],
-        StrategyKind::BullCallSpread => &[(OptionType::Ce, Side::Buy), (OptionType::Ce, Side::Sell)],
+        StrategyKind::BullCallSpread => {
+            &[(OptionType::Ce, Side::Buy), (OptionType::Ce, Side::Sell)]
+        }
         StrategyKind::BearPutSpread => &[(OptionType::Pe, Side::Buy), (OptionType::Pe, Side::Sell)],
     }
 }
@@ -458,7 +464,11 @@ pub fn validate_legs(kind: StrategyKind, legs: &[Leg]) -> Option<String> {
 }
 
 /// Entry charges and entry-plus-exit charges for `lots` lots (exit at the far side).
-pub fn round_trip_costs(legs: &[Leg], lots: i64, rates: &CostRates) -> CoreResult<(Decimal, Decimal)> {
+pub fn round_trip_costs(
+    legs: &[Leg],
+    lots: i64,
+    rates: &CostRates,
+) -> CoreResult<(Decimal, Decimal)> {
     let Some(first) = legs.first() else {
         return Err(CoreError::InvalidInput("no legs".into()));
     };
@@ -503,7 +513,10 @@ pub fn payoff_grid(
     let Some(first) = legs.first() else {
         return Err(CoreError::InvalidInput("no legs".into()));
     };
-    let span = num::div(num::mul(spot, params.payoff_range_pct)?, Decimal::ONE_HUNDRED)?;
+    let span = num::div(
+        num::mul(spot, params.payoff_range_pct)?,
+        Decimal::ONE_HUNDRED,
+    )?;
     let (low, high) = (num::sub(spot, span)?, num::add(spot, span)?);
     let steps = (params.payoff_points - 1).max(1);
     let width = num::sub(high, low)?;
@@ -512,8 +525,17 @@ pub fn payoff_grid(
         let step = num::div(num::muli(width, i)?, Decimal::from(steps))?;
         xs.push(num::add(low, step)?);
     }
-    xs.extend(legs.iter().map(Leg::strike).filter(|k| low <= *k && *k <= high));
-    xs.extend(breakevens.iter().copied().filter(|b| low <= *b && *b <= high));
+    xs.extend(
+        legs.iter()
+            .map(Leg::strike)
+            .filter(|k| low <= *k && *k <= high),
+    );
+    xs.extend(
+        breakevens
+            .iter()
+            .copied()
+            .filter(|b| low <= *b && *b <= high),
+    );
     xs.push(spot);
     // Python's set: numerically equal values collapse before rounding.
     xs.sort();
@@ -578,7 +600,11 @@ fn int_div(a: Decimal, b: Decimal) -> CoreResult<i64> {
     while q.abs().checked_mul(abs_b).ok_or_else(overflow)? > abs_a {
         q -= step;
     }
-    while (q.abs() + Decimal::ONE).checked_mul(abs_b).ok_or_else(overflow)? <= abs_a {
+    while (q.abs() + Decimal::ONE)
+        .checked_mul(abs_b)
+        .ok_or_else(overflow)?
+        <= abs_a
+    {
         q += step;
     }
     num::floor_int(q)
@@ -627,7 +653,12 @@ pub struct OptionsResult {
 }
 
 fn strike_window(strikes: &[Decimal], spot: Decimal, each_side: usize) -> CoreResult<Vec<Decimal>> {
-    let ordered: Vec<Decimal> = strikes.iter().copied().collect::<BTreeSet<_>>().into_iter().collect();
+    let ordered: Vec<Decimal> = strikes
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
     let mut atm: Option<(Decimal, Decimal, usize)> = None;
     for (i, k) in ordered.iter().enumerate() {
         let key = (num::abs(num::sub(*k, spot)?)?, *k);
@@ -675,7 +706,11 @@ pub fn candidate_structures(
         let shorts: Vec<&AcceptedQuote> = if kind == StrategyKind::BullCallSpread {
             available.iter().skip(i + 1).take(steps).copied().collect()
         } else {
-            available[i.saturating_sub(steps)..i].iter().rev().copied().collect()
+            available[i.saturating_sub(steps)..i]
+                .iter()
+                .rev()
+                .copied()
+                .collect()
         };
         out.extend(
             shorts
@@ -722,7 +757,9 @@ pub fn analyze(
         .iter()
         .filter(|q| {
             let d = dte(q.expiry, now);
-            request.min_dte <= d && d <= request.max_dte && q.underlying.to_uppercase() == underlying
+            request.min_dte <= d
+                && d <= request.max_dte
+                && q.underlying.to_uppercase() == underlying
         })
         .map(|q| q.expiry)
         .collect::<BTreeSet<_>>()
@@ -825,7 +862,10 @@ pub fn build_candidate(
     let max_loss_after_costs = num::add(max_loss_lot, round_trip)?;
     let lots = sizing(max_loss_after_costs, request.max_loss_inr)?;
     if lots < 1 {
-        let limit = request.max_loss_inr.map(py_str).unwrap_or_else(|| "None".into());
+        let limit = request
+            .max_loss_inr
+            .map(py_str)
+            .unwrap_or_else(|| "None".into());
         return Ok(Err(reject(
             &label,
             format!(
@@ -840,7 +880,9 @@ pub fn build_candidate(
         .find_map(|l| if l.side == Side::Buy { l.iv } else { None });
     #[allow(clippy::cast_precision_loss)]
     let years = dte.max(0) as f64 / DAYS_PER_YEAR;
-    let expected_move_pct = first_iv.filter(|_| years > 0.0).map(|iv| iv * years.sqrt() * 100.0);
+    let expected_move_pct = first_iv
+        .filter(|_| years > 0.0)
+        .map(|iv| iv * years.sqrt() * 100.0);
     let first_be = metrics
         .breakevens
         .first()
@@ -853,13 +895,15 @@ pub fn build_candidate(
         .transpose()?;
     let mut limitations = Vec::new();
     if legs.iter().any(|l| l.iv.is_none()) {
-        limitations.push("Model IV did not solve for at least one leg; Greeks omitted there.".to_owned());
+        limitations
+            .push("Model IV did not solve for at least one leg; Greeks omitted there.".to_owned());
     }
     if metrics.max_profit.is_none() {
         limitations.push("Maximum profit is unlimited; payoff score is neutral.".to_owned());
     }
     if dte <= 1 {
-        limitations.push("Expires within a day; exercise/settlement STT may apply if held.".to_owned());
+        limitations
+            .push("Expires within a day; exercise/settlement STT may apply if held.".to_owned());
     }
     let worst_spread = legs
         .iter()

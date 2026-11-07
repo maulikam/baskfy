@@ -178,7 +178,8 @@ fn system_exit(msg: &str) -> i32 {
 }
 
 async fn authed_kite(state: &AppState) -> Result<std::sync::Arc<DeskKite>, i32> {
-    let k = exec_kite::kite(state).map_err(|e| raised(&format!("{}: {}", e.python_type, e.message)))?;
+    let k =
+        exec_kite::kite(state).map_err(|e| raised(&format!("{}: {}", e.python_type, e.message)))?;
     if !k.is_authed().await {
         return Err(system_exit("Kite session expired — log in at / first"));
     }
@@ -239,7 +240,9 @@ impl Col {
                 None | Some(DbValue::Null | DbValue::Int(_) | DbValue::Float(_))
             )
         });
-        let has_null = values.iter().any(|v| matches!(v, None | Some(DbValue::Null)));
+        let has_null = values
+            .iter()
+            .any(|v| matches!(v, None | Some(DbValue::Null)));
         let has_float = values.iter().any(|v| matches!(v, Some(DbValue::Float(_))));
         if num && !has_null && !has_float {
             return Self::Int(
@@ -297,7 +300,9 @@ impl Col {
 fn is_decimal(s: &str) -> bool {
     let body = s.trim_start().trim_start_matches(['+', '-']);
     body.split_once('.').is_some_and(|(a, b)| {
-        !a.is_empty() && a.bytes().all(|c| c.is_ascii_digit()) && b.bytes().all(|c| c.is_ascii_digit())
+        !a.is_empty()
+            && a.bytes().all(|c| c.is_ascii_digit())
+            && b.bytes().all(|c| c.is_ascii_digit())
     })
 }
 
@@ -359,7 +364,10 @@ pub fn frame_string(cols: &[(&str, Col)]) -> String {
     let rows = cols.first().map_or(0, |(_, c)| c.len());
     if rows == 0 {
         let names: Vec<&str> = cols.iter().map(|(n, _)| *n).collect();
-        return format!("Empty DataFrame\nColumns: [{}]\nIndex: []", names.join(", "));
+        return format!(
+            "Empty DataFrame\nColumns: [{}]\nIndex: []",
+            names.join(", ")
+        );
     }
     let mut rendered: Vec<Vec<String>> = Vec::new();
     for (name, col) in cols {
@@ -507,21 +515,36 @@ pub async fn benchmark(state: &AppState, argv: &[String]) -> i32 {
         let res = async {
             let start = iso(a.get("--from").map_or("2020-01-01", String::as_str))?;
             let end = a.get("--to").map(|s| iso(s)).transpose()?;
-            let cfg = RegimeConfig::from_settings(&state.settings_snapshot()).map_err(|e| e.to_string())?;
+            let cfg = RegimeConfig::from_settings(&state.settings_snapshot())
+                .map_err(|e| e.to_string())?;
             let aliases = cfg
                 .index_aliases
                 .iter()
                 .find(|(k, _)| k == index)
                 .map(|(_, v)| v.clone())
                 .unwrap_or_default();
-            let k = exec_kite::kite(&state).map_err(|e| format!("{}: {}", e.python_type, e.message))?;
-            let s = bm::kite_index_series(&*k as &dyn bm::IndexKite, &root, today, index, &aliases, start, end)
-                .await
-                .map_err(|e| e.to_string())?;
+            let k =
+                exec_kite::kite(&state).map_err(|e| format!("{}: {}", e.python_type, e.message))?;
+            let s = bm::kite_index_series(
+                &*k as &dyn bm::IndexKite,
+                &root,
+                today,
+                index,
+                &aliases,
+                start,
+                end,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
             let mut conn = migrated(&state).await?;
-            bm::upsert_benchmark(&mut conn, &s.index_name, &bm::series_pairs(&s.series), bm::PRI)
-                .await
-                .map_err(|e| e.to_string())
+            bm::upsert_benchmark(
+                &mut conn,
+                &s.index_name,
+                &bm::series_pairs(&s.series),
+                bm::PRI,
+            )
+            .await
+            .map_err(|e| e.to_string())
         }
         .await;
         match res {
@@ -547,7 +570,10 @@ pub async fn benchmark(state: &AppState, argv: &[String]) -> i32 {
         match res {
             Ok(s) => {
                 let (Some(first), Some(last)) = (s.series.first(), s.series.last()) else {
-                    say(&format!("no rows for {}", PyValue::Str(index.clone()).py_repr()));
+                    say(&format!(
+                        "no rows for {}",
+                        PyValue::Str(index.clone()).py_repr()
+                    ));
                     return 0;
                 };
                 say(&format!(
@@ -564,7 +590,10 @@ pub async fn benchmark(state: &AppState, argv: &[String]) -> i32 {
         }
     }
 
-    if !["--pri", "--tri", "--show"].iter().any(|f| given(f).is_some()) {
+    if !["--pri", "--tri", "--show"]
+        .iter()
+        .any(|f| given(f).is_some())
+    {
         let res = async {
             let mut conn = migrated(&state).await?;
             bm::available_benchmarks(&mut conn)
@@ -584,7 +613,8 @@ pub async fn benchmark(state: &AppState, argv: &[String]) -> i32 {
 // app/analytics/tradebook.py
 // ---------------------------------------------------------------------------------------------
 
-const TB_USAGE: &str = "[-h] [--file FILE] [--db DB] [--reconcile] [--summary]\n                   [--capture]";
+const TB_USAGE: &str =
+    "[-h] [--file FILE] [--db DB] [--reconcile] [--summary]\n                   [--capture]";
 
 /// `tradebook.py`'s flags.
 pub const TB_FLAGS: [(&str, Arity); 5] = [
@@ -660,11 +690,14 @@ pub async fn tradebook(state: &AppState, argv: &[String]) -> i32 {
     let now = || state.clock.now_ist().naive_local();
 
     if let Some(file) = a.get("--file") {
-        let res = match tb::import_tradebook(&mut conn, &state.paths.resolve(file), true, now()).await {
-            Ok(r) => r,
-            Err(tb::ImportError::Tradebook(e)) => return system_exit(&format!("import failed: {}", e.0)),
-            Err(e) => return raised(&e.to_string()),
-        };
+        let res =
+            match tb::import_tradebook(&mut conn, &state.paths.resolve(file), true, now()).await {
+                Ok(r) => r,
+                Err(tb::ImportError::Tradebook(e)) => {
+                    return system_exit(&format!("import failed: {}", e.0));
+                }
+                Err(e) => return raised(&e.to_string()),
+            };
         say(&format!(
             "imported {} fills across {} symbols ({} -> {})",
             gs(&res, "fills"),
@@ -726,21 +759,33 @@ pub async fn tradebook(state: &AppState, argv: &[String]) -> i32 {
                 ));
             }
         } else {
-            say(&format!("no fills today ({} raw rows from Kite)", gs(&res, "raw")));
+            say(&format!(
+                "no fills today ({} raw rows from Kite)",
+                gs(&res, "raw")
+            ));
         }
     }
 
     if a.contains_key("--summary") || a.contains_key("--file") || a.contains_key("--capture") {
         let cur = match conn
-            .execute("SELECT COUNT(*) n, SUM(exit_ts IS NULL) open FROM trades", &[])
+            .execute(
+                "SELECT COUNT(*) n, SUM(exit_ts IS NULL) open FROM trades",
+                &[],
+            )
             .await
         {
             Ok(c) => c,
             Err(e) => return raised(&e.to_string()),
         };
         let row = cur.rows.first();
-        let n = row.and_then(|r| r.get("n")).and_then(DbValue::as_i64).unwrap_or(0);
-        let open = row.and_then(|r| r.get("open")).and_then(DbValue::as_i64).unwrap_or(0);
+        let n = row
+            .and_then(|r| r.get("n"))
+            .and_then(DbValue::as_i64)
+            .unwrap_or(0);
+        let open = row
+            .and_then(|r| r.get("open"))
+            .and_then(DbValue::as_i64)
+            .unwrap_or(0);
         say(&format!("\ntrades table: {n} rows, {open} open lots"));
     }
 
@@ -850,7 +895,9 @@ pub async fn protection_check(state: &AppState, argv: &[String]) -> i32 {
             ));
         }
     }
-    say("\nThis check never places or cancels a stop. Arming one is a decision with money behind it, not something a status check should do.");
+    say(
+        "\nThis check never places or cancels a stop. Arming one is a decision with money behind it, not something a status check should do.",
+    );
     0
 }
 
@@ -860,7 +907,11 @@ pub async fn protection_check(state: &AppState, argv: &[String]) -> i32 {
 
 /// `python -m app.analytics.db [--db DB] [--init] [--info]` (an explicit path: SQLite).
 pub async fn db_cli(state: &AppState, argv: &[String]) -> i32 {
-    let flags = [("--db", Arity::One), ("--init", Arity::Flag), ("--info", Arity::Flag)];
+    let flags = [
+        ("--db", Arity::One),
+        ("--init", Arity::Flag),
+        ("--info", Arity::Flag),
+    ];
     let a = match parse("db.py", "[-h] [--db DB] [--init] [--info]", &flags, argv) {
         Ok(a) => a,
         Err(s) => return stop_code(s),
@@ -903,8 +954,20 @@ async fn db_info(conn: &mut Conn, path: &str) -> Result<Vec<String>, String> {
         }
     };
     let e = |x: crate::storage::StorageError| x.to_string();
-    let ver = first(&conn.execute("PRAGMA user_version", &[]).await.map_err(e)?.rows);
-    let mode = first(&conn.execute("PRAGMA journal_mode", &[]).await.map_err(e)?.rows);
+    let ver = first(
+        &conn
+            .execute("PRAGMA user_version", &[])
+            .await
+            .map_err(e)?
+            .rows,
+    );
+    let mode = first(
+        &conn
+            .execute("PRAGMA journal_mode", &[])
+            .await
+            .map_err(e)?
+            .rows,
+    );
     let mut out = vec![
         format!("db            : {path}"),
         format!("schema version: {ver}   journal_mode: {mode}"),
@@ -941,7 +1004,11 @@ async fn db_info(conn: &mut Conn, path: &str) -> Result<Vec<String>, String> {
             Some(other) => format!("{other:?}"),
             None => "None".to_owned(),
         };
-        let iv = |r: &Row| r.get("index_value").and_then(DbValue::as_f64).unwrap_or(f64::NAN);
+        let iv = |r: &Row| {
+            r.get("index_value")
+                .and_then(DbValue::as_f64)
+                .unwrap_or(f64::NAN)
+        };
         out.push(format!("snapshots span: {} -> {}", d(a), d(b)));
         out.push(format!(
             "index          : {} -> {}",
@@ -1032,7 +1099,9 @@ pub fn scoring_table(s: &crate::lanes::weekly::score::Scored) -> Result<String, 
 /// `python -m pytest tests/ -q`: the suite is not in the desk image.
 #[must_use]
 pub fn tests_cli() -> i32 {
-    err("the test suite is not part of the desk binary; run `cargo test -p baskfy-desk` in a source checkout");
+    err(
+        "the test suite is not part of the desk binary; run `cargo test -p baskfy-desk` in a source checkout",
+    );
     5
 }
 
@@ -1047,14 +1116,33 @@ mod tests {
 
     #[test]
     fn argparse_like_python() {
-        let a = parse("benchmark.py", BENCH_USAGE, &BENCH_FLAGS, &v(&["--list", "NIFTY"])).unwrap();
+        let a = parse(
+            "benchmark.py",
+            BENCH_USAGE,
+            &BENCH_FLAGS,
+            &v(&["--list", "NIFTY"]),
+        )
+        .unwrap();
         assert_eq!(a["--list"], "NIFTY");
         let a = parse("benchmark.py", BENCH_USAGE, &BENCH_FLAGS, &v(&["--list"])).unwrap();
         assert_eq!(a["--list"], "");
-        let a = parse("benchmark.py", BENCH_USAGE, &BENCH_FLAGS, &v(&["--pri", "NIFTY 500", "--from", "2020-01-01"])).unwrap();
-        assert_eq!((a["--pri"].as_str(), a["--from"].as_str()), ("NIFTY 500", "2020-01-01"));
-        assert!(matches!(parse("tradebook.py", TB_USAGE, &TB_FLAGS, &v(&["--nope"])), Err(Stop::Error(e)) if e.ends_with("tradebook.py: error: unrecognized arguments: --nope")));
-        assert!(matches!(parse("x.py", "", &TB_FLAGS, &v(&["--file"])), Err(Stop::Error(e)) if e.ends_with("argument --file: expected one argument")));
+        let a = parse(
+            "benchmark.py",
+            BENCH_USAGE,
+            &BENCH_FLAGS,
+            &v(&["--pri", "NIFTY 500", "--from", "2020-01-01"]),
+        )
+        .unwrap();
+        assert_eq!(
+            (a["--pri"].as_str(), a["--from"].as_str()),
+            ("NIFTY 500", "2020-01-01")
+        );
+        assert!(
+            matches!(parse("tradebook.py", TB_USAGE, &TB_FLAGS, &v(&["--nope"])), Err(Stop::Error(e)) if e.ends_with("tradebook.py: error: unrecognized arguments: --nope"))
+        );
+        assert!(
+            matches!(parse("x.py", "", &TB_FLAGS, &v(&["--file"])), Err(Stop::Error(e)) if e.ends_with("argument --file: expected one argument"))
+        );
     }
 
     #[test]
@@ -1063,20 +1151,43 @@ mod tests {
         assert_eq!(
             frame_string(&[
                 ("rank", Col::Float(vec![1.0, 2.0, nan])),
-                ("symbol", Col::Obj(vec![Some("AB".into()), Some("LONGSYM".into()), Some("C".into())])),
+                (
+                    "symbol",
+                    Col::Obj(vec![
+                        Some("AB".into()),
+                        Some("LONGSYM".into()),
+                        Some("C".into())
+                    ])
+                ),
                 ("SCORE", Col::Float(vec![81.234_567, -5.5, nan])),
                 ("close", Col::Float(vec![1234.5, 12.25, 3.0])),
                 ("x", Col::Float(vec![0.000_012_34, 1.0, 2.0])),
                 ("big", Col::Float(vec![1e17, 1.0, 2.0])),
-                ("reject", Col::Obj(vec![Some(String::new()), Some("price<20".into()), Some(String::new())])),
+                (
+                    "reject",
+                    Col::Obj(vec![
+                        Some(String::new()),
+                        Some("price<20".into()),
+                        Some(String::new())
+                    ])
+                ),
             ]),
             " rank  symbol     SCORE   close        x          big   reject\n  1.0      AB 81.234567 1234.50 0.000012 1.000000e+17         \n  2.0 LONGSYM -5.500000   12.25 1.000000 1.000000e+00 price<20\n  NaN       C       NaN    3.00 2.000000 2.000000e+00         "
         );
         assert_eq!(frame_string(&[("a", Col::Int(vec![-5, 20]))]), " a\n-5\n20");
-        assert_eq!(frame_string(&[("a", Col::Float(vec![123_456.789, 2.0]))]), "         a\n123456.789\n     2.000");
-        assert_eq!(frame_string(&[("a", Col::Float(vec![123_456_789.123, 2.0]))]), "           a\n1.234568e+08\n2.000000e+00");
         assert_eq!(
-            frame_string(&[("a", Col::Bool(vec![true, false])), ("b", Col::Obj(vec![None, Some("x".into())]))]),
+            frame_string(&[("a", Col::Float(vec![123_456.789, 2.0]))]),
+            "         a\n123456.789\n     2.000"
+        );
+        assert_eq!(
+            frame_string(&[("a", Col::Float(vec![123_456_789.123, 2.0]))]),
+            "           a\n1.234568e+08\n2.000000e+00"
+        );
+        assert_eq!(
+            frame_string(&[
+                ("a", Col::Bool(vec![true, false])),
+                ("b", Col::Obj(vec![None, Some("x".into())]))
+            ]),
             "    a   b\n True NaN\nFalse   x"
         );
         assert_eq!(frame_string(&[]), "Empty DataFrame\nColumns: []\nIndex: []");

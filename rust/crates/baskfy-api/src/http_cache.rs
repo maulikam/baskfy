@@ -15,10 +15,9 @@ use sha2::{Digest, Sha256};
 use crate::settings::API_PREFIX;
 
 /// `CACHEABLE_PREFIXES` (below `/api/v1`).
-pub const CACHEABLE_PREFIXES: [&str; 5] = [
+pub const CACHEABLE_PREFIXES: [&str; 4] = [
     "/meta/",
     "/instruments",
-    "/indices/",
     "/market-health",
     "/listings",
 ];
@@ -213,7 +212,6 @@ mod tests {
             "/meta/factors",
             "/instruments/CUPID",
             "/instruments/CUPID/history",
-            "/indices/dashboard",
             "/market-health",
             "/market-health/history",
             "/listings",

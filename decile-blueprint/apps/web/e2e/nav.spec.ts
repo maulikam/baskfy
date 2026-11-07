@@ -38,7 +38,7 @@ test.describe("the primary navigation", () => {
   for (const width of [768, 1024, 1280] as const) {
     test(`desktop nav shows Home · Market · Discover · Build · Portfolio at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto("/market/today");
+      await page.goto("/market/indices");
 
       const nav = page.locator(`#${PRIMARY_NAV_ID}`);
       await expect(nav).toBeVisible();
@@ -53,7 +53,7 @@ test.describe("the primary navigation", () => {
 
   test("mobile bottom tab bar shows every reachable tab under 768px", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/market/today");
+    await page.goto("/market/indices");
 
     await expect(page.locator(`#${PRIMARY_NAV_ID}`)).toBeHidden();
 
@@ -112,7 +112,7 @@ test.describe("the home surface is the signed-in landing page", () => {
   test("is where the wordmark leads, and lights up its own nav pill", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await signIn(page);
-    await page.goto("/market/today");
+    await page.goto("/market/indices");
 
     await page.getByRole("link", { name: "Baskfy — home" }).click();
     await page.waitForURL(/\/build$/);
@@ -128,7 +128,7 @@ test.describe("the home surface is the signed-in landing page", () => {
     request,
   }) => {
     const response = await request.get("/dashboard", { maxRedirects: 0 });
-    expect(response.headers().location ?? "").toContain("/market/today");
+    expect(response.headers().location ?? "").toContain("/market/indices");
   });
 });
 

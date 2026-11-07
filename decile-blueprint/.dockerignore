@@ -5,6 +5,7 @@
 # pnpm's symlink farm, both of which break inside linux/arm64.
 **/node_modules
 **/.next
+**/.next-*
 **/.next-build
 **/.turbo
 **/dist

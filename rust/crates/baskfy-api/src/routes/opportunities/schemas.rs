@@ -14,7 +14,9 @@ use serde_json::{Map, Value};
 use crate::body::Received;
 use crate::opportunities_llm::ToolArgsValidator;
 use crate::problems::Problem;
-use crate::routes::sleeves::pyd::{Bound, Default as D, Fail, Model, PV, Ty, validate_body, validate_value};
+use crate::routes::sleeves::pyd::{
+    Bound, Default as D, Fail, Model, PV, Ty, validate_body, validate_value,
+};
 
 use super::service::MAX_VALIDATION_DAYS;
 
@@ -38,7 +40,12 @@ pub(crate) const SETUP_NAMES: &[&str] = &[
 /// The setups a request without `setups` scans (the original three).
 const DEFAULT_SETUP_NAMES: &[&str] = &["BREAKOUT", "PULLBACK", "RELATIVE_STRENGTH"];
 const MAX_SETUPS: usize = SETUP_NAMES.len();
-const STRATEGY_NAMES: &[&str] = &["LONG_CALL", "LONG_PUT", "BULL_CALL_SPREAD", "BEAR_PUT_SPREAD"];
+const STRATEGY_NAMES: &[&str] = &[
+    "LONG_CALL",
+    "LONG_PUT",
+    "BULL_CALL_SPREAD",
+    "BEAR_PUT_SPREAD",
+];
 const DIRECTIONS: &[&str] = &["BULLISH", "BEARISH"];
 
 fn is_slug(s: &str) -> bool {
@@ -119,7 +126,9 @@ fn pv_strs(v: Option<&PV>) -> Option<Vec<String>> {
 fn pv_dec(v: Option<&PV>) -> Option<Decimal> {
     match v {
         Some(PV::Dec(d)) => d.to_decimal(),
-        Some(PV::Int(i)) => i.value.and_then(|x| Decimal::try_from_i128_with_scale(x, 0).ok()),
+        Some(PV::Int(i)) => i
+            .value
+            .and_then(|x| Decimal::try_from_i128_with_scale(x, 0).ok()),
         _ => None,
     }
 }
@@ -161,7 +170,10 @@ impl Default for SwingScanIn {
         Self {
             universe: DEFAULT_UNIVERSE.to_owned(),
             sectors: Vec::new(),
-            setups: DEFAULT_SETUP_NAMES.iter().map(|s| (*s).to_owned()).collect(),
+            setups: DEFAULT_SETUP_NAMES
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
             min_turnover_cr: f.min_turnover_cr,
             min_price: f.min_price,
             horizon_min: f.horizon_min,
@@ -280,7 +292,9 @@ pub(crate) struct ValidateIn {
 }
 
 fn validate_after(fields: &[(String, Option<PV>)]) -> Result<(), String> {
-    if let (Some(PV::Date(start)), Some(PV::Date(end))) = (field(fields, "start"), field(fields, "end")) {
+    if let (Some(PV::Date(start)), Some(PV::Date(end))) =
+        (field(fields, "start"), field(fields, "end"))
+    {
         if start > end {
             return Err("start must not be after end".to_owned());
         }
@@ -432,7 +446,8 @@ impl OptionsIn {
 
     /// `OptionsIn` from a request body.
     pub(crate) fn from_body(received: &Received) -> Result<Self, Problem> {
-        let pv = validate_body(received, &options_model()).map_err(|f| f.into_problem(Vec::new()))?;
+        let pv =
+            validate_body(received, &options_model()).map_err(|f| f.into_problem(Vec::new()))?;
         Self::from_pv(&pv)
     }
 
@@ -446,7 +461,11 @@ impl OptionsIn {
         OptionsRequest {
             underlying: self.symbol.to_uppercase(),
             direction: self.direction,
-            strategies: self.strategies.iter().filter_map(|s| strategy_of(s)).collect(),
+            strategies: self
+                .strategies
+                .iter()
+                .filter_map(|s| strategy_of(s))
+                .collect(),
             max_loss_inr: self.max_loss_inr,
             min_dte: self.min_dte,
             max_dte: self.max_dte,

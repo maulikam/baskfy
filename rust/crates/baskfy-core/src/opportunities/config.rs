@@ -80,7 +80,10 @@ impl SetupType {
     /// Whether the setup reads the instrument's bar history rather than one indicated row.
     #[must_use]
     pub const fn needs_history(self) -> bool {
-        !matches!(self, Self::Breakout | Self::Pullback | Self::RelativeStrength)
+        !matches!(
+            self,
+            Self::Breakout | Self::Pullback | Self::RelativeStrength
+        )
     }
 }
 

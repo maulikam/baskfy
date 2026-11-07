@@ -10,12 +10,15 @@ services:
     command: [baskfy-api, --host, 0.0.0.0, --port, "8000"]
   worker:
     <<: *rs
+    image: ${BASKFY_RS_PIPELINE_IMAGE:-${BASKFY_RS_IMAGE:-baskfy-rs:local}}
     command: [baskfy-worker, serve, --queues, "compute,backtest,default"]
   ingest-worker:
     <<: *rs
+    image: ${BASKFY_RS_PIPELINE_IMAGE:-${BASKFY_RS_IMAGE:-baskfy-rs:local}}
     command: [baskfy-worker, serve, --queues, ingest]
   beat:
     <<: *rs
+    image: ${BASKFY_RS_PIPELINE_IMAGE:-${BASKFY_RS_IMAGE:-baskfy-rs:local}}
     command: [baskfy-worker, beat, --serve]
   desk:
     <<: *rs

@@ -59,6 +59,24 @@ export function CheckboxGroup({
     <fieldset className="flex flex-col gap-1">
       <legend className="mb-1 text-xs font-medium text-muted-foreground">{legend}</legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {options.length > 2 ? (
+          <label className="inline-flex items-center gap-1.5 border-r border-border/70 pr-4 text-sm font-medium">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--accent)]"
+              data-testid="select-all"
+              checked={options.every((o) => selected.includes(o.value))}
+              ref={(el) => {
+                if (el) {
+                  el.indeterminate =
+                    selected.length > 0 && !options.every((o) => selected.includes(o.value));
+                }
+              }}
+              onChange={(event) => onChange(event.target.checked ? options.map((o) => o.value) : [])}
+            />
+            Select all
+          </label>
+        ) : null}
         {options.map((option) => {
           const checked = selected.includes(option.value);
           return (

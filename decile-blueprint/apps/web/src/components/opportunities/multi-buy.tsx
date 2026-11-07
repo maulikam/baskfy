@@ -11,7 +11,7 @@ import {
   analyzeDeskBuy,
   DeskBuyError,
   executeDeskBuy,
-  fetchDeskTicket,
+  fetchMtfLeverage,
   fetchOrderStatus,
   STATUS_LABEL,
   TERMINAL_STATUSES,
@@ -88,7 +88,16 @@ export function MultiBuyButton({ rows }: { rows: readonly SwingOpportunity[] }) 
   );
 }
 
-function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
+function MultiBuy({ rows: picked }: { rows: readonly SwingOpportunity[] }) {
+  // One line per stock: a stock that matched two setups keeps its higher-scoring one.
+  const rows = useMemo(() => {
+    const best = new Map<string, SwingOpportunity>();
+    for (const r of picked) {
+      const seen = best.get(r.symbol);
+      if (!seen || r.score.total > seen.score.total) best.set(r.symbol, r);
+    }
+    return [...best.values()];
+  }, [picked]);
   const symbols = useMemo(() => rows.map((r) => r.symbol), [rows]);
   const live = useLiveMarks(symbols);
   const [total, setTotal] = useState("");
@@ -103,25 +112,33 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
   const placing = useRef(false);
   const [leverage, setLeverage] = useState<Record<string, number | null>>({});
 
-  // MTF: each stock's Zerodha leverage, so "my capital" turns into a real order value before Review.
+  const [leverageError, setLeverageError] = useState<string | null>(null);
+
+  // MTF: every stock's Zerodha leverage in one desk call (stored each morning), so "my capital"
+  // turns into an order value before Review.
+  const symbolKey = [...new Set(symbols)].sort().join(",");
   useEffect(() => {
-    if (product !== "MTF") return;
+    if (product !== "MTF" || symbolKey === "") return;
     let live = true;
-    for (const symbol of symbols) {
-      if (symbol in leverage) continue;
-      fetchDeskTicket(symbol)
-        .then((t) => {
-          const lev = t.mtf.eligible && t.mtf.leverage ? Number(t.mtf.leverage) : null;
-          if (live) setLeverage((prev) => ({ ...prev, [symbol]: lev && lev > 0 ? lev : null }));
-        })
-        .catch(() => {
-          if (live) setLeverage((prev) => ({ ...prev, [symbol]: null }));
-        });
-    }
+    fetchMtfLeverage(symbolKey.split(","))
+      .then((res) => {
+        if (!live) return;
+        const next: Record<string, number | null> = {};
+        for (const sym of symbolKey.split(",")) {
+          const row = res.data[sym];
+          const lev = row?.eligible && row.leverage ? Number(row.leverage) : null;
+          next[sym] = lev && lev > 0 ? lev : null;
+        }
+        setLeverage(next);
+        setLeverageError(null);
+      })
+      .catch((e: unknown) => {
+        if (live) setLeverageError(e instanceof Error ? e.message : "Could not read MTF leverage.");
+      });
     return () => {
       live = false;
     };
-  }, [product, symbols, leverage]);
+  }, [product, symbolKey]);
 
   const priced = rows.map((r) => {
     const price = live.marks[r.symbol] ?? live.quotes[r.symbol]?.lastPrice ?? r.close ?? r.entry.price;
@@ -256,7 +273,7 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
   const totalOwn = sum((r) => r.own);
   const risk = sum((r) => r.loss);
   const reward = sum((r) => r.profit);
-  const levPending = product === "MTF" && symbols.some((sym) => !(sym in leverage));
+  const levPending = product === "MTF" && leverageError === null && symbols.some((sym) => !(sym in leverage));
 
   return (
     <>
@@ -449,7 +466,8 @@ function MultiBuy({ rows }: { rows: readonly SwingOpportunity[] }) {
           ? " With MTF, “my capital” buys capital × each stock’s Zerodha leverage, so quantity, loss and profit scale up with it; own funds are estimated as order value ÷ leverage until Review gives Zerodha’s exact margin. Profit is before MTF interest."
           : ""}
       </p>
-      {levPending ? <p className="text-xs text-muted-foreground">Reading each stock&rsquo;s MTF leverage from the desk…</p> : null}
+      {levPending ? <p className="text-xs text-muted-foreground">Reading MTF leverage from the desk…</p> : null}
+      {leverageError ? <p className="text-xs text-negative">MTF leverage: {leverageError}</p> : null}
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button

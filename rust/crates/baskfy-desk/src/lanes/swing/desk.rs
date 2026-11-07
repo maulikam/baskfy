@@ -1827,6 +1827,7 @@ pub fn routes() -> Router<AppState> {
         .route("/swing/data", get(swing_data))
         .route("/swing/analyze", post(opps_analyze::swing_analyze))
         .route("/swing/ticket", get(opps_ticket::swing_ticket))
+        .route("/swing/mtf-leverage", get(mtf_daily::swing_mtf_leverage))
         .route("/swing/order-status", get(opps_ticket::swing_order_status))
         .route("/swing/execute", post(swing_execute))
         .route("/swing/scan", post(swing_scan))
@@ -1837,6 +1838,7 @@ pub fn routes() -> Router<AppState> {
 
 mod opps_analyze;
 mod opps_ticket;
+pub mod mtf_daily;
 #[cfg(test)]
 mod scenario;
 #[cfg(test)]

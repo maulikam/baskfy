@@ -31,10 +31,17 @@ To trade from here again: a static IP from the ISP, registered in the Kite devel
 ## Run it
 
 ```bash
-bash tools/deploy/local.sh up       # postgres + redis, migrate (a no-op at the same tag), every service, flag check
+bash tools/deploy/local.sh up       # postgres + redis, migrate (a no-op at the same tag), every app service, flag check
+bash tools/deploy/local.sh pipeline [tag]   # redeploy worker/ingest-worker/beat only
 bash tools/deploy/local.sh status
 bash tools/deploy/local.sh down     # data stays in the baskfy-local_* Docker volumes
 ```
+
+**Pipeline deployed apart from the app** (Maulik, 7 Nov 2026): `worker`, `ingest-worker` and `beat`
+run `baskfy-rs:$(cat pipeline.tag)`, the app `rs.tag`. `up` starts them if absent and never
+restarts them, so an app deploy cannot kill a nightly run. Bump them only for pipeline code
+changes, with `pipeline <tag>`; it (and `down`, `live|dry`) refuses while the chain holds its lock
+(`BASKFY_LOCAL_FORCE=1` overrides).
 
 **One address** (Maulik, 29 Oct 2026): the app at `http://localhost:8480`, the desk at
 `http://localhost:8480/desk` — the same port, bound to 127.0.0.1 only. Caddy routes `/desk/*` to the

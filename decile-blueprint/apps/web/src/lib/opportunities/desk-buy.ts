@@ -182,6 +182,16 @@ export function fetchDeskTicket(symbol: string, exchange = "NSE"): Promise<DeskT
   return deskGet<DeskTicket>("/swing/ticket", { symbol, exchange });
 }
 
+export interface MtfLeverage {
+  kite_authed: boolean;
+  data: Record<string, { eligible: boolean; leverage: string | null; reason: string | null }>;
+}
+
+/** Stored daily MTF leverage for many symbols in one call (the desk quotes misses live). */
+export function fetchMtfLeverage(symbols: readonly string[]): Promise<MtfLeverage> {
+  return deskGet<MtfLeverage>("/swing/mtf-leverage", { symbols: symbols.join(",") });
+}
+
 export interface AnalyzeInput {
   symbol: string;
   instrument_id: number;

@@ -1,12 +1,10 @@
-//! `/indices/*`, `/market-health*` and `/listings` — docs/07 §"Market data surfaces".
+//! `/market-health*` and `/listings` — docs/07 §"Market data surfaces".
 //!
 //! Ports `baskfy_api.routers.market_data` and the service module `baskfy_api.market_data`. All
-//! four routes are public (no principal needed), read tables the nightly writes, and answer with
+//! three routes are public (no principal needed), read tables the nightly writes, and answer with
 //! the screener's canonical encoder (decimals unquoted at their stored precision) plus
 //! `snapshot_headers`:
 //!
-//! * `GET /indices/dashboard?date=` — the newest snapshot per index on or before the as-of date,
-//!   sorted by % change, with a 30-day sparkline each;
 //! * `GET /market-health?universe=&date=` — the four breadth gauges for one universe;
 //! * `GET /market-health/history?universe=&from=&to=` — the four series plus the index level;
 //! * `GET /listings?limit=&cursor=&series=&search=&from=&to=` — the register, newest first,
@@ -19,14 +17,13 @@ use axum::routing::get;
 use baskfy_core::screener::Payload;
 use baskfy_db::OrderedJson;
 use chrono::{Duration, NaiveDate};
-use rust_decimal::Decimal;
 use sqlx::Row;
 use sqlx::postgres::PgArguments;
 use sqlx::query::Query;
 
 use super::meta::reference::universes::{self, Universe};
 use super::meta::reference::{
-    self as r, Params, canonical_response, p_date, p_dec, p_map, p_opt_date, p_opt_dec, p_opt_int,
+    self as r, Params, canonical_response, p_date, p_map, p_opt_date, p_opt_dec, p_opt_int,
     p_opt_str, p_str,
 };
 use crate::problems::{Problem, ProblemType};
@@ -106,103 +103,6 @@ fn health_universe(slug: &str) -> Result<Universe, Problem> {
 
 fn membership(u: Universe) -> Payload {
     p_map(vec![("slug", p_str(u.slug)), ("name", p_str(u.name))])
-}
-
-// ---------------------------------------------------------------------------------------------
-// /indices/dashboard
-// ---------------------------------------------------------------------------------------------
-
-/// `GET /indices/dashboard?date=`.
-///
-/// # Errors
-/// 400 for a bad date, 422/503 from the as-of resolution, 500 for a database failure.
-pub async fn get_index_dashboard(
-    State(state): State<AppState>,
-    RawQuery(raw): RawQuery,
-) -> Result<Response, Problem> {
-    let mut p = Params::new(raw.as_deref());
-    let date = p.date("date");
-    p.finish()?;
-    let as_of = r::resolve_as_of(&state, date.ok().flatten()).await?;
-    let data_version = r::current_data_version(&state).await?;
-    let floor = as_of - Duration::days(MAX_SNAPSHOT_STALENESS_DAYS);
-    let rows = sqlx::query(
-        "SELECT d.id, d.slug, d.name, d.is_universe, s.date, s.level, s.change_abs, \
-         s.change_pct, s.pe, s.pb, s.div_yield \
-         FROM index_def d JOIN ( \
-           SELECT DISTINCT ON (index_id) index_id, date, level, change_abs, change_pct, pe, pb, \
-                  div_yield \
-           FROM index_snapshot_daily WHERE date <= $1 AND date >= $2 \
-           ORDER BY index_id, date DESC) s ON s.index_id = d.id \
-         ORDER BY s.change_pct DESC NULLS LAST, d.sort_order, d.name",
-    )
-    .bind(as_of)
-    .bind(floor)
-    .fetch_all(state.db.pool())
-    .await
-    .map_err(r::db)?;
-
-    // `_sparklines`: the last thirty levels per index, oldest first.
-    let window_floor = as_of - Duration::days(SPARKLINE_DAYS * 3);
-    let spark_rows = sqlx::query(
-        "SELECT index_id, level FROM ( \
-           SELECT index_id, date, level, row_number() OVER ( \
-             PARTITION BY index_id ORDER BY date DESC) AS recency \
-           FROM index_snapshot_daily \
-           WHERE date <= $1 AND date >= $2 AND level IS NOT NULL) ranked \
-         WHERE recency <= $3 ORDER BY index_id, date",
-    )
-    .bind(as_of)
-    .bind(window_floor)
-    .bind(SPARKLINE_DAYS)
-    .fetch_all(state.db.pool())
-    .await
-    .map_err(r::db)?;
-    let mut series: Vec<(i16, Vec<Decimal>)> = Vec::new();
-    for row in &spark_rows {
-        let id: i16 = row.try_get("index_id").map_err(r::db)?;
-        let level = baskfy_db::row::decimal(row, "level").map_err(|e| r::dbe(&e))?;
-        match series.last_mut() {
-            Some((last, values)) if *last == id => values.push(level),
-            _ => series.push((id, vec![level])),
-        }
-    }
-
-    let mut latest: Option<NaiveDate> = None;
-    let mut data = Vec::with_capacity(rows.len());
-    for row in &rows {
-        let id: i16 = row.try_get("id").map_err(r::db)?;
-        let date = baskfy_db::row::date(row, "date").map_err(|e| r::dbe(&e))?;
-        latest = Some(latest.map_or(date, |l| l.max(date)));
-        let dec = |c: &str| baskfy_db::row::opt_decimal(row, c).map_err(|e| r::dbe(&e));
-        let slug: String = row.try_get("slug").map_err(r::db)?;
-        let name: String = row.try_get("name").map_err(r::db)?;
-        let is_universe: bool = row.try_get("is_universe").map_err(r::db)?;
-        let spark = series
-            .iter()
-            .find(|(i, _)| *i == id)
-            .map(|(_, v)| v.iter().copied().map(p_dec).collect())
-            .unwrap_or_default();
-        data.push(p_map(vec![
-            ("slug", Payload::Str(slug)),
-            ("name", Payload::Str(name)),
-            ("is_universe", Payload::Bool(is_universe)),
-            ("level", p_opt_dec(dec("level")?)),
-            ("change_abs", p_opt_dec(dec("change_abs")?)),
-            ("change_pct", p_opt_dec(dec("change_pct")?)),
-            ("pe", p_opt_dec(dec("pe")?)),
-            ("pb", p_opt_dec(dec("pb")?)),
-            ("div_yield", p_opt_dec(dec("div_yield")?)),
-            ("sparkline", Payload::List(spark)),
-        ]));
-    }
-    let board_as_of = latest.unwrap_or(as_of);
-    let payload = p_map(vec![
-        ("as_of", p_date(board_as_of)),
-        ("data_version", Payload::Int(data_version)),
-        ("data", Payload::List(data)),
-    ]);
-    canonical_response(&payload, Some(board_as_of), Some(data_version))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -652,7 +552,6 @@ pub async fn get_listings(
 /// The routes of `baskfy_api.routers.market_data`, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/indices/dashboard", get(get_index_dashboard))
         .route("/market-health", get(get_market_health))
         .route("/market-health/history", get(get_market_health_history))
         .route("/listings", get(get_listings))

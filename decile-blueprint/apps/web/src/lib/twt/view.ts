@@ -1,3 +1,4 @@
+import type { RegimeSignal } from "@/lib/regime-signal/types";
 import { REASONS, watchOnlyReason } from "@/lib/twt/copy";
 import type {
   TwtBacktest,
@@ -54,6 +55,7 @@ export interface TightNameView {
   readonly symbol: string;
   readonly name: string;
   readonly close: Figure;
+  readonly price: number | null;
   readonly weekCloses: readonly Figure[];
   readonly weekRange: Figure;
   readonly aboveMonthLow: Figure;
@@ -64,6 +66,8 @@ export interface TightNameView {
   /** Why it is watch-only, in a reader's words. Empty for the other two states. */
   readonly watchReason: string;
   readonly lockedUpperCircuit: boolean;
+  readonly regimeSignal: RegimeSignal | null;
+  readonly series: string | null;
 }
 
 export function tightNameView(row: TwtTightName): TightNameView {
@@ -79,6 +83,10 @@ export function tightNameView(row: TwtTightName): TightNameView {
       })(),
       REASONS.notComputed,
     ),
+    price: (() => {
+      const n = Number(row.last_price ?? row.close_raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })(),
     weekCloses: [row.week_close_0, row.week_close_1, row.week_close_2].map((value) =>
       figure(value === null ? null : rupees(value), REASONS.notComputed),
     ),
@@ -106,6 +114,8 @@ export function tightNameView(row: TwtTightName): TightNameView {
           : "NONE",
     watchReason: row.signal_state === "SCAN_ONLY" ? watchOnlyReason(row.failed_filters) : "",
     lockedUpperCircuit: row.locked_upper_circuit,
+    regimeSignal: row.regime_signal ?? null,
+    series: row.series ?? null,
   };
 }
 

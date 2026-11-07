@@ -16,7 +16,9 @@ import {
   rupees,
   toneOf,
 } from "@/components/desk/ui";
+import { BrokerReconcile } from "@/components/reconcile/broker-reconcile";
 import { DeskUnavailable, fetchReconcile } from "@/lib/desk/fetch";
+import { isStaffServer } from "@/lib/desk-ops/staff";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -25,6 +27,8 @@ import { PAGES } from "@/lib/vocabulary";
  * One question, answered at the top, with the per-order detail underneath. The desk's console
  * answers the same question against live broker state; this answers it against the record,
  * which is what the database can honestly say (see `routers/desk.py`).
+ *
+ * Staff also get the desk's live comparison (`BrokerReconcile`, `GET /desk/reconcile/data`).
  *
  * **Read-only.** Nothing here re-sends an order.
  */
@@ -47,13 +51,17 @@ const STATUS: Record<string, string> = {
 };
 
 export default async function ReconcilePage() {
+  const staff = await isStaffServer();
   let data;
   try {
     data = await fetchReconcile();
   } catch (error) {
     if (!(error instanceof DeskUnavailable)) throw error;
     return (
-      <Empty title={PAGES["/reconcile"].title} body="The desk has not recorded a rebalance plan yet." />
+      <div className="flex flex-col gap-5">
+        <Empty title={PAGES["/reconcile"].title} body="The desk has not recorded a rebalance plan yet." />
+        {staff ? <BrokerReconcile /> : null}
+      </div>
     );
   }
 
@@ -133,8 +141,16 @@ export default async function ReconcilePage() {
         your favour on a buy. It is only shown where both prices are known.
       </p>
 
+      {staff ? <BrokerReconcile /> : null}
+
       <DeskNav current="/reconcile" />
-      <ReadOnlyFooter live="This compares the plan against the desk's own record of what filled. Comparing it against what the broker holds right now is done in the desk console, which is the only surface that talks to the broker." />
+      <ReadOnlyFooter
+        live={
+          staff
+            ? "The record above compares the plan against the desk's own fills; the broker section is the desk's live comparison, read through the desk."
+            : "This compares the plan against the desk's own record of what filled. Comparing it against what the broker holds right now is done in the desk console, which is the only surface that talks to the broker."
+        }
+      />
     </div>
   );
 }

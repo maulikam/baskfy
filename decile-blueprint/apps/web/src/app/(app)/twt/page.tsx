@@ -8,6 +8,8 @@ import { GateCard } from "@/components/twt/gate-card";
 import { HalfSizeCounter } from "@/components/twt/half-size-counter";
 import { OpenPositions } from "@/components/twt/open-positions";
 import { TightNames } from "@/components/twt/tight-names";
+import { TwtDeskConsole } from "@/components/twt/desk/desk-console";
+import { fetchMe } from "@/lib/auth/me";
 import { formatTradeDate } from "@/lib/format";
 import { breadthLine, gateMeaning } from "@/lib/twt/copy";
 import { fetchLastScan, fetchToday } from "@/lib/twt/fetch";
@@ -25,13 +27,10 @@ import { ScanNow } from "./_components/scan-now";
  * The gate is first because a list of candidates under a shut gate is a list of trades not to
  * take, and a reader who meets the list first is a reader who has already started choosing.
  *
- * **Nothing on this page can place an order.** There is exactly one server action under this
- * tree — "Scan now", which queues the detector, moves no money, sets no sleeve capital and flips
- * no execution switch. `docs/twt/02` Track C §4 still gives the web app no route under `/twt`
- * that can reach the gateway, and `05` §2 still puts the click in the desk console — a plan line
- * becomes an order there, and nowhere else. `__tests__/read-only.test.tsx` is the
- * census that keeps the set at exactly one (DECISIONS-TW TW11, which supersedes TW8.7's "no
- * action at all") and still asserts that no route handler exists under this tree.
+ * **Orders stay on the desk.** The staff-only Desk section (desk port, 6 Nov 2026) renders the
+ * desk console's plan and calls the desk same-origin (`/desk/twt/*`): one line per Confirm, the
+ * desk's own plan_id, confirm=true. This app gains no order route. "Scan now" stays the one
+ * server action; `__tests__/read-only.test.tsx` is the census.
  *
  * **It was built ahead of its data (TW8), and the data arrived before the reader did.** For the
  * whole of TW8-TW12 `fetchToday` answered `null` because `GET /twt/today` did not exist, and
@@ -56,7 +55,8 @@ export const metadata: Metadata = {
 };
 
 export default async function TwtPage() {
-  const today = await fetchToday();
+  const [today, me] = await Promise.all([fetchToday(), fetchMe()]);
+  const isStaff = me?.is_staff ?? false;
   const lastScan = await fetchLastScan(today);
   const view = todayView(today);
   const gate = today?.gate ?? null;
@@ -83,7 +83,8 @@ export default async function TwtPage() {
           "Read from published end-of-day prices — a daily price is a closed day, so this is the " +
           "last completed session and not today. Open positions are marked at that session's " +
           "close, not at a live price. " +
-          "Nothing here is advice, and nothing on this page can place an order."
+          "Nothing here is advice. Buy opens an order ticket; an order is sent only when you press " +
+          "Place Buy Order, through the desk's gateway."
         }
       >
         {gate && gate.gate !== null ? (
@@ -99,9 +100,11 @@ export default async function TwtPage() {
         )}
       </Answer>
 
+      {isStaff ? <TwtDeskConsole /> : null}
+
       <GateCard gate={gate} />
 
-      <TightNames rows={view.tight} session={view.gate.session} />
+      <TightNames rows={view.tight} session={view.gate.session} gateOpen={gate?.gate === "OPEN"} />
 
       <OpenPositions rows={view.positions} />
 

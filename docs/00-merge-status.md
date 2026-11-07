@@ -6,6 +6,10 @@ that culture continues here.
 
 **Run started:** 22 Aug 2026 · **State:** **M0 → M34**, and continuing on request.
 
+**AWS closed (6 Nov 2026, Maulik).** All 3 AWS accounts closed (reopenable via Support to ~4 Feb 2027); Lightsail desk 65.0.226.77 deleted after a verified backup to `/Volumes/T7-Work/aws-final-backup-2026-11-06/`. 16 AWS-only scripts (`box*.sh`, `ship.sh`, `push-images.sh`, `tf.sh`, `deploy-swing.sh`, `exit-aws.sh`, …) now exit 1 with a RETIRED notice; files kept for history. Local only: `tools/deploy/local.sh`.
+
+**Screen MTF allocation (4 Nov 2026).** Equal gross position value. The silent 5% cash holdback is gone. Preview and confirm share one plan. Unverified leverage is not guessed. A rejected buy does not hide the ones that landed.
+
 **Ranking Phase 2 (14 Sep 2026).** All 51 leaf gates across `gates/ranking-2.[A-H]-*.md` are met.
 Root: G1–G4 met (leaf sweep ALL MET; Python suite 8990 passed + desk suite 2066 passed + lint
 green; every brief item mapped in `docs/ranking/PLAN.md`'s brief-coverage table). G5/G6 are

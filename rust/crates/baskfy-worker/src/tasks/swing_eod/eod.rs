@@ -1238,11 +1238,13 @@ pub(super) async fn run_swing_eod(
 
     let (items, mut instrument_ids) = watch_items(conn, user_id, trade_date).await?;
     report.watching = count(items.len());
+    let (items, regime_red) = crate::regime_signal::split_watch(conn, trade_date, items).await?;
     let account = sleeve_account(conn, user_id, capital).await?;
-    let entries = build_entries(
+    let mut entries = build_entries(
         trade_date, &items, &account, gate, &tier, &config, 0, multiplier,
     )
     .map_err(core_err)?;
+    entries.skipped.extend(regime_red);
     report.entry_lines = count(
         entries
             .lines

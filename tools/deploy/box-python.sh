@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # Run a local Python file inside a service container on the box, over SSM.
 #
 #     AWS_PROFILE=baskfy-poc bash tools/deploy/box-python.sh worker ops/some-script.py

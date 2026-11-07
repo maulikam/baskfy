@@ -356,7 +356,15 @@ impl Settings {
                 values.insert(attr, value);
             }
         }
-        Self::from_values(&values)
+        let mut out = Self::from_values(&values)?;
+        out.regime = baskfy_core::regime::RegimeConfig::from_lookup(lookup).map_err(|e| {
+            SettingsError {
+                key: "BASKFY_REGIME_*".to_owned(),
+                raw: e.clone(),
+                python_error: "ValueError".to_owned(),
+            }
+        })?;
+        Ok(out)
     }
 
     /// The process environment, as the Python desk sees it after `load_dotenv()`.
@@ -798,6 +806,9 @@ pub struct Settings {
     pub service_name: String,
     /// `app.telemetry.SENTRY_DSN` (env `SENTRY_DSN`).
     pub sentry_dsn: String,
+    /// `BASKFY_REGIME_MODE` / `_MIN_LEADING` / `_INDEX_GROUPS` (Rust-only, beside
+    /// `SWING_INDEX_SLUG`; not in [`ENV_VARS`], which is Python's answer key).
+    pub regime: baskfy_core::regime::RegimeConfig,
 }
 
 impl Settings {
@@ -925,6 +936,7 @@ impl Settings {
             otlp_endpoint: take_str(values, "OTLP_ENDPOINT")?,
             service_name: take_str(values, "SERVICE_NAME")?,
             sentry_dsn: take_str(values, "SENTRY_DSN")?,
+            regime: baskfy_core::regime::RegimeConfig::default(),
         })
     }
 

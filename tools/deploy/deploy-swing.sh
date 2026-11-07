@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # SW13 — deploy the merged desk (weekly book + swing book) beside api/web/worker/beat on the
 # Phase A box, per DECISIONS-SW MD20. Run from the laptop after `aws sso login`, after
 # `push-images.sh` has pushed this commit's three images and `tf.sh apply` has added the

@@ -398,6 +398,7 @@ pub async fn get_today(
             crate::routes::sleeves::common::set_field(row, "unrealised_fraction", fraction);
         }
     }
+    super::regime_signal::attach(state.db.pool(), as_of, &mut tight_rows).await?;
     let body = Obj::new()
         .put("as_of", J::opt_date(as_of))
         .put("gate", gate)

@@ -8644,3 +8644,26 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 **Choice.** The screen API sends each buy itself: `MARKET` plus `market_protection=-1` (Kite's auto band, same as VBT/TWT). The order uses Kite's tradingsymbol, so a BE listing is `SWANDEF-BE` rather than the NSE symbol `SWANDEF`. Each name is sized for the same position value; MTF only reduces the cash that position needs. The `MY_SCREEN` portfolio, sleeve, and holdings are inserted only after every buy returns an order id. A failed buy stops the rest (`NOT_SENT`) and writes nothing. The protective GTT sell stays a limit leg because Zerodha GTT requires one. Rebalance still does not send an order. Cash invest (MTF off) still creates the paper book immediately.
 **Rejected.** LIMIT buys. Creating the book before the broker confirms. Sending the rest of the list after one name fails. Ordering the NSE symbol when Kite lists the series suffix.
 **Reverse.** Create the portfolio before `send_screen_mtf` again, and drop `market_protection` from the form.
+
+## SCREEN-INVEST-GROSS — equal position value when MTF is ticked · ⚠ UNREVIEWED
+
+**Context.** Screen invest held back 5% of the cash budget without showing it, sized again at confirm, and wrote no portfolio unless every buy returned an order id. On ₹3,50,000, three ₹500 names at 1×, 2× and 4×, that cannot produce the equal 400-share book.
+**Choice.** `allocate_equal_gross` is the only sizing. Cash for positions is budget minus an explicit reserve minus explicit costs, both defaulting to zero. One position value `G = C / Σ(1/L)`. Quantity is `floor(G / price)` in lots. Leverage changes the investor's cash, not the share count. Preview stores the plan (`gross-v1`). Confirm sends those quantities, or returns the plan again when price, leverage, product or broker margin would change the share count. Cash rows are CNC. MTF rows are MTF. Missing leverage is not treated as 4× and the other names are not enlarged to fill the gap. If one lot of every selected name does not fit, nothing is bought and the shortfall names the name. A rejected order stays in the result; accepted buys are still recorded. The same plan does not send twice within two minutes. `DRY_RUN` simulates and does not post.
+**Rejected.** Equal cash per name, then multiply by leverage. The silent 5% buffer. Stopping the rest of the list and dropping the portfolio when one name fails.
+**Reverse.** Put the 5% buffer back in `size_book` and require every buy to confirm before any portfolio row is written.
+
+## OPPS-TICKET — one Buy ticket on Overlap, Opportunities, Swing, Volume, Tight (5 Nov 2026) ⚠ UNREVIEWED
+
+* Shared `components/orders/buy-ticket.tsx` → desk `GET /swing/ticket` (account, funds, quote+timestamp, MTF eligibility from a Zerodha MTF margin quote), `POST /swing/analyze` (qty or amount; amount = order value or own capital; MARKET/LIMIT; order value, own funds = Zerodha margin, broker funding, charges, est. MTF interest), `POST /swing/execute`, `GET /swing/order-status` (broker order id/status/fills), `/swing/reconcile` on fills.
+* Execute revalidates OPPS lines (quote drift >1%, stale quote, margin, funds) → 409, ticket re-reviews; line untouched. MTF never falls back to CNC.
+* Line `setup` stored as FLAG/EP (sw_position CHECK); original setup/source in the note. Missing stop → band midpoint, GTT still band-clamped.
+* MTF interest rate: `BASKFY_MTF_INTEREST_PCT_DAY`, default 0.04 (Zerodha published), labelled estimate.
+* Reverse: drop the two GET routes, the ticket and the Buy cells; restore page copy.
+
+## DESK-UI — the desk's pages move into the web app; the desk stays the backend (6 Nov 2026) ✅ decided by Maulik
+
+* **Choice.** Option A: every desk console page now has a web route — `/rebalance`, `/stops`, `/lifecycle`, `/ops`, `/desk-settings`, `/indices`, `/regime` (+`/backtest`), `/performance`, `/tradebook`, `/reconcile`, `/options/desk`, `/options/nifty`, and desk sections on `/swing`, `/twt`, `/vbt`. Rejected: one backend (Rust desk not cut over; would put order code in the public API process).
+* **Boundary.** Actions are same-origin `POST /desk/...` from the browser (`lib/desk-actions/client.ts`), staff-only (server `is_staff` + `useIsStaff`), two-click confirm, `confirm=true` + desk `plan_id`, never retried. No order route in Next.js or baskfy-api. No auto-execute flag added or changed.
+* **Rust.** JSON answers only under `Accept: application/json` on `/`, `/stops`, `/stops/arm`, `/settings*`, `/ops*`, `/regime/backtest`, `/tradebook*`, `/lifecycle/adopt`; HTML/redirect paths unchanged. Needs a desk image rebuild.
+* **Desk pages retired (same day).** `BASKFY_DESK_WEB_UI=true` (set by `local.sh` for the desk; code default off, so the templates and their tests stay) 303s every browser page GET to its web route (`web_ui.rs`); JSON reads and POSTs untouched. `/build/desk` redirects to `/rebalance`. `/performance` reads live holdings from new `GET /desk/performance/holdings`, falling back to the EOD snapshot.
+* **Reverse.** Delete the new routes and repoint `DESK_MENU` to `/desk/*`.

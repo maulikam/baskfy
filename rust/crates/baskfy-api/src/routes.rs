@@ -37,18 +37,20 @@ pub mod curated_versions;
 pub mod desk;
 pub mod explore;
 pub mod fno;
+pub mod indices;
 pub mod instruments;
 pub mod kite;
 pub mod managers;
 pub mod market_data;
 pub mod meta;
-pub mod ops;
 pub mod opportunities;
+pub mod ops;
 pub mod options;
 pub mod overlap;
 pub mod portfolio_overview;
 pub mod portfolios;
 pub mod public;
+pub(crate) mod regime_signal;
 pub mod screens;
 pub mod search;
 pub mod sleeve_state;
@@ -109,4 +111,5 @@ pub fn api_router() -> Router<AppState> {
         .merge(options::router())
         .merge(opportunities::router())
         .merge(fno::router())
+        .merge(indices::router())
 }

@@ -260,7 +260,7 @@ pub fn build_app(state: AppState) -> Router {
             .route("/__harness/kite-calls", get(harness_kite_calls));
     }
     let probe = crate::lanes::session::routing::probe(router.clone(), state.clone());
-    router
+    let router = router
         .fallback(move |req: axum::extract::Request| {
             crate::lanes::session::routing::fallback(probe.clone(), req)
         })
@@ -272,6 +272,11 @@ pub fn build_app(state: AppState) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             prefix,
             crate::path_prefix::layer,
-        ))
-        .with_state(state)
+        ));
+    let router = if crate::web_ui::enabled() {
+        router.layer(axum::middleware::from_fn(crate::web_ui::layer))
+    } else {
+        router
+    };
+    router.with_state(state)
 }

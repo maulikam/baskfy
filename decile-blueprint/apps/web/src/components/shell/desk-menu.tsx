@@ -31,7 +31,13 @@ export function DeskMenu({
   className?: string;
 }) {
   const pathname = usePathname();
-  const active = isDeskSection(pathname);
+  const active =
+    isDeskSection(pathname) ||
+    DESK_MENU.flat().some((item) =>
+      [item.href, ...(item.children ?? []).map((c) => c.href)].some(
+        (href) => href !== "/" && (pathname === href || pathname.startsWith(`${href}/`)),
+      ),
+    );
 
   return (
     <div className={cn(variant === "tab" && "flex w-full", className)}>

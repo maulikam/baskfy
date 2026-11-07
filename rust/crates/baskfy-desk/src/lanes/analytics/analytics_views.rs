@@ -33,7 +33,7 @@ pub mod protection;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{HeaderValue, Response, StatusCode, Uri, header};
+use axum::http::{HeaderMap, HeaderValue, Response, StatusCode, Uri, header};
 use axum::routing::{MethodRouter, get};
 
 use crate::app::AppState;
@@ -50,6 +50,7 @@ pub fn routes() -> Router<AppState> {
         .route("/regime/backtest", get_only(get(regime_backtest)))
         .route("/performance", get_only(get(performance_page)))
         .route("/performance/data", get_only(get(performance_data)))
+        .route("/performance/holdings", get_only(get(performance_holdings)))
 }
 
 async fn performance_view(state: &AppState) -> Result<crate::wire::PyDict, String> {
@@ -97,6 +98,25 @@ async fn performance_data(State(state): State<AppState>) -> Response<Body> {
     }
 }
 
+/// `GET /performance/holdings`: the live holdings block as JSON, for the web app's /performance.
+async fn performance_holdings(State(state): State<AppState>) -> Response<Body> {
+    let holdings = match performance_view::holdings_block(&state).await {
+        Ok(h) => h,
+        Err(e) => return internal_error(&e),
+    };
+    match orjson_dumps(&PyValue::Map(holdings)) {
+        Ok(text) => {
+            let mut r = Response::new(Body::from(text));
+            r.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+            r
+        }
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
 /// FastAPI's `@app.get`: the route's methods are `{"GET"}` alone, so `HEAD` (which axum's
 /// `get` would answer and list in `Allow`) and every other verb get Starlette's 405 with
 /// `Allow: GET` — the pattern the regime lane uses.
@@ -112,7 +132,11 @@ async fn get_405() -> Response<Body> {
 }
 
 /// `GET /regime/backtest`: the detailed backtest results, kept off the live status page.
-async fn regime_backtest(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+async fn regime_backtest(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    uri: Uri,
+) -> Response<Body> {
     let file = state.paths.resolve(REGIME_BACKTEST_PATH);
     let data = if file.exists() {
         let bytes = match std::fs::read(&file) {
@@ -127,14 +151,13 @@ async fn regime_backtest(State(state): State<AppState>, uri: Uri) -> Response<Bo
         None
     };
     let charts = backtest_view::build(data.as_ref());
-    render(
-        &state,
-        uri.path(),
-        "regime_backtest.html",
-        dict([
-            ("b", data.unwrap_or(PyValue::None)),
-            ("path", PyValue::Str(REGIME_BACKTEST_PATH.to_owned())),
-            ("charts", charts),
-        ]),
-    )
+    let ctx = dict([
+        ("b", data.unwrap_or(PyValue::None)),
+        ("path", PyValue::Str(REGIME_BACKTEST_PATH.to_owned())),
+        ("charts", charts),
+    ]);
+    if super::desk_json::wants_json(&headers) {
+        return super::desk_json::context(ctx);
+    }
+    render(&state, uri.path(), "regime_backtest.html", ctx)
 }

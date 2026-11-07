@@ -41,7 +41,9 @@ const SOURCES = [
 
 describe("the desk surfaces are read-only", () => {
   it("covers all five pages", () => {
-    expect(PAGES.filter((path) => path.endsWith("page.tsx"))).toHaveLength(PAGE_DIRS.length);
+    // Sub-pages (e.g. regime/backtest) are scanned too; the five top-level pages must all exist.
+    const top = PAGE_DIRS.map((dir) => join(APP, dir, "page.tsx"));
+    expect(PAGES.filter((path) => top.includes(path))).toHaveLength(PAGE_DIRS.length);
   });
 
   it("never issues a non-GET request", () => {
@@ -87,6 +89,23 @@ describe("the desk surfaces are read-only", () => {
     expect(paths.length).toBeGreaterThan(0);
     for (const path of paths) {
       expect(path, `${path} is not a desk read`).toMatch(/^\/desk\//);
+    }
+  });
+
+  it("lets only staff act, only on the tax-lot record, only after a confirm (desk port, 6 Nov 2026)", () => {
+    // Tradebook gained the desk's import + corporate-action tools; reconcile gained the live broker read.
+    const components = join(__dirname, "..", "..", "..", "components");
+    const lots = readFileSync(join(components, "tradebook", "tax-lots.tsx"), "utf8");
+    expect(lots).toContain("useIsStaff()");
+    expect(lots).toContain("ConfirmAction");
+    const posts = [...lots.matchAll(/postDesk(?:File)?\("([^"]+)"/g)].map((m) => m[1]);
+    expect(posts.length).toBeGreaterThan(0);
+    for (const path of posts) expect(path).toMatch(/^\/tradebook(\/corporate-action(\/delete)?)?$/);
+    const broker = readFileSync(join(components, "reconcile", "broker-reconcile.tsx"), "utf8");
+    expect(broker).toContain("useIsStaff()");
+    expect(broker).not.toMatch(/postDesk|deskForm|method:/);
+    for (const page of ["tradebook", "reconcile"]) {
+      expect(readFileSync(join(APP, page, "page.tsx"), "utf8")).toContain("isStaffServer()");
     }
   });
 

@@ -25,6 +25,7 @@ mod f3_scan;
 #[cfg(test)]
 mod fixtures;
 pub(crate) mod index_daily;
+mod indices_nightly;
 pub(crate) mod ingest;
 mod ledger;
 pub(crate) mod nightly;
@@ -108,17 +109,33 @@ pub async fn fno_ingest_bhavcopy_task(ctx: &TaskContext, args: BoundArgs) -> Tas
 pub async fn fno_index_daily_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let now = options_now(ctx, &args)?;
     let today = now.date_naive();
+    // The index service rides this evening slot (bars are in by 18:15); read-only, never fatal.
+    let session = kite_session_usable(ctx);
+    let index_kite = if session {
+        kite_family(ctx, KiteFamily::Historical).await.ok()
+    } else {
+        None
+    };
+    let indices = indices_nightly::run(&ctx.db, index_kite.as_ref()).await;
+    baskfy_api::logging::info(
+        "baskfy_worker.indices",
+        "index service nightly",
+        &[("report", &indices.to_string())],
+    );
     if !ctx.worker.fno_scan_enabled {
         return Ok(object([("date", s(iso(today))), ("skipped", s(SCAN_OFF))]));
     }
-    if !kite_session_usable(ctx) {
+    if !session {
         return Ok(object([
             ("date", s(iso(today))),
             ("skipped", s("no usable Kite session")),
         ]));
     }
     let mut tx = ctx.db.begin().await?;
-    let kite = kite_family(ctx, KiteFamily::Historical).await?;
+    let kite = match index_kite {
+        Some(k) => k,
+        None => kite_family(ctx, KiteFamily::Historical).await?,
+    };
     let report = match falsy_date(&args, "start")? {
         Some(start) => index_daily::backfill(&mut tx, &kite, start, today).await?,
         None => index_daily::extend(&mut tx, &kite, today).await?,

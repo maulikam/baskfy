@@ -1,3 +1,5 @@
+import type { RegimeSignal } from "@/lib/regime-signal/types";
+
 export type DataStatus = "FRESH" | "STALE" | "UNAVAILABLE";
 export type SwingSetupType =
   | "BREAKOUT"
@@ -113,6 +115,9 @@ export interface SwingOpportunity {
   data_as_of: string;
   scanned_at: string;
   limitations: string[];
+  /** Per-stock market regime; absent until the backend serves it. */
+  regime_signal?: RegimeSignal | null;
+  series?: string | null;
 }
 
 export interface SwingCounts {

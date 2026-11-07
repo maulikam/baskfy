@@ -142,6 +142,7 @@ pub async fn twt_detect_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let mut tx = ctx.db.begin().await?;
     let out = detect::detect_session(&mut tx, day, user_id, false).await?;
     tx.commit().await?;
+    super::swing_live::regime_jobs::after_scan(ctx, Some(day)).await;
     Ok(out)
 }
 
@@ -255,6 +256,7 @@ pub async fn twt_scan_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let mut tx = ctx.db.begin().await?;
     let out = scan::run_twt_scan(ctx, &mut tx, run_id, deps.twt_execution_enabled).await?;
     tx.commit().await?;
+    super::swing_live::regime_jobs::after_scan(ctx, Some(ctx.today_ist())).await;
     Ok(out)
 }
 

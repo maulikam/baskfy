@@ -32,6 +32,11 @@ import { describe, expect, it } from "vitest";
  * desk's confirm route too. It also cannot set this sleeve's capital or flip its execution
  * switch, which are Maulik's alone (`02` §3) and live nowhere this application can reach.
  * DECISIONS-TW TW11.
+ *
+ * DESK PORT (6 Nov 2026, Maulik's Option A): the desk console's TWT sections now render here for
+ * staff. Orders still never touch this app's server: the browser posts same-origin to the desk
+ * (`/desk/twt/*`) through `lib/twt/desk-ops.ts`, one line per explicit confirm, with the desk's
+ * own plan_id and confirm=true. The block at the end asserts that spec.
  */
 
 const APP_TREE = join(__dirname, "..");
@@ -54,10 +59,6 @@ const ALLOWED_ACTIONS = ["scanNow"];
 
 /** The routes and the verbs that reach an order, in either codebase's spelling. */
 const FORBIDDEN_WORDS = [
-  "/desk/",
-  "/twt/execute",
-  "/execute",
-  "/reconcile",
   "place_order",
   "placeorder",
   "place_gtt",
@@ -69,7 +70,6 @@ const FORBIDDEN_WORDS = [
   "kite_client",
   "ordergateway",
   "baskfy_execution",
-  "confirm=true",
   "confirm all",
   "confirm-all",
   "auto_execute",
@@ -111,7 +111,7 @@ function exportsOf(source: string): string[] {
   );
 }
 
-describe("the three-weeks-tight hub can queue a scan and can do nothing else", () => {
+describe("the three-weeks-tight hub: one server action, desk orders only via /desk", () => {
   it("read-only: the scan actually finds the pages, the reads and the components", () => {
     // A scan over nothing passes silently and proves nothing.
     expect(SOURCES.length).toBeGreaterThanOrEqual(10);
@@ -294,9 +294,58 @@ describe("the three-weeks-tight hub can queue a scan and can do nothing else", (
     }
   });
 
-  it("read-only: the page still says that nothing on it can place an order", () => {
+  it("read-only: the page says an order is sent only on Place Buy Order", () => {
     const page = readFileSync(join(APP_TREE, "page.tsx"), "utf8");
-    expect(page).toContain("can place an order");
+    expect(page).toContain("Place Buy Order");
     expect(page).toContain("desk console");
+  });
+
+  it("desk: the only desk caller is desk-ops, via the shared same-origin client, no bearer", () => {
+    const ops = join(LIB_TREE, "desk-ops.ts");
+    const source = readFileSync(ops, "utf8");
+    expect(source).toContain('from "@/lib/desk-actions/client"');
+    expect(source).not.toMatch(/\bfetch\s*\(/);
+    expect(source).not.toMatch(/accessToken|Authorization|server-only/);
+    for (const path of SOURCES.filter((file) => file !== ops)) {
+      const lowered = readFileSync(path, "utf8").toLowerCase();
+      for (const word of ["/twt/execute", "/twt/rearm", "/twt/sweep", "/twt/halt", "/twt/reconcile", "deskform"]) {
+        expect(lowered, `${path} names ${word}`).not.toContain(word);
+      }
+    }
+  });
+
+  it("desk: every desk POST is one of the TWT lane's routes, each with confirm", () => {
+    const source = readFileSync(join(LIB_TREE, "desk-ops.ts"), "utf8");
+    const posts = [...source.matchAll(/deskForm(?:<[^>]+>)?\("([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(posts).toEqual([
+      "/twt/execute",
+      "/twt/halt",
+      "/twt/rearm",
+      "/twt/reconcile",
+      "/twt/scan",
+      "/twt/sweep",
+    ]);
+    expect(source).toMatch(/"\/twt\/execute", \{ plan_id: planId, line_id: String\(lineId\), confirm: "true" \}/);
+    expect([...source.matchAll(/confirm: "true"/g)]).toHaveLength(5);
+  });
+
+  it("desk: staff only, server-side and client-side", () => {
+    const page = readFileSync(join(APP_TREE, "page.tsx"), "utf8");
+    expect(page).toContain("fetchMe()");
+    expect(page).toMatch(/isStaff \? <TwtDeskConsole \/> : null/);
+    const console_ = readFileSync(join(COMPONENT_TREE, "desk", "desk-console.tsx"), "utf8");
+    expect(console_).toContain("useIsStaff()");
+    expect(console_).toContain("if (!isStaff) return null;");
+  });
+
+  it("desk: a line is sent only from the confirm dialog, never on load", () => {
+    const console_ = readFileSync(join(COMPONENT_TREE, "desk", "desk-console.tsx"), "utf8");
+    const calls = [...console_.matchAll(/confirmTwtLine\(/g)];
+    expect(calls).toHaveLength(1);
+    expect(console_).toMatch(/run=\{async \(\) => outcomeLine\(await confirmTwtLine\(line\.plan_id, line\.id\)\)\}/);
+    expect(console_).toMatch(/line\.confirmable && planLive/);
+    const dialog = readFileSync(join(COMPONENT_TREE, "desk", "confirm-action.tsx"), "utf8");
+    expect(dialog).toContain("if (pending || result) return;");
+    expect(dialog).not.toMatch(/useEffect/);
   });
 });

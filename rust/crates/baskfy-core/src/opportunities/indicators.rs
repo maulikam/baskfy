@@ -11,8 +11,8 @@ use polars::prelude::{BooleanChunked, DataFrame, DataType, IntoColumn, NamedFrom
 use crate::error::{CoreError, CoreResult};
 use crate::opportunities::config::SwingParams;
 use crate::twt::indicators::frame::{
-    F, bools, cmp_nulls_first, date_of, dates, floats, groups, has, ints, put, py_list,
-    strings, take_rows,
+    F, bools, cmp_nulls_first, date_of, dates, floats, groups, has, ints, put, py_list, strings,
+    take_rows,
 };
 
 /// Ports `BAR_COLUMNS`: the columns [`with_indicators`] requires.
@@ -109,7 +109,9 @@ fn shift_over<T: Copy>(values: &[Option<T>], parts: &[Range<usize>], n: i64) -> 
         for i in 0..len {
             let src = i - n;
             let v = if (0..len).contains(&src) {
-                usize::try_from(src).ok().and_then(|k| slice.get(k).copied().flatten())
+                usize::try_from(src)
+                    .ok()
+                    .and_then(|k| slice.get(k).copied().flatten())
             } else {
                 None
             };
@@ -271,7 +273,12 @@ pub fn with_indicators(
     let turnover_avg = roll_over(&turnover_inr, &parts, Roll::Mean, VOLUME_BARS)?;
     let volume_avg = roll_over(&volume, &parts, Roll::Mean, VOLUME_BARS)?;
     let pivot = roll_over(&prev_high, &parts, Roll::Max, brk.pivot_lookback)?;
-    let base_low = roll_over(&shift_over(&low, &parts, 1), &parts, Roll::Min, brk.pivot_lookback)?;
+    let base_low = roll_over(
+        &shift_over(&low, &parts, 1),
+        &parts,
+        Roll::Min,
+        brk.pivot_lookback,
+    )?;
     let swing_high = roll_over(&high, &parts, Roll::Max, pb.swing_lookback)?;
     let pullback_low = roll_over(&low, &parts, Roll::Min, pb.pullback_bars)?;
     let rs_trigger = roll_over(&prev_high, &parts, Roll::Max, rs.trigger_lookback)?;
@@ -311,10 +318,7 @@ pub fn with_indicators(
         .map(|v| v.is_some_and(|x| x > 0.0))
         .collect();
 
-    let columns: Vec<(&str, Vec<F>)> = vec![
-        ("prev_close", prev_close),
-        ("prev_high", prev_high),
-    ];
+    let columns: Vec<(&str, Vec<F>)> = vec![("prev_close", prev_close), ("prev_high", prev_high)];
     for (name, values) in columns {
         put(&mut frame, float_col(name, values))?;
     }

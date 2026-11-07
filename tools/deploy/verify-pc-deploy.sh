@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # Post-deploy verification for the Portfolio Command Center (12 Sep 2026).
 #
 # Why a script and not four CHECK lines: each of these runs a command on the box through

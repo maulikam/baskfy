@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
-use axum::http::{HeaderMap, Response, StatusCode, Uri};
+use axum::http::{HeaderMap, Response, StatusCode, Uri, header};
 use axum::routing::{get, post};
 
 use super::analyze::{dumps_indent2, form_fields, load_config, missing_fields};
@@ -223,8 +223,15 @@ async fn review(state: &AppState, band: StopConfig) -> Result<PyDict, String> {
     Ok(build_stop_plan(&held, &gtts, &[], &plan_id, band))
 }
 
+fn wants_json(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("application/json"))
+}
+
 /// `GET /stops?armed=&error=`: review the stops that would be armed; places nothing.
-async fn page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+async fn page(State(state): State<AppState>, headers: HeaderMap, uri: Uri) -> Response<Body> {
     let q = MultiDict::from_query(&uri);
     let (cfg, _) = load_config(&state).await;
     let band = band_of(&cfg);
@@ -247,27 +254,27 @@ async fn page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
         Ok(c) => c.max_daily_loss,
         Err(e) => return internal_error(&e.to_string()),
     };
-    web::render(
-        &state,
-        uri.path(),
-        "stops.html",
-        dict([
-            ("plan", plan),
-            ("review", rev),
-            ("problem", PyValue::Str(problem)),
-            ("dry_run", PyValue::Bool(settings.dry_run)),
-            ("armed", PyValue::Str(q.str_or_empty("armed"))),
-            ("error", PyValue::Str(q.str_or_empty("error"))),
-            (
-                "band",
-                PyValue::List(vec![
-                    PyValue::Float(band.stop_min * 100.0),
-                    PyValue::Float(band.stop_max * 100.0),
-                ]),
-            ),
-            ("daily_loss_cap", PyValue::Float(cap)),
-        ]),
-    )
+    let ctx = dict([
+        ("plan", plan),
+        ("review", rev),
+        ("problem", PyValue::Str(problem)),
+        ("dry_run", PyValue::Bool(settings.dry_run)),
+        ("armed", PyValue::Str(q.str_or_empty("armed"))),
+        ("error", PyValue::Str(q.str_or_empty("error"))),
+        (
+            "band",
+            PyValue::List(vec![
+                PyValue::Float(band.stop_min * 100.0),
+                PyValue::Float(band.stop_max * 100.0),
+            ]),
+        ),
+        ("daily_loss_cap", PyValue::Float(cap)),
+    ]);
+    // The web app's /stops reads the same context as JSON; the HTML page is unchanged.
+    if wants_json(&headers) {
+        return web::json(StatusCode::OK, &PyValue::Map(ctx));
+    }
+    web::render(&state, uri.path(), "stops.html", ctx)
 }
 
 /// The confirm gate, in Python's order: 400, 404, 410.
@@ -311,6 +318,12 @@ async fn arm(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> 
         Ok(k) => k,
         Err(e) => return internal_error(&e.to_string()),
     };
+    if wants_json(&headers) {
+        return match arm_core(&state, &plan, k.as_ref()).await {
+            Ok(out) => web::json(StatusCode::OK, &PyValue::Map(out)),
+            Err(r) => *r,
+        };
+    }
     arm_plan(&state, &plan, k.as_ref()).await
 }
 
@@ -348,6 +361,21 @@ async fn api_slot(state: &AppState, desk: &StopPlans) {
 
 /// Cancels first, then one stop per row; single use; the outcome as a 303 back to `/stops`.
 pub async fn arm_plan(state: &AppState, plan: &StopPlan, armer: &dyn StopArmer) -> Response<Body> {
+    match arm_core(state, plan, armer).await {
+        Ok(out) => web::redirect_303(&format!(
+            "/stops?armed={}",
+            py_str(out.get("armed").unwrap_or(&PyValue::None))
+        )),
+        Err(r) => *r,
+    }
+}
+
+/// [`arm_plan`]'s work; returns `{armed, dry_run, cancelled, results}` (or the 500).
+async fn arm_core(
+    state: &AppState,
+    plan: &StopPlan,
+    armer: &dyn StopArmer,
+) -> Result<PyDict, Box<Response<Body>>> {
     let desk = stop_plans(state);
     let cancels = list_of(plan.body.get("cancels"));
     let rows = list_of(plan.body.get("rows"));
@@ -414,7 +442,7 @@ pub async fn arm_plan(state: &AppState, plan: &StopPlan, armer: &dyn StopArmer) 
         ("results", as_list(&placed)),
     ]));
     if let Err(e) = std::fs::write(state.paths.resolve(&log_path), dumps_indent2(&log)) {
-        return internal_error(&format!("FileNotFoundError: {e}"));
+        return Err(Box::new(internal_error(&format!("FileNotFoundError: {e}"))));
     }
 
     let is_ok = |p: &PyDict| {
@@ -464,5 +492,10 @@ pub async fn arm_plan(state: &AppState, plan: &StopPlan, armer: &dyn StopArmer) 
             named.join(", ")
         ));
     }
-    web::redirect_303(&format!("/stops?armed={msg}"))
+    Ok(dict([
+        ("armed", PyValue::Str(msg)),
+        ("dry_run", PyValue::Bool(dry_run)),
+        ("cancelled", as_list(&cancelled)),
+        ("results", as_list(&placed)),
+    ]))
 }

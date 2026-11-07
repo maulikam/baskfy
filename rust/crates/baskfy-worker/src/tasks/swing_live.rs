@@ -30,6 +30,7 @@ mod probe;
 pub mod producer;
 pub mod published_session;
 mod quotes;
+pub mod regime_jobs;
 pub(crate) mod scan;
 
 use std::path::PathBuf;
@@ -158,6 +159,7 @@ pub async fn swing_scan_now_task(ctx: &TaskContext, args: BoundArgs) -> TaskResu
         return Ok(object([("run_id", int(run_id)), ("skipped", s(NO_USER))]));
     };
     let scan = execute_swing_scan(ctx, run_id, user_id).await?;
+    regime_jobs::after_scan(ctx, Some(ctx.today_ist())).await;
     Ok(with_plan(
         ctx,
         user_id,
@@ -242,6 +244,7 @@ pub async fn swing_scan_sweep_task(ctx: &TaskContext, args: BoundArgs) -> TaskRe
         published.push(OrderedJson::Int(run_id));
     }
     tx.commit().await?;
+    regime_jobs::maybe_intraday(ctx).await;
     Ok(object([("published", OrderedJson::Array(published))]))
 }
 

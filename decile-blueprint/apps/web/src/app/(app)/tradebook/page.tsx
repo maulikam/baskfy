@@ -16,7 +16,9 @@ import {
   rupees,
   toneOf,
 } from "@/components/desk/ui";
+import { TaxLots } from "@/components/tradebook/tax-lots";
 import { DeskUnavailable, fetchTradebook } from "@/lib/desk/fetch";
+import { isStaffServer } from "@/lib/desk-ops/staff";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -25,7 +27,8 @@ import { PAGES } from "@/lib/vocabulary";
  * The record, in the order it happened. Open positions first because they are the ones still
  * capable of changing.
  *
- * **Read-only.** A trade shown here has already happened.
+ * **Read-only** for everyone but staff. Staff also get the desk's tax-lot tools (`TaxLots`): Console
+ * import and corporate actions, posted same-origin to `/desk/tradebook*` — record-keeping, never an order.
  */
 export const dynamic = "force-dynamic";
 
@@ -49,12 +52,18 @@ function reasonOf(code: string | null): string {
 }
 
 export default async function TradebookPage() {
+  const staff = await isStaffServer();
   let data;
   try {
     data = await fetchTradebook();
   } catch (error) {
     if (!(error instanceof DeskUnavailable)) throw error;
-    return <Empty title={PAGES["/tradebook"].title} body="The desk has recorded no trades yet." />;
+    return (
+      <div className="flex flex-col gap-5">
+        <Empty title={PAGES["/tradebook"].title} body="The desk has recorded no trades yet." />
+        {staff ? <TaxLots /> : null}
+      </div>
+    );
   }
 
   const decided = data.winners + data.losers;
@@ -129,8 +138,16 @@ export default async function TradebookPage() {
         is on the holdings page.
       </p>
 
+      {staff ? <TaxLots /> : null}
+
       <DeskNav current="/tradebook" />
-      <ReadOnlyFooter />
+      {staff ? (
+        <p className="text-xs text-muted-foreground">
+          The tax-lot tools above change the lot record only. Orders are placed from the desk console and nowhere else.
+        </p>
+      ) : (
+        <ReadOnlyFooter />
+      )}
     </div>
   );
 }

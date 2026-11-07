@@ -18,15 +18,13 @@ use sqlx::PgConnection;
 
 use super::graph::{self, GraphError, MAX_DEPTH};
 use super::model::{self, Bounds, Errors, PyInt};
-use super::screen_invest::{
-    attach_if_screen, parse_create_link, sized_holdings_for_create,
-};
 use super::multipart::{self, FormValue};
 use super::portfolio_csv::{
     self, MAX_IMPORT_ROWS, MatchStatus, ParseFailure, ParsedCsv, ParsedHolding, RowIssue,
     SkipReason, SkippedRow, UnmatchedReason,
 };
 use super::request::{header_value, pool, read_body};
+use super::screen_invest::{attach_if_screen, parse_create_link, sized_holdings_for_create};
 use super::symbols::{self, SymbolResolution};
 use super::{db, num, params};
 use crate::auth::{Principal, require_authenticated};

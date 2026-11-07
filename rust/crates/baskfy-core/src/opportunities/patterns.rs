@@ -66,7 +66,8 @@ impl<'a> History<'a> {
             h.low.push(num(r.low)?);
             h.close.push(num(r.close)?);
             h.volume.push(num(r.volume)?);
-            h.adj.push(num(r.adj_factor).filter(|a| *a > 0.0).unwrap_or(1.0));
+            h.adj
+                .push(num(r.adj_factor).filter(|a| *a > 0.0).unwrap_or(1.0));
         }
         Some(h)
     }
@@ -227,7 +228,13 @@ fn r_targets(entry: f64, stop: f64, extension_r: f64) -> Vec<Target> {
 
 /// A level break the breakout way: triggered above `pivot` on volume within the extension
 /// cap, pending just below it. `(triggered, extension_atr, distance_pct)`.
-fn pivot_state(close: f64, pivot: f64, atr: f64, rvol: Option<f64>, params: &SwingParams) -> Option<(bool, f64, f64)> {
+fn pivot_state(
+    close: f64,
+    pivot: f64,
+    atr: f64,
+    rvol: Option<f64>,
+    params: &SwingParams,
+) -> Option<(bool, f64, f64)> {
     let p = &params.breakout;
     let extension = (close - pivot) / atr;
     let distance = (pivot - close) / close * PCT;
@@ -267,7 +274,14 @@ fn finish(l: Levels, horizon: (i64, i64)) -> Option<Evaluation> {
     })
 }
 
-fn ev(key: &str, label: impl Into<String>, value: Option<f64>, threshold: Option<f64>, unit: &str, passed: bool) -> Evidence {
+fn ev(
+    key: &str,
+    label: impl Into<String>,
+    value: Option<f64>,
+    threshold: Option<f64>,
+    unit: &str,
+    passed: bool,
+) -> Evidence {
     Evidence::new(key, label, value, threshold, unit, passed)
 }
 
@@ -278,7 +292,11 @@ fn ev(key: &str, label: impl Into<String>, value: Option<f64>, threshold: Option
 /// Successively shallower pullbacks from the base high, volume drying up, a break of the last
 /// contraction's high.
 #[must_use]
-pub fn evaluate_vcp(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_vcp(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let p = &params.patterns.vcp;
     let row = h.row();
     let last = h.last();
@@ -347,14 +365,70 @@ pub fn evaluate_vcp(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
     let stop = last_low - params.risk.stop_buffer_atr * atr;
     let depths_txt: Vec<String> = depths.iter().map(|d| format!("{d:.1}%")).collect();
     let evidence = vec![
-        ev("trend", "Close above 50-session average (50 above 200)", Some(close), Some(sma_mid), "₹", trend),
-        ev("near_high", "Below 52-week high", Some(below_high), Some(p.max_below_52w_high_pct), "%", near_high),
-        ev("contractions", format!("Contractions ({})", depths_txt.join(" → ")), Some(count as f64), Some(p.min_contractions as f64), "count", count_ok && shrinking),
-        ev("first_depth", "First contraction depth", Some(first_depth), Some(p.max_first_depth_pct), "%", first_ok),
-        ev("last_depth", "Last contraction depth", Some(last_depth), Some(p.max_last_depth_pct), "%", last_ok),
-        ev("dryup", "10- over 50-session volume", dryup, Some(p.dryup_max_ratio), "x", dryup_ok),
-        ev("close_vs_pivot", "Close vs last contraction high", Some(close), Some(pivot), "₹", close > pivot),
-        ev("rvol", "Volume vs 20-session average", rvol, Some(params.breakout.volume_multiple), "x", rvol.is_some_and(|r| r >= params.breakout.volume_multiple)),
+        ev(
+            "trend",
+            "Close above 50-session average (50 above 200)",
+            Some(close),
+            Some(sma_mid),
+            "₹",
+            trend,
+        ),
+        ev(
+            "near_high",
+            "Below 52-week high",
+            Some(below_high),
+            Some(p.max_below_52w_high_pct),
+            "%",
+            near_high,
+        ),
+        ev(
+            "contractions",
+            format!("Contractions ({})", depths_txt.join(" → ")),
+            Some(count as f64),
+            Some(p.min_contractions as f64),
+            "count",
+            count_ok && shrinking,
+        ),
+        ev(
+            "first_depth",
+            "First contraction depth",
+            Some(first_depth),
+            Some(p.max_first_depth_pct),
+            "%",
+            first_ok,
+        ),
+        ev(
+            "last_depth",
+            "Last contraction depth",
+            Some(last_depth),
+            Some(p.max_last_depth_pct),
+            "%",
+            last_ok,
+        ),
+        ev(
+            "dryup",
+            "10- over 50-session volume",
+            dryup,
+            Some(p.dryup_max_ratio),
+            "x",
+            dryup_ok,
+        ),
+        ev(
+            "close_vs_pivot",
+            "Close vs last contraction high",
+            Some(close),
+            Some(pivot),
+            "₹",
+            close > pivot,
+        ),
+        ev(
+            "rvol",
+            "Volume vs 20-session average",
+            rvol,
+            Some(params.breakout.volume_multiple),
+            "x",
+            rvol.is_some_and(|r| r >= params.breakout.volume_multiple),
+        ),
     ];
     finish(
         Levels {
@@ -367,7 +441,13 @@ pub fn evaluate_vcp(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
             trigger_level: pivot,
             entry,
             stop,
-            targets: targets(entry, stop, Some(h.high[h0]), reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                Some(h.high[h0]),
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some(extension),
             distance_pct: Some(distance),
@@ -422,7 +502,12 @@ fn twt_state(h: &History<'_>, i: usize) -> (Option<f64>, Option<f64>, Option<f64
         .collect();
     let month_low = min_of(&month_lows);
     let vol_bars = to_usize(scan.vol_sma_bars);
-    let vol_sma = rolling_mean(&h.volume, i, vol_bars, to_usize(TWT.data.min_samples(scan.vol_sma_bars)));
+    let vol_sma = rolling_mean(
+        &h.volume,
+        i,
+        vol_bars,
+        to_usize(TWT.data.min_samples(scan.vol_sma_bars)),
+    );
     let state = h.close_raw(i) > dec_f(scan.min_close_raw)
         && month_low.is_some_and(|m| h.close[i] >= m * dec_f(scan.month_low_multiple))
         && range_pct.is_some_and(|r| r <= dec_f(scan.tight_band_pct))
@@ -433,7 +518,11 @@ fn twt_state(h: &History<'_>, i: usize) -> (Option<f64>, Option<f64>, Option<f64
 /// The desk's TWT entry event on the as-of bar: the state today, out of it on each of the
 /// `entry_min_sessions_out` sessions before, above the liquidity floor, not an ETF.
 #[must_use]
-pub fn evaluate_twt(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_twt(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let row = h.row();
     let last = h.last();
     if row.symbol.as_deref().is_some_and(is_etf_symbol) {
@@ -450,7 +539,12 @@ pub fn evaluate_twt(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
     let out_before = (last - gap..last).all(|i| !twt_state(h, i).3);
     let turnover: Vec<f64> = (0..=last).map(|i| h.turnover_raw(i)).collect();
     let tbars = to_usize(TWT.entry.turnover_avg_bars);
-    let turnover_avg = rolling_mean(&turnover, last, tbars, to_usize(TWT.data.min_samples(TWT.entry.turnover_avg_bars)));
+    let turnover_avg = rolling_mean(
+        &turnover,
+        last,
+        tbars,
+        to_usize(TWT.data.min_samples(TWT.entry.turnover_avg_bars)),
+    );
     let floor = dec_f(TWT.entry.min_turnover_inr);
     let floor_ok = turnover_avg.is_some_and(|t| t >= floor);
     if !(out_before && floor_ok) {
@@ -461,12 +555,57 @@ pub fn evaluate_twt(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
     let entry = close;
     let stop = entry * (1.0 - dec_f(TWT.exits.stop_pct) / PCT);
     let evidence = vec![
-        ev("tight", format!("{} weekly closes within band", scan.tight_weeks), range_pct, Some(dec_f(scan.tight_band_pct)), "%", true),
-        ev("month_low", format!("Close vs {}x the low {} months back", scan.month_low_multiple, scan.month_low_months_back), Some(close), month_low.map(|m| m * dec_f(scan.month_low_multiple)), "₹", true),
-        ev("vol_sma", format!("{}-session average volume", scan.vol_sma_bars), vol_sma, Some(dec_f(scan.min_vol_sma)), "shares", true),
-        ev("close_raw", "Exchange close", Some(h.close_raw(last)), Some(dec_f(scan.min_close_raw)), "₹", true),
-        ev("entry_event", format!("Out of the state the prior {gap} sessions"), None, Some(gap as f64), "sessions", out_before),
-        ev("turnover", "20-session average turnover", turnover_avg.map(|t| t / 1e7), Some(floor / 1e7), "₹ cr", floor_ok),
+        ev(
+            "tight",
+            format!("{} weekly closes within band", scan.tight_weeks),
+            range_pct,
+            Some(dec_f(scan.tight_band_pct)),
+            "%",
+            true,
+        ),
+        ev(
+            "month_low",
+            format!(
+                "Close vs {}x the low {} months back",
+                scan.month_low_multiple, scan.month_low_months_back
+            ),
+            Some(close),
+            month_low.map(|m| m * dec_f(scan.month_low_multiple)),
+            "₹",
+            true,
+        ),
+        ev(
+            "vol_sma",
+            format!("{}-session average volume", scan.vol_sma_bars),
+            vol_sma,
+            Some(dec_f(scan.min_vol_sma)),
+            "shares",
+            true,
+        ),
+        ev(
+            "close_raw",
+            "Exchange close",
+            Some(h.close_raw(last)),
+            Some(dec_f(scan.min_close_raw)),
+            "₹",
+            true,
+        ),
+        ev(
+            "entry_event",
+            format!("Out of the state the prior {gap} sessions"),
+            None,
+            Some(gap as f64),
+            "sessions",
+            out_before,
+        ),
+        ev(
+            "turnover",
+            "20-session average turnover",
+            turnover_avg.map(|t| t / 1e7),
+            Some(floor / 1e7),
+            "₹ cr",
+            floor_ok,
+        ),
     ];
     finish(
         Levels {
@@ -517,19 +656,31 @@ fn ep_on(h: &History<'_>, j: usize) -> Option<Gap> {
         && h.close[j] >= h.open[j]
         && cp >= ep.min_close_position
         && prior_move <= ep.max_prior_gain_pct;
-    ok.then_some(Gap { gap_pct, rvol, close_position: cp, prior_move, adr })
+    ok.then_some(Gap {
+        gap_pct,
+        rvol,
+        close_position: cp,
+        prior_move,
+        adr,
+    })
 }
 
 /// A gap of at least 10 % on 3x volume that held, after a quiet stretch; enterable above the
 /// gap day's high for `ep.valid_bars` sessions while its low holds.
 #[must_use]
-pub fn evaluate_episodic_pivot(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_episodic_pivot(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let ep = &SWING.ep;
     let row = h.row();
     let last = h.last();
     let atr = num(row.atr).filter(|a| *a > 0.0)?;
     let first = last.saturating_sub(to_usize(ep.valid_bars).saturating_sub(1));
-    let (j, gap) = (first..=last).rev().find_map(|j| ep_on(h, j).map(|g| (j, g)))?;
+    let (j, gap) = (first..=last)
+        .rev()
+        .find_map(|j| ep_on(h, j).map(|g| (j, g)))?;
     if j < last && min_of(&h.low[j + 1..=last])? < h.low[j] {
         return None;
     }
@@ -547,12 +698,54 @@ pub fn evaluate_episodic_pivot(h: &History<'_>, params: &SwingParams, horizon: (
     }
     let p = &SWING.ep;
     let evidence = vec![
-        ev("gap", "Opening gap", Some(gap.gap_pct), Some(p.min_gap_pct), "%", true),
-        ev("rvol", format!("Volume vs prior {}-session average", p.rvol_bars), Some(gap.rvol), Some(p.min_rvol), "x", true),
-        ev("held", "Close position in the gap day's range", Some(gap.close_position), Some(p.min_close_position), "", true),
-        ev("neglect", format!("Move over the {} sessions before the gap", p.prior_bars), Some(gap.prior_move), Some(p.max_prior_gain_pct), "%", true),
-        ev("adr", "Average daily range", Some(gap.adr), Some(SWING.liquidity.adr_min_pct), "%", true),
-        ev("close_vs_level", "Close vs gap-day high", Some(close), Some(level), "₹", close > level),
+        ev(
+            "gap",
+            "Opening gap",
+            Some(gap.gap_pct),
+            Some(p.min_gap_pct),
+            "%",
+            true,
+        ),
+        ev(
+            "rvol",
+            format!("Volume vs prior {}-session average", p.rvol_bars),
+            Some(gap.rvol),
+            Some(p.min_rvol),
+            "x",
+            true,
+        ),
+        ev(
+            "held",
+            "Close position in the gap day's range",
+            Some(gap.close_position),
+            Some(p.min_close_position),
+            "",
+            true,
+        ),
+        ev(
+            "neglect",
+            format!("Move over the {} sessions before the gap", p.prior_bars),
+            Some(gap.prior_move),
+            Some(p.max_prior_gain_pct),
+            "%",
+            true,
+        ),
+        ev(
+            "adr",
+            "Average daily range",
+            Some(gap.adr),
+            Some(SWING.liquidity.adr_min_pct),
+            "%",
+            true,
+        ),
+        ev(
+            "close_vs_level",
+            "Close vs gap-day high",
+            Some(close),
+            Some(level),
+            "₹",
+            close > level,
+        ),
     ];
     finish(
         Levels {
@@ -565,7 +758,13 @@ pub fn evaluate_episodic_pivot(h: &History<'_>, params: &SwingParams, horizon: (
             trigger_level: level,
             entry,
             stop,
-            targets: targets(entry, stop, None, reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                None,
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some(extension),
             distance_pct: Some((level - close) / close * PCT),
@@ -585,7 +784,11 @@ fn sma(xs: &[f64], end: usize, n: usize) -> Option<f64> {
 /// A 30 %+ pole, a 10–60-session base no deeper than 30 %, tight, on rising averages with
 /// volume drying up; triggered on a close above the 20-session pivot on 1.5x volume.
 #[must_use]
-pub fn evaluate_flag(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_flag(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let f = &SWING.flag;
     let hp = &params.patterns.flag;
     let row = h.row();
@@ -619,7 +822,11 @@ pub fn evaluate_flag(h: &History<'_>, params: &SwingParams, horizon: (i64, i64))
     let ma_fast = sma(&h.close, last, to_usize(SWING.ma_fast))?;
     let ma_slow = sma(&h.close, last, to_usize(SWING.ma_slow))?;
     let ma_trend = sma(&h.close, last, to_usize(SWING.ma_trend))?;
-    let ma_slow_before = sma(&h.close, last.checked_sub(to_usize(f.ma_rising_bars))?, to_usize(SWING.ma_slow))?;
+    let ma_slow_before = sma(
+        &h.close,
+        last.checked_sub(to_usize(f.ma_rising_bars))?,
+        to_usize(SWING.ma_slow),
+    )?;
     let vol_fast = sma(&h.volume, last, to_usize(f.dryup_bars))?;
     let rvol = rvol_prior(h, last);
 
@@ -659,16 +866,79 @@ pub fn evaluate_flag(h: &History<'_>, params: &SwingParams, horizon: (i64, i64))
     let high_tight = prior_move >= hp.htf_min_pole_pct
         && pole - pole_low_idx <= to_usize(hp.htf_max_pole_bars)
         && depth <= hp.htf_max_depth_pct;
-    let kind = if high_tight { "High tight flag" } else { "Flag" };
+    let kind = if high_tight {
+        "High tight flag"
+    } else {
+        "Flag"
+    };
     let evidence = vec![
-        ev("pole", "Flagpole gain", Some(prior_move), Some(f.flagpole_min_gain_pct), "%", prior_move >= f.flagpole_min_gain_pct),
-        ev("base_bars", "Base length", Some(base_bars as f64), Some(f.base_max_bars as f64), "sessions", base_ok),
-        ev("depth", "Base depth from pole high", Some(depth), Some(f.base_max_depth_pct), "%", depth <= f.base_max_depth_pct),
-        ev("tightness", format!("{tb}-session range in ADRs"), Some(tightness), Some(f.tight_max_adr_multiple), "ADR", tightness <= f.tight_max_adr_multiple),
-        ev("dryup", "Volume dry-up (10-session over base)", Some(dryup), Some(f.dryup_max_ratio), "x", dryup <= f.dryup_max_ratio),
-        ev("adr", "Average daily range", Some(adr), Some(SWING.liquidity.adr_min_pct), "%", liquid),
-        ev("high_tight", format!("High tight flag ({}%+ pole in ≤{} sessions, ≤{}% deep)", hp.htf_min_pole_pct, hp.htf_max_pole_bars, hp.htf_max_depth_pct), Some(prior_move), Some(hp.htf_min_pole_pct), "%", high_tight),
-        ev("rvol", format!("Volume vs prior {}-session average", SWING.ep.rvol_bars), rvol, Some(f.breakout_min_rvol), "x", rvol.is_some_and(|r| r >= f.breakout_min_rvol)),
+        ev(
+            "pole",
+            "Flagpole gain",
+            Some(prior_move),
+            Some(f.flagpole_min_gain_pct),
+            "%",
+            prior_move >= f.flagpole_min_gain_pct,
+        ),
+        ev(
+            "base_bars",
+            "Base length",
+            Some(base_bars as f64),
+            Some(f.base_max_bars as f64),
+            "sessions",
+            base_ok,
+        ),
+        ev(
+            "depth",
+            "Base depth from pole high",
+            Some(depth),
+            Some(f.base_max_depth_pct),
+            "%",
+            depth <= f.base_max_depth_pct,
+        ),
+        ev(
+            "tightness",
+            format!("{tb}-session range in ADRs"),
+            Some(tightness),
+            Some(f.tight_max_adr_multiple),
+            "ADR",
+            tightness <= f.tight_max_adr_multiple,
+        ),
+        ev(
+            "dryup",
+            "Volume dry-up (10-session over base)",
+            Some(dryup),
+            Some(f.dryup_max_ratio),
+            "x",
+            dryup <= f.dryup_max_ratio,
+        ),
+        ev(
+            "adr",
+            "Average daily range",
+            Some(adr),
+            Some(SWING.liquidity.adr_min_pct),
+            "%",
+            liquid,
+        ),
+        ev(
+            "high_tight",
+            format!(
+                "High tight flag ({}%+ pole in ≤{} sessions, ≤{}% deep)",
+                hp.htf_min_pole_pct, hp.htf_max_pole_bars, hp.htf_max_depth_pct
+            ),
+            Some(prior_move),
+            Some(hp.htf_min_pole_pct),
+            "%",
+            high_tight,
+        ),
+        ev(
+            "rvol",
+            format!("Volume vs prior {}-session average", SWING.ep.rvol_bars),
+            rvol,
+            Some(f.breakout_min_rvol),
+            "x",
+            rvol.is_some_and(|r| r >= f.breakout_min_rvol),
+        ),
     ];
     finish(
         Levels {
@@ -681,7 +951,13 @@ pub fn evaluate_flag(h: &History<'_>, params: &SwingParams, horizon: (i64, i64))
             trigger_level,
             entry,
             stop,
-            targets: targets(entry, stop, Some(trigger_level + (pole_high - pole_low)), reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                Some(trigger_level + (pole_high - pole_low)),
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some((close - pivot_prev) / atr),
             distance_pct: Some((pivot_incl - close) / close * PCT),
@@ -716,7 +992,11 @@ fn squeeze_name(nr7: bool, inside: bool, nr: usize) -> String {
 /// An inside bar or the narrowest range of seven in an uptrend: pending above its high,
 /// triggered on the next close above it.
 #[must_use]
-pub fn evaluate_squeeze(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_squeeze(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let nr = to_usize(params.patterns.squeeze.nr_bars).max(2);
     let row = h.row();
     let last = h.last();
@@ -728,7 +1008,10 @@ pub fn evaluate_squeeze(h: &History<'_>, params: &SwingParams, horizon: (i64, i6
         return None;
     }
     let buffer = params.risk.stop_buffer_atr * atr;
-    let (bar, triggered, nr7, inside) = match last.checked_sub(1).and_then(|y| squeeze_on(h, y, nr).map(|s| (y, s))) {
+    let (bar, triggered, nr7, inside) = match last
+        .checked_sub(1)
+        .and_then(|y| squeeze_on(h, y, nr).map(|s| (y, s)))
+    {
         Some((y, (n7, ib))) if (n7 || ib) && close > h.high[y] => (y, true, n7, ib),
         _ => match squeeze_on(h, last, nr) {
             Some((n7, ib)) if n7 || ib => (last, false, n7, ib),
@@ -744,10 +1027,38 @@ pub fn evaluate_squeeze(h: &History<'_>, params: &SwingParams, horizon: (i64, i6
     let stop = h.low[bar] - buffer;
     let name = squeeze_name(nr7, inside, nr);
     let evidence = vec![
-        ev("trend", "Close above 50-session average", Some(close), Some(sma_mid), "₹", trend),
-        ev("nr7", format!("Narrowest range of {nr} sessions"), Some(h.high[bar] - h.low[bar]), None, "₹", nr7),
-        ev("inside", "Inside the prior bar's range", None, None, "", inside),
-        ev("break", "Close above the squeeze bar's high", Some(close), Some(level), "₹", triggered),
+        ev(
+            "trend",
+            "Close above 50-session average",
+            Some(close),
+            Some(sma_mid),
+            "₹",
+            trend,
+        ),
+        ev(
+            "nr7",
+            format!("Narrowest range of {nr} sessions"),
+            Some(h.high[bar] - h.low[bar]),
+            None,
+            "₹",
+            nr7,
+        ),
+        ev(
+            "inside",
+            "Inside the prior bar's range",
+            None,
+            None,
+            "",
+            inside,
+        ),
+        ev(
+            "break",
+            "Close above the squeeze bar's high",
+            Some(close),
+            Some(level),
+            "₹",
+            triggered,
+        ),
     ];
     finish(
         Levels {
@@ -757,7 +1068,13 @@ pub fn evaluate_squeeze(h: &History<'_>, params: &SwingParams, horizon: (i64, i6
             trigger_level: level,
             entry,
             stop,
-            targets: targets(entry, stop, None, reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                None,
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some(extension),
             distance_pct: Some((level - close) / close * PCT),
@@ -772,7 +1089,11 @@ pub fn evaluate_squeeze(h: &History<'_>, params: &SwingParams, horizon: (i64, i6
 
 /// A close above the prior 252 sessions' high on volume, or within reach of it.
 #[must_use]
-pub fn evaluate_high_52w(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_high_52w(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let lookback = to_usize(params.patterns.high_52w.lookback_bars);
     let row = h.row();
     let last = h.last();
@@ -793,10 +1114,38 @@ pub fn evaluate_high_52w(h: &History<'_>, params: &SwingParams, horizon: (i64, i
     let stop = entry - params.risk.stop_atr * atr;
     let p = &params.breakout;
     let evidence = vec![
-        ev("trend", "Close above 50-session average", Some(close), Some(sma_mid), "₹", trend),
-        ev("close_vs_high", format!("Close vs prior {lookback}-session high"), Some(close), Some(pivot), "₹", close > pivot),
-        ev("rvol", "Volume vs 20-session average", rvol, Some(p.volume_multiple), "x", rvol.is_some_and(|r| r >= p.volume_multiple)),
-        ev("extension", "Extension above the high", triggered.then_some(extension), Some(p.max_extension_atr), "ATR", triggered),
+        ev(
+            "trend",
+            "Close above 50-session average",
+            Some(close),
+            Some(sma_mid),
+            "₹",
+            trend,
+        ),
+        ev(
+            "close_vs_high",
+            format!("Close vs prior {lookback}-session high"),
+            Some(close),
+            Some(pivot),
+            "₹",
+            close > pivot,
+        ),
+        ev(
+            "rvol",
+            "Volume vs 20-session average",
+            rvol,
+            Some(p.volume_multiple),
+            "x",
+            rvol.is_some_and(|r| r >= p.volume_multiple),
+        ),
+        ev(
+            "extension",
+            "Extension above the high",
+            triggered.then_some(extension),
+            Some(p.max_extension_atr),
+            "ATR",
+            triggered,
+        ),
     ];
     finish(
         Levels {
@@ -809,7 +1158,13 @@ pub fn evaluate_high_52w(h: &History<'_>, params: &SwingParams, horizon: (i64, i
             trigger_level: pivot,
             entry,
             stop,
-            targets: targets(entry, stop, None, reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                None,
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some(extension),
             distance_pct: Some(distance),
@@ -825,7 +1180,11 @@ pub fn evaluate_high_52w(h: &History<'_>, params: &SwingParams, horizon: (i64, i
 /// A rounded 12–35 % cup after a 30 % advance, a right lip near the left, a short handle in
 /// the cup's upper half on lighter volume; triggered above the handle's high.
 #[must_use]
-pub fn evaluate_cup(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_cup(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let p = &params.patterns.cup;
     let row = h.row();
     let last = h.last();
@@ -844,7 +1203,8 @@ pub fn evaluate_cup(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
     if max_of(&h.high[l + 1..r]).is_some_and(|m| m > left.max(lip)) {
         return None;
     }
-    let lip_ok = lip >= left * (1.0 - p.right_lip_min_pct / PCT) && lip <= left * (1.0 + p.right_lip_max_pct / PCT);
+    let lip_ok = lip >= left * (1.0 - p.right_lip_min_pct / PCT)
+        && lip <= left * (1.0 + p.right_lip_max_pct / PCT);
     let b = arg_min(&h.low, l + 1, r)?;
     let bottom = h.low[b];
     let depth = (left - bottom) / left * PCT;
@@ -871,14 +1231,70 @@ pub fn evaluate_cup(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
     let entry = if triggered { close } else { lip };
     let stop = handle_low - params.risk.stop_buffer_atr * atr;
     let evidence = vec![
-        ev("advance", format!("Advance into the left lip ({} sessions)", p.prior_bars), Some(advance), Some(p.prior_uptrend_pct), "%", advance_ok),
-        ev("depth", "Cup depth", Some(depth), Some(p.max_depth_pct), "%", depth_ok),
-        ev("length", "Cup length", Some((r - l) as f64), Some(p.cup_min_bars as f64), "sessions", true),
-        ev("right_lip", "Right lip vs left lip", Some((lip / left - 1.0) * PCT), Some(-p.right_lip_min_pct), "%", lip_ok),
-        ev("handle_depth", "Handle depth", Some(handle_depth), Some(p.handle_max_depth_pct), "%", handle_ok),
-        ev("handle_volume", "Handle volume over cup volume", Some(handle_vol / cup_vol), Some(1.0), "x", dry),
-        ev("close_vs_pivot", "Close vs handle high", Some(close), Some(lip), "₹", close > lip),
-        ev("rvol", "Volume vs 20-session average", rvol, Some(params.breakout.volume_multiple), "x", rvol.is_some_and(|v| v >= params.breakout.volume_multiple)),
+        ev(
+            "advance",
+            format!("Advance into the left lip ({} sessions)", p.prior_bars),
+            Some(advance),
+            Some(p.prior_uptrend_pct),
+            "%",
+            advance_ok,
+        ),
+        ev(
+            "depth",
+            "Cup depth",
+            Some(depth),
+            Some(p.max_depth_pct),
+            "%",
+            depth_ok,
+        ),
+        ev(
+            "length",
+            "Cup length",
+            Some((r - l) as f64),
+            Some(p.cup_min_bars as f64),
+            "sessions",
+            true,
+        ),
+        ev(
+            "right_lip",
+            "Right lip vs left lip",
+            Some((lip / left - 1.0) * PCT),
+            Some(-p.right_lip_min_pct),
+            "%",
+            lip_ok,
+        ),
+        ev(
+            "handle_depth",
+            "Handle depth",
+            Some(handle_depth),
+            Some(p.handle_max_depth_pct),
+            "%",
+            handle_ok,
+        ),
+        ev(
+            "handle_volume",
+            "Handle volume over cup volume",
+            Some(handle_vol / cup_vol),
+            Some(1.0),
+            "x",
+            dry,
+        ),
+        ev(
+            "close_vs_pivot",
+            "Close vs handle high",
+            Some(close),
+            Some(lip),
+            "₹",
+            close > lip,
+        ),
+        ev(
+            "rvol",
+            "Volume vs 20-session average",
+            rvol,
+            Some(params.breakout.volume_multiple),
+            "x",
+            rvol.is_some_and(|v| v >= params.breakout.volume_multiple),
+        ),
     ];
     finish(
         Levels {
@@ -891,7 +1307,13 @@ pub fn evaluate_cup(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
             trigger_level: lip,
             entry,
             stop,
-            targets: targets(entry, stop, Some(lip + (left - bottom)), reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                Some(lip + (left - bottom)),
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some(extension),
             distance_pct: Some(distance),
@@ -907,7 +1329,11 @@ pub fn evaluate_cup(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
 /// Stacked, rising EMAs; a recent low tagged one of them and the close held above it; triggered
 /// on a close above the prior bar's high.
 #[must_use]
-pub fn evaluate_ma_bounce(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_ma_bounce(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let p = &params.patterns.ma_bounce;
     let row = h.row();
     let last = h.last();
@@ -916,7 +1342,11 @@ pub fn evaluate_ma_bounce(h: &History<'_>, params: &SwingParams, horizon: (i64, 
     if last < to_usize(s_slow + p.slope_bars) {
         return None;
     }
-    let emas = [ema(&h.close, s_fast), ema(&h.close, s_mid), ema(&h.close, s_slow)];
+    let emas = [
+        ema(&h.close, s_fast),
+        ema(&h.close, s_mid),
+        ema(&h.close, s_slow),
+    ];
     let (e10, e20, e50) = (emas[0][last], emas[1][last], emas[2][last]);
     let e50_before = emas[2][last - to_usize(p.slope_bars)];
     let close = h.close[last];
@@ -928,7 +1358,10 @@ pub fn evaluate_ma_bounce(h: &History<'_>, params: &SwingParams, horizon: (i64, 
     let reach_atr = p.touch_atr * atr;
     let first = (last + 1).saturating_sub(to_usize(p.touch_bars).max(1));
     let (t, k) = (first..=last).rev().find_map(|t| {
-        (0..3).rev().find(|&k| h.low[t] <= emas[k][t] + reach_atr && h.close[t] > emas[k][t]).map(|k| (t, k))
+        (0..3)
+            .rev()
+            .find(|&k| h.low[t] <= emas[k][t] + reach_atr && h.close[t] > emas[k][t])
+            .map(|k| (t, k))
     })?;
     let span = p.spans[k];
     let support = emas[k][t];
@@ -940,10 +1373,38 @@ pub fn evaluate_ma_bounce(h: &History<'_>, params: &SwingParams, horizon: (i64, 
     let stop = low.min(support) - params.risk.stop_buffer_atr * atr;
     let swing_high = num(row.swing_high);
     let evidence = vec![
-        ev("stack", format!("EMA {s_fast} > {s_mid} > {s_slow}"), Some(e10), Some(e20), "₹", stacked),
-        ev("slope", format!("{s_slow} EMA rising over {} sessions", p.slope_bars), Some(e50), Some(e50_before), "₹", rising),
-        ev("touch", format!("Low tagged the {span} EMA on {}", h.dates[t]), Some(h.low[t]), Some(support), "₹", true),
-        ev("reversal", "Close above prior bar high", Some(close), Some(prev_high), "₹", triggered),
+        ev(
+            "stack",
+            format!("EMA {s_fast} > {s_mid} > {s_slow}"),
+            Some(e10),
+            Some(e20),
+            "₹",
+            stacked,
+        ),
+        ev(
+            "slope",
+            format!("{s_slow} EMA rising over {} sessions", p.slope_bars),
+            Some(e50),
+            Some(e50_before),
+            "₹",
+            rising,
+        ),
+        ev(
+            "touch",
+            format!("Low tagged the {span} EMA on {}", h.dates[t]),
+            Some(h.low[t]),
+            Some(support),
+            "₹",
+            true,
+        ),
+        ev(
+            "reversal",
+            "Close above prior bar high",
+            Some(close),
+            Some(prev_high),
+            "₹",
+            triggered,
+        ),
     ];
     finish(
         Levels {
@@ -953,7 +1414,13 @@ pub fn evaluate_ma_bounce(h: &History<'_>, params: &SwingParams, horizon: (i64, 
             trigger_level,
             entry,
             stop,
-            targets: targets(entry, stop, swing_high, reach(entry, atr, horizon, params), params.risk.extension_r),
+            targets: targets(
+                entry,
+                stop,
+                swing_high,
+                reach(entry, atr, horizon, params),
+                params.risk.extension_r,
+            ),
             evidence,
             extension_atr: Some((close - prev_high) / atr),
             distance_pct: Some((h.high[last] - close) / close * PCT),
@@ -977,7 +1444,12 @@ fn vbt_signal(h: &History<'_>, last: usize) -> Option<Vec<Evidence>> {
     let close = h.close[last];
     let volume = h.volume[last];
     let change = (close / h.close[last - 1] - 1.0) * PCT;
-    let vol_sma = rolling_mean(&h.volume, last, to_usize(scan.vol_sma_bars), samples(scan.vol_sma_bars)?);
+    let vol_sma = rolling_mean(
+        &h.volume,
+        last,
+        to_usize(scan.vol_sma_bars),
+        samples(scan.vol_sma_bars)?,
+    );
     let line1 = vol_sma.is_some_and(|s| volume > s * scan.vol_mult);
     let line2 = h.close_raw(last) > scan.min_close_raw_inr;
     let line3 = change >= scan.min_change_pct;
@@ -986,19 +1458,31 @@ fn vbt_signal(h: &History<'_>, last: usize) -> Option<Vec<Evidence>> {
     if !(line1 && line2 && line3 && line4 && line5) {
         return None;
     }
-    let sma_dma = rolling_mean(&h.close, last, to_usize(trend.dma_bars), samples(trend.dma_bars)?);
+    let sma_dma = rolling_mean(
+        &h.close,
+        last,
+        to_usize(trend.dma_bars),
+        samples(trend.dma_bars)?,
+    );
     let hb = to_usize(trend.breakout_high_bars);
     let high_prior = {
         let end = last - 1;
         let have = (end + 1).min(hb);
-        (have >= samples(trend.breakout_high_bars)?).then(|| max_of(&h.high[end + 1 - have..=end])).flatten()
+        (have >= samples(trend.breakout_high_bars)?)
+            .then(|| max_of(&h.high[end + 1 - have..=end]))
+            .flatten()
     };
     let ret = last
         .checked_sub(to_usize(trend.ret_bars))
         .map(|b| (close / h.close[b] - 1.0) * PCT);
     let cp = close_position(h, last);
     let turnover: Vec<f64> = (0..=last).map(|i| h.turnover_raw(i)).collect();
-    let turnover_avg = rolling_mean(&turnover, last, to_usize(trend.turnover_bars), samples(trend.turnover_bars)?);
+    let turnover_avg = rolling_mean(
+        &turnover,
+        last,
+        to_usize(trend.turnover_bars),
+        samples(trend.turnover_bars)?,
+    );
     let a = sma_dma.is_some_and(|s| close > s);
     let b = high_prior.is_some_and(|hp| close > hp);
     let c = ret.is_some_and(|r| r < trend.max_ret_20_pct);
@@ -1009,13 +1493,65 @@ fn vbt_signal(h: &History<'_>, last: usize) -> Option<Vec<Evidence>> {
         return None;
     }
     Some(vec![
-        ev("volume", format!("Volume vs {}x the {}-session average", scan.vol_mult, scan.vol_sma_bars), vol_sma.map(|s| volume / s), Some(scan.vol_mult), "x", line1),
-        ev("change", "Change on the day", Some(change), Some(scan.min_change_pct), "%", line3 && e),
-        ev("A", format!("Close above {}-session average", trend.dma_bars), Some(close), sma_dma, "₹", a),
-        ev("B", format!("Close above prior {hb}-session high"), Some(close), high_prior, "₹", b),
-        ev("C", format!("{}-session return below ceiling", trend.ret_bars), ret, Some(trend.max_ret_20_pct), "%", c),
-        ev("D", "Close position in the day's range", Some(cp), Some(trend.min_close_position), "", d),
-        ev("F", "20-session average turnover", turnover_avg.map(|t| t / 1e7), Some(trend.min_turnover_avg_inr / 1e7), "₹ cr", f),
+        ev(
+            "volume",
+            format!(
+                "Volume vs {}x the {}-session average",
+                scan.vol_mult, scan.vol_sma_bars
+            ),
+            vol_sma.map(|s| volume / s),
+            Some(scan.vol_mult),
+            "x",
+            line1,
+        ),
+        ev(
+            "change",
+            "Change on the day",
+            Some(change),
+            Some(scan.min_change_pct),
+            "%",
+            line3 && e,
+        ),
+        ev(
+            "A",
+            format!("Close above {}-session average", trend.dma_bars),
+            Some(close),
+            sma_dma,
+            "₹",
+            a,
+        ),
+        ev(
+            "B",
+            format!("Close above prior {hb}-session high"),
+            Some(close),
+            high_prior,
+            "₹",
+            b,
+        ),
+        ev(
+            "C",
+            format!("{}-session return below ceiling", trend.ret_bars),
+            ret,
+            Some(trend.max_ret_20_pct),
+            "%",
+            c,
+        ),
+        ev(
+            "D",
+            "Close position in the day's range",
+            Some(cp),
+            Some(trend.min_close_position),
+            "",
+            d,
+        ),
+        ev(
+            "F",
+            "20-session average turnover",
+            turnover_avg.map(|t| t / 1e7),
+            Some(trend.min_turnover_avg_inr / 1e7),
+            "₹ cr",
+            f,
+        ),
     ])
 }
 
@@ -1023,11 +1559,17 @@ fn vbt_signal(h: &History<'_>, last: usize) -> Option<Vec<Evidence>> {
 /// `entry.valid_sessions` sessions. Triggered on the signal bar itself; pending while a recent
 /// signal's limit is still unfilled; the stop is `exits.stop_pct` below the limit.
 #[must_use]
-pub fn evaluate_vbt(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) -> Option<Evaluation> {
+pub fn evaluate_vbt(
+    h: &History<'_>,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
     let last = h.last();
     let valid = to_usize(VBT.entry.valid_sessions).max(1);
     let first = (last + 1).saturating_sub(valid);
-    let (j, mut evidence) = (first..=last).rev().find_map(|j| vbt_signal(h, j).map(|e| (j, e)))?;
+    let (j, mut evidence) = (first..=last)
+        .rev()
+        .find_map(|j| vbt_signal(h, j).map(|e| (j, e)))?;
     let limit = h.close[j];
     let through = limit * (1.0 - VBT.entry.fill_through_pct / PCT);
     if j < last && min_of(&h.low[j + 1..=last]).is_some_and(|l| l <= through) {
@@ -1036,7 +1578,14 @@ pub fn evaluate_vbt(h: &History<'_>, params: &SwingParams, horizon: (i64, i64)) 
     let triggered = j == last;
     let close = h.close[last];
     let stop = limit * (1.0 - VBT.exits.stop_pct / PCT);
-    evidence.push(ev("limit", format!("Signal on {}; limit unfilled", h.dates[j]), Some(close), Some(limit), "₹", true));
+    evidence.push(ev(
+        "limit",
+        format!("Signal on {}; limit unfilled", h.dates[j]),
+        Some(close),
+        Some(limit),
+        "₹",
+        true,
+    ));
     finish(
         Levels {
             setup: SetupType::Vbt,

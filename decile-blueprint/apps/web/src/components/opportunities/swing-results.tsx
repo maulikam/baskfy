@@ -6,17 +6,24 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
+  type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 
 import { SwingBuyButton } from "@/components/opportunities/buy-panel";
+import { MultiBuyButton } from "@/components/opportunities/multi-buy";
 import { SortableHeader } from "@/components/opportunities/sortable-header";
+import { SeriesFlag } from "@/components/regime-signal/series-flag";
+import { RegimeDot } from "@/components/regime-signal/regime-dot";
+import { GreenOnlyToggle } from "@/components/regime-signal/regime-table";
 import { DataStatusBanner, WarningsList } from "@/components/opportunities/states";
 import { SwingDetail } from "@/components/opportunities/swing-detail";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/format";
+import { isGreen } from "@/lib/regime-signal/types";
 import type { DataStatus, SwingOpportunity, SwingScanResponse } from "@/lib/opportunities/types";
 import {
   SETUP_LABEL,
@@ -52,6 +59,39 @@ export function ActionableBadge({
 function columns(status: DataStatus) {
   return [
     column.display({
+      id: "select",
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          aria-label="Select all for multi-buy"
+          className="size-4 accent-primary"
+          checked={table.getIsAllRowsSelected()}
+          ref={(el) => {
+            if (el) el.indeterminate = table.getIsSomeRowsSelected();
+          }}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          aria-label={`Select ${row.original.symbol} for multi-buy`}
+          className="size-4 accent-primary"
+          checked={row.getIsSelected()}
+          disabled={!row.getCanSelect()}
+          onChange={row.getToggleSelectedHandler()}
+        />
+      ),
+    }),
+    // GREEN 2 > RED 1, so the first (descending) press puts green first; absent sorts last.
+    column.accessor((r) => (r.regime_signal ? (r.regime_signal.signal === "GREEN" ? 2 : 1) : undefined), {
+      id: "regime",
+      header: "Regime",
+      sortDescFirst: true,
+      sortUndefined: "last",
+      cell: ({ row }) => <RegimeDot signal={row.original.regime_signal} />,
+    }),
+    column.display({
       id: "expand",
       header: () => <span className="sr-only">Details</span>,
       cell: ({ row }) => (
@@ -70,7 +110,10 @@ function columns(status: DataStatus) {
       header: "Symbol",
       cell: ({ row }) => (
         <span className="flex flex-col">
-          <span className="font-medium">{row.original.symbol}</span>
+          <span className="font-medium">
+            {row.original.symbol}
+            <SeriesFlag series={row.original.series} />
+          </span>
           <span className="max-w-[14rem] truncate text-xs text-muted-foreground">{row.original.name}</span>
         </span>
       ),
@@ -132,11 +175,18 @@ export function SwingResultsTable({
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "score", desc: true }]);
   const [expanded, setExpanded] = useState({});
+  const [greenOnly, setGreenOnly] = useState(false);
+  const [selection, setSelection] = useState<RowSelectionState>({});
+  const data = greenOnly
+    ? response.opportunities.filter((row) => isGreen(row.regime_signal))
+    : response.opportunities;
   const table = useReactTable({
-    data: response.opportunities,
+    data,
     columns: columns(response.data_status),
-    state: { sorting, expanded },
+    state: { sorting, expanded, rowSelection: selection },
     onSortingChange: setSorting,
+    onRowSelectionChange: setSelection,
+    enableRowSelection: (row) => row.original.instrument_id > 0,
     onExpandedChange: setExpanded,
     getRowId: (row) => row.id,
     getRowCanExpand: () => true,
@@ -144,10 +194,21 @@ export function SwingResultsTable({
     getSortedRowModel: getSortedRowModel(),
   });
   const span = table.getVisibleLeafColumns().length;
+  const selected = table.getSelectedRowModel().rows.map((r) => r.original);
 
   return (
+    <div className="space-y-2">
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {selected.length > 0 ? (
+        <Button type="button" size="sm" variant="ghost" onClick={() => setSelection({})}>
+          Clear selection
+        </Button>
+      ) : null}
+      <MultiBuyButton rows={selected} />
+      <GreenOnlyToggle pressed={greenOnly} onChange={setGreenOnly} />
+    </div>
     <div className="overflow-x-auto" data-testid="swing-results">
-      <table className="w-full min-w-[74rem] border-collapse text-sm">
+      <table className="w-full min-w-[76rem] border-collapse text-sm">
         <thead>
           {table.getHeaderGroups().map((group) => (
             <tr key={group.id} className="border-b border-border/70">
@@ -176,8 +237,17 @@ export function SwingResultsTable({
               ) : null}
             </Fragment>
           ))}
+          {data.length === 0 ? (
+            <tr>
+              <td colSpan={span} className="py-3 text-sm text-muted-foreground" data-testid="regime-none-green">
+                No stock in this list has a green market regime. Turn off &ldquo;Green only&rdquo; to see all{" "}
+                {response.opportunities.length}.
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }

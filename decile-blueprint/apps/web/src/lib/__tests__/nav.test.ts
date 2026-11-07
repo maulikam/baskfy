@@ -53,13 +53,16 @@ describe("the primary consumer IA", () => {
   it("puts the landing surface at /home, not at the screener's market dashboard", () => {
     expect(PRIMARY_NAV[0]?.href).toBe("/home");
     expect(LEGACY_REDIRECTS.find((r) => r.source === "/dashboard")?.destination).toBe(
-      "/market/today",
+      "/market/indices",
+    );
+    expect(LEGACY_REDIRECTS.find((r) => r.source === "/indices")?.destination).toBe(
+      "/market/indices",
     );
   });
 
   it("marks /home as its own section so the pill and the tab bar light up", () => {
     expect(primarySection("/home")).toBe("home");
-    expect(primarySection("/market/today")).toBe("market");
+    expect(primarySection("/market/indices")).toBe("market");
   });
 
   it("keeps primary labels one word and short enough not to truncate", () => {
@@ -72,7 +75,7 @@ describe("the primary consumer IA", () => {
   it("lists primary routes in the first nav group", () => {
     expect(NAV_GROUPS[0]?.items.map((item) => item.href)).toEqual([
       "/home",
-      "/market/today",
+      "/market/indices",
       "/discover",
       "/build",
       "/portfolio/overview",
@@ -84,7 +87,7 @@ describe("the primary consumer IA", () => {
   });
 
   it("keeps section tabs for each hub", () => {
-    expect(SECTION_TABS.market.map((t) => t.label)).toEqual(["Today", "Mood", "Listings"]);
+    expect(SECTION_TABS.market.map((t) => t.label)).toEqual(["Indices", "Mood", "Listings"]);
     /* Discover's six tabs. "Create" is deliberately gone: it builds a strategy, which is Build's
        job, and a second entrance from inside Discover made the two sections look like rivals.
        "Search" is the sixth, added with `/discover/search` in `dd23b59` (AF I.3) — the catalogue
@@ -229,7 +232,7 @@ describe("the primary consumer IA", () => {
   });
 
   it("documents every legacy permanent redirect, so no old path silently 404s", () => {
-    expect(LEGACY_REDIRECTS).toHaveLength(23);
+    expect(LEGACY_REDIRECTS).toHaveLength(24);
   });
 
   it("keeps every `/baskets*` path resolving after the rename to Discover", () => {
@@ -342,24 +345,24 @@ describe("the sidebar IA", () => {
 
   it("puts the desk console's sections on the Desk menu", () => {
     expect(DESK_MENU.flat().map((item) => item.href)).toEqual([
-      "/desk/",
-      "/desk/indices",
-      "/desk/performance",
-      "/desk/regime",
-      "/desk/tradebook",
-      "/desk/stops",
-      "/desk/reconcile",
-      "/desk/lifecycle",
-      "/desk/swing",
-      "/desk/nifty-options",
-      "/desk/fno",
-      "/desk/ops",
-      "/desk/settings",
+      "/rebalance",
+      "/market/indices",
+      "/performance",
+      "/regime",
+      "/tradebook",
+      "/stops",
+      "/reconcile",
+      "/lifecycle",
+      "/swing",
+      "/options/nifty",
+      "/options/desk",
+      "/ops",
+      "/desk-settings",
       "/desk/status",
     ]);
     expect(DESK_MENU.flat().find((item) => item.label === "Regime")?.children?.map((tab) => tab.href)).toEqual([
-      "/desk/regime",
-      "/desk/regime/backtest",
+      "/regime",
+      "/regime/backtest",
     ]);
   });
 
@@ -378,11 +381,18 @@ describe("the sidebar IA", () => {
   it("lists operator sleeve hubs for staff", () => {
     expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
       "/build/desk",
+      "/rebalance",
+      "/stops",
+      "/lifecycle",
       "/swing",
       "/vbt",
       "/twt",
       "/options",
       "/opportunities/swing",
+      "/options/desk",
+      "/options/nifty",
+      "/ops",
+      "/desk-settings",
     ]);
   });
 

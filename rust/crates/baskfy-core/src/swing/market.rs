@@ -210,3 +210,59 @@ pub fn exposure_tier(
         drawdown_locked: false,
     })
 }
+
+/// `INDEX_HISTORY_SESSIONS`: closes the gate's index EMAs read.
+pub const INDEX_HISTORY_SESSIONS: usize = 250;
+
+/// CPython 3.12's float `sum()` (Neumaier; compensation added only when non-zero and finite).
+#[must_use]
+pub fn py_sum(values: &[f64]) -> f64 {
+    let mut total = 0.0_f64;
+    let mut c = 0.0_f64;
+    for &x in values {
+        let t = total + x;
+        if total.abs() >= x.abs() {
+            c += (total - t) + x;
+        } else {
+            c += (x - t) + total;
+        }
+        total = t;
+    }
+    if c != 0.0 && c.is_finite() {
+        total += c;
+    }
+    total
+}
+
+/// The swing gate's `ema(values, length)`: TradingView's `ta.ema`, seeded with the simple average
+/// of the first `length` values; with no more than `length` values, their simple average.
+/// `None` for no values.
+#[must_use]
+pub fn gate_ema(values: &[f64], length: usize) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let mean = |v: &[f64]| py_sum(v) / v.len() as f64;
+    if values.len() <= length {
+        return Some(mean(values));
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let alpha = 2.0 / (length as f64 + 1.0);
+    let mut value = mean(values.get(..length)?);
+    for x in values.get(length..)? {
+        value = alpha * x + (1.0 - alpha) * value;
+    }
+    Some(value)
+}
+
+/// EMA(fast) and EMA(slow) over the last [`INDEX_HISTORY_SESSIONS`] closes ending at the last;
+/// `None` with fewer than `slow` closes.
+#[must_use]
+pub fn gate_ema_pair(closes: &[f64], fast: usize, slow: usize) -> Option<(f64, f64)> {
+    if closes.len() < slow {
+        return None;
+    }
+    let window = closes.get(closes.len().saturating_sub(INDEX_HISTORY_SESSIONS)..)?;
+    Some((gate_ema(window, fast)?, gate_ema(window, slow)?))
+}

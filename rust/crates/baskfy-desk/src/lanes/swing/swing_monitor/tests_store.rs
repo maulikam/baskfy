@@ -816,6 +816,7 @@ async fn test_the_store_still_accepts_a_starting_context_but_never_sizes_from_it
         reserved: Vec::new(),
         first_live_sessions_left: 0,
         live: None,
+        per_stock: None,
     };
     let dir = tempfile::tempdir().unwrap();
     let conn = Book {

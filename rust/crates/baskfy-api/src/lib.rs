@@ -29,6 +29,7 @@ pub mod email_address;
 pub mod entitlements;
 pub mod http_cache;
 pub mod idempotency;
+pub mod indices;
 pub mod live_prices;
 pub mod logging;
 pub mod mailer;

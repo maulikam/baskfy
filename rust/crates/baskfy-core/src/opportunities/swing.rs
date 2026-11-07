@@ -284,7 +284,13 @@ pub(crate) fn targets(
         Some(s) if s > entry && s <= reach => "T1 structural",
         _ => "T1 ATR reach",
     };
-    let r_of = |price: f64| if risk > 0.0 { (price - entry) / risk } else { 0.0 };
+    let r_of = |price: f64| {
+        if risk > 0.0 {
+            (price - entry) / risk
+        } else {
+            0.0
+        }
+    };
     let mut out = vec![Target {
         label: label.to_owned(),
         price: first,
@@ -640,7 +646,11 @@ fn histories(
         .filter(|r| r.instrument_id.is_some() && r.date.is_some_and(|d| d <= as_of))
         .cloned()
         .collect();
-    kept.sort_by(|a, b| a.instrument_id.cmp(&b.instrument_id).then_with(|| a.date.cmp(&b.date)));
+    kept.sort_by(|a, b| {
+        a.instrument_id
+            .cmp(&b.instrument_id)
+            .then_with(|| a.date.cmp(&b.date))
+    });
     let mut ranges = HashMap::new();
     let mut start = 0;
     while start < kept.len() {
@@ -763,7 +773,13 @@ pub fn build_opportunity(
     let targets = evaluation
         .targets
         .iter()
-        .map(|t| Ok((t.label.clone(), price(t.price, factor)?, ratio(t.r_multiple)?)))
+        .map(|t| {
+            Ok((
+                t.label.clone(),
+                price(t.price, factor)?,
+                ratio(t.r_multiple)?,
+            ))
+        })
         .collect::<CoreResult<Vec<_>>>()?;
     let hv_pct = num(row.hv_pct).map(ratio).transpose()?;
     Ok(SwingOpportunity {
@@ -822,7 +838,11 @@ pub fn passes_filters(
 /// Python's `seq[:n]` bound for a length.
 fn head_len(len: usize, n: i64) -> usize {
     let len_i = i64::try_from(len).unwrap_or(i64::MAX);
-    let end = if n < 0 { (len_i + n).max(0) } else { n.min(len_i) };
+    let end = if n < 0 {
+        (len_i + n).max(0)
+    } else {
+        n.min(len_i)
+    };
     usize::try_from(end).unwrap_or(0)
 }
 
@@ -899,7 +919,9 @@ pub fn scan(
         }
     }
     if found.iter().any(|o| o.rs_excess_pct.is_none()) {
-        warnings.push("Benchmark series incomplete; relative-strength readings are partial.".to_owned());
+        warnings.push(
+            "Benchmark series incomplete; relative-strength readings are partial.".to_owned(),
+        );
     }
     let mut ranked = rank(found);
     let count = |status| {
@@ -951,7 +973,11 @@ pub fn missing_sessions(present: &[NaiveDate], calendar: &[NaiveDate], window: i
     sorted.sort_unstable();
     let len = i64::try_from(sorted.len()).unwrap_or(i64::MAX);
     // Python's `[-window:]`: `[-0:]` is the whole list.
-    let start = if window > 0 { (len - window).max(0) } else { (-window).min(len) };
+    let start = if window > 0 {
+        (len - window).max(0)
+    } else {
+        (-window).min(len)
+    };
     let start = usize::try_from(start).unwrap_or(0);
     sorted[start..]
         .iter()

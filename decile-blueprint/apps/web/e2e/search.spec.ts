@@ -16,7 +16,7 @@ import { expect, test, type Page } from "@playwright/test";
 const PLACEHOLDER = /Search stocks, indices, baskets, screens/;
 
 async function openPalette(page: Page, query: string) {
-  await page.goto("/market/today");
+  await page.goto("/market/indices");
   await page.keyboard.press("ControlOrMeta+k");
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();

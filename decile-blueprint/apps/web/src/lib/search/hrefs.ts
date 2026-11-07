@@ -33,13 +33,13 @@ export const KIND_ORDER: readonly CatalogKind[] = ["instrument", "index", "baske
 /**
  * There is no index detail page, and inventing one was out of scope for this sitting.
  *
- * `/market/today` is the ~145-row dashboard, and its search box is URL state (`?q=`), so a hit
+ * `/market/indices` is the ~145-row dashboard, and its search box is URL state (`?q=`), so a hit
  * lands on that index's row with its level, change, P/E, P/B and sparkline — the closest thing to
  * an index page the product has. `encodeURIComponent` because index names carry spaces.
  * `docs/DECISIONS-MERGE.md` M46.2 records this and how to reverse it when an index page exists.
  */
 function indexHref(slug: string): Route {
-  return `/market/today?q=${encodeURIComponent(slug)}` as Route;
+  return `/market/indices?q=${encodeURIComponent(slug)}` as Route;
 }
 
 const HREFS: Record<CatalogKind, (id: string) => Route> = {

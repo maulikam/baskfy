@@ -19,6 +19,9 @@ export interface ScreenInvestHolding {
   price: string | null;
   leverage: string;
   product: "MTF" | "CNC";
+  contribution: string;
+  funding: string;
+  deviation: string;
 }
 
 export interface ScreenInvestSkip {
@@ -35,6 +38,16 @@ export interface ScreenInvestPreview {
   mtf: boolean;
   min_investment: string;
   leftover: string;
+  reserve: string;
+  costs: string;
+  contribution: string;
+  funding: string;
+  gross_target: string;
+  plan_id: string;
+  allocation_version: string;
+  quoted_at: string;
+  constraint: string | null;
+  already_sent?: boolean;
   empty_reason: string | null;
   holdings: ScreenInvestHolding[];
   skipped: ScreenInvestSkip[];
@@ -55,6 +68,21 @@ export interface ScreenInvestRequest {
   amount: number;
   mtf: boolean;
   leverage?: number;
+  reserve?: number;
+  costs?: number;
+  plan_id?: string;
+}
+
+function investBody(input: ScreenInvestRequest, name?: string): Record<string, unknown> {
+  return {
+    ...(name === undefined ? {} : { name }),
+    amount: input.amount,
+    mtf: input.mtf,
+    ...(input.leverage === undefined ? {} : { leverage: input.leverage }),
+    ...(input.reserve === undefined ? {} : { reserve: input.reserve }),
+    ...(input.costs === undefined ? {} : { costs: input.costs }),
+    ...(input.plan_id ? { plan_id: input.plan_id } : {}),
+  };
 }
 
 function asPreview(payload: unknown, fallback: string, status?: number): ScreenInvestPreview {
@@ -102,11 +130,7 @@ export function previewScreenInvest(
   return screenInvestFetch(
     `/api/v1/screens/${encodeURIComponent(screenPublicId)}/invest-preview`,
     "POST",
-    {
-      amount: input.amount,
-      mtf: input.mtf,
-      ...(input.leverage === undefined ? {} : { leverage: input.leverage }),
-    },
+    investBody(input),
     "The invest preview could not be calculated.",
   );
 }
@@ -118,12 +142,7 @@ export function confirmScreenInvest(
   return screenInvestFetch(
     `/api/v1/screens/${encodeURIComponent(screenPublicId)}/invest`,
     "POST",
-    {
-      name: input.name,
-      amount: input.amount,
-      mtf: input.mtf,
-      ...(input.leverage === undefined ? {} : { leverage: input.leverage }),
-    },
+    investBody(input, input.name),
     "The portfolio could not be created.",
   );
 }
@@ -135,11 +154,7 @@ export function rebalanceFromScreen(
   return screenInvestFetch(
     `/api/v1/portfolios/${portfolioId}/from-screen`,
     "POST",
-    {
-      amount: input.amount,
-      mtf: input.mtf,
-      ...(input.leverage === undefined ? {} : { leverage: input.leverage }),
-    },
+    investBody(input),
     "The portfolio could not be updated.",
   );
 }

@@ -263,6 +263,20 @@ pub fn gate_change_line(
             gate_str(before),
             gate_str(c.gate)
         ),
+        Some(live) if live.index_slug == baskfy_core::regime::INDEX_LED_SLUG => format!(
+            "INFO swing_monitor gate {} -> {} on the live index-led regime: {} leading (min {}); \
+             rung {}, entries {}",
+            gate_str(before),
+            gate_str(c.gate),
+            baskfy_providers::py::fixed(live.reading.close, 0),
+            baskfy_providers::py::fixed(live.reading.ma_slow + 0.5, 0),
+            c.tier.level,
+            if c.tier.new_entries_allowed {
+                "allowed"
+            } else {
+                "refused"
+            }
+        ),
         Some(live) => format!(
             "INFO swing_monitor gate {} -> {} on the live {}: {}, 10-day {} {} 20-day {}; rung {}, \
              entries {}",

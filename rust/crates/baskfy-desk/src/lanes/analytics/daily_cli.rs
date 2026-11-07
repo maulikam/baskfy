@@ -369,8 +369,13 @@ pub async fn main(state: &AppState, argv: &[String]) -> i32 {
         }
     };
     if !authed {
-        say("Kite session expired. Tokens last one trading day and the standard login flow has no refresh token.");
-        say(&format!("  log in:  {}", kite.login_url().unwrap_or_default()));
+        say(
+            "Kite session expired. Tokens last one trading day and the standard login flow has no refresh token.",
+        );
+        say(&format!(
+            "  log in:  {}",
+            kite.login_url().unwrap_or_default()
+        ));
         say("  then re-run this command.");
         if record_run {
             let steps: Vec<(String, String, String)> = STEPS
@@ -384,7 +389,16 @@ pub async fn main(state: &AppState, argv: &[String]) -> i32 {
                 })
                 .collect();
             let (secs, at) = stamp_record();
-            safe_record(&mut conn, &steps, &a.source, today, Some(dr::AUTH), secs, &at).await;
+            safe_record(
+                &mut conn,
+                &steps,
+                &a.source,
+                today,
+                Some(dr::AUTH),
+                secs,
+                &at,
+            )
+            .await;
         }
         return 2;
     }
@@ -574,7 +588,9 @@ pub async fn main(state: &AppState, argv: &[String]) -> i32 {
             count(&st, "trades")
         ));
         if count(&st, "breadth_readings").parse::<i64>().unwrap_or(0) < 26 {
-            say("  breadth history is still too thin for the tiered regime backtest; pass --scan on the day you upload one");
+            say(
+                "  breadth history is still too thin for the tiered regime backtest; pass --scan on the day you upload one",
+            );
         }
         if count(&st, "trades") == "0" {
             say("  no tax lots: import a Console tradebook at /tradebook");
@@ -657,10 +673,12 @@ async fn breadth_step(
     let frame = crate::lanes::weekly::score::load_scan(&raw, &scoring).map_err(|e| e.0)?;
     let audit = crate::lanes::weekly::score::audit(&frame, &scoring).map_err(|e| e.0)?;
     let opt = |v: f64| (!v.is_nan()).then_some(v);
-    let close_ma20 = frame
-        .f64s("close")
-        .zip(frame.f64s("ma_20"))
-        .map(|(c, m)| c.into_iter().zip(m).map(|(c, m)| (opt(c), opt(m))).collect());
+    let close_ma20 = frame.f64s("close").zip(frame.f64s("ma_20")).map(|(c, m)| {
+        c.into_iter()
+            .zip(m)
+            .map(|(c, m)| (opt(c), opt(m)))
+            .collect()
+    });
     let cols = breadth::ScanColumns {
         symbol: frame.strs("symbol").map(|v| {
             v.into_iter()
@@ -709,7 +727,10 @@ mod tests {
             ["index history"]
         );
         assert_eq!(
-            parse_args(&s(&["--db", "x.db", "--check"])).unwrap().db.as_deref(),
+            parse_args(&s(&["--db", "x.db", "--check"]))
+                .unwrap()
+                .db
+                .as_deref(),
             Some("x.db")
         );
     }

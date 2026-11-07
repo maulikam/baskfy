@@ -6,7 +6,7 @@ import { DeskMenu } from "@/components/shell/desk-menu";
 import { StaffProvider } from "@/components/shell/staff-context";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/desk/regime/backtest",
+  usePathname: () => "/regime/backtest",
 }));
 
 function renderMenu() {
@@ -18,7 +18,7 @@ function renderMenu() {
 }
 
 describe("the Desk menu", () => {
-  it("lists the desk console and opens Regime's backtest", async () => {
+  it("lists the desk pages in the web app and opens Regime's backtest", async () => {
     const user = userEvent.setup();
     renderMenu();
 
@@ -28,14 +28,14 @@ describe("the Desk menu", () => {
 
     expect(screen.getByRole("menuitem", { name: "Performance" })).toHaveAttribute(
       "href",
-      "/desk/performance",
+      "/performance",
     );
-    expect(screen.getByRole("menuitem", { name: "Swing" })).toHaveAttribute("href", "/desk/swing");
+    expect(screen.getByRole("menuitem", { name: "Swing" })).toHaveAttribute("href", "/swing");
 
     await user.hover(screen.getByRole("menuitem", { name: "Regime" }));
     expect(await screen.findByRole("menuitem", { name: "Backtest" })).toHaveAttribute(
       "href",
-      "/desk/regime/backtest",
+      "/regime/backtest",
     );
     expect(screen.getByRole("menuitem", { name: "Backtest" })).toHaveAttribute("aria-current", "page");
   });

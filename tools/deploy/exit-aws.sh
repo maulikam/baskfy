@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
 # Leave AWS: take the box's whole state home, verified, before anything is destroyed.
 #
 #     bash tools/deploy/exit-aws.sh export     # on the box: stop, dump, pack, upload to S3

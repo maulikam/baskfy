@@ -61,6 +61,8 @@ pub struct SignalContext {
     pub first_live_sessions_left: i64,
     /// SW30: the live re-read, when it took.
     pub live: Option<LiveGate>,
+    /// Per-stock regime (`BASKFY_REGIME_MODE=per_stock`): each new entry's own index gate.
+    pub per_stock: Option<super::per_stock::PerStockGate>,
 }
 
 fn red_tier() -> ExposureTier {
@@ -139,12 +141,28 @@ pub async fn load_context(
         ),
     };
     let mut live = None;
-    if let (Some(m), Some(level)) = (&market, live_level) {
-        live = read_live_gate(conn, m, &tier, day, schema, level, now, index_slug).await?;
-        if let Some(l) = &live {
-            gate = l.gate;
-            tier = l.tier.clone();
+    // Index-led (BASKFY_REGIME_MODE=index_led): when the close's row was set by the regime verdict, the live
+    // overlay is the worker's latest intraday regime run, never the Smallcap quote.
+    let index_led = match &market {
+        Some(m) => read_index_led_gate(conn, m, &tier, user_id, day, schema, now).await?,
+        None => None,
+    };
+    let per_stock = match &market {
+        Some(_) if index_led.is_none() => {
+            super::per_stock::load(conn, user_id, day, schema, live_level, now).await?
         }
+        _ => None,
+    };
+    if let Some(overlay) = index_led {
+        live = overlay;
+    } else if per_stock.is_some() {
+        // The close's breadth gate stands; the index half is per stock (entries_now).
+    } else if let (Some(m), Some(level)) = (&market, live_level) {
+        live = read_live_gate(conn, m, &tier, day, schema, level, now, index_slug).await?;
+    }
+    if let Some(l) = &live {
+        gate = l.gate;
+        tier = l.tier.clone();
     }
     let capital_row = conn
         .execute(
@@ -330,6 +348,7 @@ pub async fn load_context(
         reserved,
         first_live_sessions_left: first_live_left,
         live,
+        per_stock,
     })
 }
 
@@ -374,6 +393,110 @@ pub async fn read_live_gate(
     ))
 }
 
+/// The index-led live overlay. `None` = not index-led (legacy path); `Some(None)` = index-led,
+/// nothing fresher than the close; `Some(Some(g))` = today's latest intraday regime run.
+///
+/// # Errors
+/// The driver's.
+#[allow(clippy::too_many_arguments)]
+pub async fn read_index_led_gate(
+    conn: &mut Conn,
+    market: &crate::storage::Row,
+    close_tier: &ExposureTier,
+    user_id: i64,
+    day: NaiveDate,
+    schema: &str,
+    now: Option<DateTime<FixedOffset>>,
+) -> Result<Option<Option<LiveGate>>, StorageError> {
+    use baskfy_core::regime::{INDEX_LED_SLUG, RegimeConfig, RegimeMode};
+    let cfg = RegimeConfig::from_lookup(&|k| std::env::var(k).ok()).unwrap_or_default();
+    if cfg.mode != RegimeMode::IndexLed || !conn.is_postgres() {
+        return Ok(None);
+    }
+    let slug_row = conn
+        .execute(
+            &format!(
+                "SELECT index_slug FROM {} WHERE user_id = ? AND date < ? ORDER BY date DESC LIMIT 1",
+                t(schema, "sw_market_daily")
+            ),
+            &[
+                Param::Int(user_id),
+                Param::Text(day.format("%Y-%m-%d").to_string()),
+            ],
+        )
+        .await?
+        .rows
+        .into_iter()
+        .next();
+    if slug_row.as_ref().map(|r| text(col(r, "index_slug"))).as_deref() != Some(INDEX_LED_SLUG) {
+        return Ok(None);
+    }
+    let Some(moment) = now else { return Ok(Some(None)) };
+    let moment = moment.with_timezone(&crate::clock::ist());
+    if moment.date_naive() != day
+        || !in_session(&moment)
+        || col(market, "pct_up_strong_1m").is_none_or(DbValue::is_null)
+    {
+        return Ok(Some(None));
+    }
+    let ready = conn
+        .execute(
+            "SELECT to_regclass(?) IS NOT NULL AS ok",
+            &[Param::Text(t(schema, "swing_regime_run"))],
+        )
+        .await?
+        .rows
+        .into_iter()
+        .next()
+        .is_some_and(|r| boolean(col(&r, "ok")));
+    if !ready {
+        return Ok(Some(None));
+    }
+    let run = conn
+        .execute(
+            &format!(
+                "SELECT gate_open, leading_count, min_leading FROM {} WHERE mode = 'index_led' \
+                 AND kind = 'intraday' AND as_of = CAST(? AS DATE) ORDER BY run_at DESC LIMIT 1",
+                t(schema, "swing_regime_run")
+            ),
+            &[Param::Text(day.format("%Y-%m-%d").to_string())],
+        )
+        .await?
+        .rows
+        .into_iter()
+        .next();
+    let Some(run) = run else { return Ok(Some(None)) };
+    let open = boolean(col(&run, "gate_open"));
+    #[allow(clippy::cast_precision_loss)]
+    let (leading, min) = (
+        int(col(&run, "leading_count")) as f64,
+        int(col(&run, "min_leading")) as f64,
+    );
+    let config = SwingConfig::default().market;
+    let breadth = BreadthSnapshot {
+        constituent_count: int(col(market, "constituent_count")),
+        pct_up_strong_1m: float_of(col(market, "pct_up_strong_1m")),
+        pct_new_52w_high: float_of(col(market, "pct_new_52w_high")),
+        pct_above_ma_slow: float_of(col(market, "pct_above_ma_slow")),
+    };
+    let gate = if open {
+        super::rules::market_gate(&breadth, None, &config)
+    } else {
+        MarketGate::Red
+    };
+    Ok(Some(Some(LiveGate {
+        gate,
+        tier: super::rules::intraday_tier(close_tier, gate, &config),
+        // Leading count against the minimum, in the reading's slots (long_bias = open).
+        reading: super::rules::IndexReading {
+            close: leading,
+            ma_fast: leading,
+            ma_slow: min - 0.5,
+        },
+        index_slug: INDEX_LED_SLUG.to_owned(),
+    })))
+}
+
 /// `live_execution()`: a confirm would place a real order — the swing flag on AND the desk not
 /// in DRY_RUN.
 #[must_use]
@@ -402,6 +525,18 @@ pub fn entries_now(
     day: NaiveDate,
     live: bool,
 ) -> Result<(Vec<PlanLine>, Vec<Skipped>), baskfy_core::error::CoreError> {
+    if let Some(ps) = &context.per_stock
+        && !ps.allows(&item.symbol)
+    {
+        return Ok((
+            Vec::new(),
+            vec![Skipped {
+                symbol: item.symbol.clone(),
+                reason: SkipReason::GateRed,
+                detail: format!("per-stock regime RED for {}", item.symbol),
+            }],
+        ));
+    }
     let reserved_others = i64::try_from(
         context
             .reserved
@@ -476,6 +611,12 @@ pub fn entries_now(
 pub fn gate_line(context: &SignalContext) -> String {
     match &context.live {
         None => format!("gate {} (last close)", gate_str(context.gate)),
+        Some(live) if live.index_slug == baskfy_core::regime::INDEX_LED_SLUG => format!(
+            "gate {} (live index-led: {} leading, min {})",
+            gate_str(context.gate),
+            baskfy_providers::py::fixed(live.reading.close, 0),
+            baskfy_providers::py::fixed(live.reading.ma_slow + 0.5, 0),
+        ),
         Some(live) => format!(
             "gate {} (live {} {}: 10d {} / 20d {})",
             gate_str(context.gate),

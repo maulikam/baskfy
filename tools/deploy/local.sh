@@ -21,7 +21,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOCK="$ROOT/decile-blueprint/infra/docker"
 BUNDLE="${BASKFY_EXIT_BUNDLE:-/Volumes/T7-Work/baskfy-aws-exit-20261029/bundle}"
 HOME_DIR="${BASKFY_LOCAL_DIR:-/Volumes/T7-Work/baskfy-local}"
-TAG="${BASKFY_LOCAL_TAG:-d78907f}"
+TAG="${BASKFY_LOCAL_TAG:-$(cat "$HOME_DIR/py.tag" 2>/dev/null || echo d78907f)}"
 # The web image is rebuilt here (its NEXT_PUBLIC_* origins are baked at build time, and the box's
 # named staging.baskfy.com); `web.tag` holds the local build's tag, else the box's.
 WEB_TAG="${BASKFY_LOCAL_WEB_TAG:-$(cat "$HOME_DIR/web.tag" 2>/dev/null || echo "$TAG")}"
@@ -105,7 +105,7 @@ services:
   # LOCAL-3 (2 Nov 2026, Maulik): no HTTP Basic on the local desk. compose.prod.yml still
   # interpolates BASKFY_DESK_PASSWORD (the box copy stays in the env file); this blanks the
   # process that serves /desk. AWS/prod is unchanged.
-  desk:          {environment: {DESK_PASSWORD: ""}}
+  desk:          {environment: {DESK_PASSWORD: "", BASKFY_DESK_WEB_UI: "true"}}  # DESK-UI: browser page GETs go to the web app
   worker:        {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   ingest-worker: {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   beat:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}

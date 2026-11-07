@@ -53,7 +53,14 @@ function filesUnder(dir: string): string[] {
   });
 }
 
-const ALL = TREES.flatMap(filesUnder);
+/* The two staff consoles are the desk's own pages moved into the shell; they have their own census below. */
+const CONSOLES = [
+  join(WEB_SRC, "app", "(app)", "options", "desk"),
+  join(WEB_SRC, "app", "(app)", "options", "nifty"),
+];
+const ALL = TREES.flatMap(filesUnder).filter(
+  (path) => !CONSOLES.some((dir) => path.startsWith(dir)),
+);
 const SOURCES = ALL.filter(
   (path) =>
     (path.endsWith(".ts") || path.endsWith(".tsx")) &&
@@ -117,5 +124,52 @@ describe("the options tab can write an event day and the settings, and nothing e
     );
     expect(page).not.toMatch(/from "\.\/actions"/);
     expect(page).not.toMatch(/action=\{/);
+  });
+});
+
+describe("the staff desk consoles (/options/desk, /options/nifty) act only through the desk", () => {
+  const CONSOLE_SOURCES = [...CONSOLES, join(WEB_SRC, "components", "options-desk")]
+    .flatMap(filesUnder)
+    .filter((path) => /\.tsx?$/.test(path) && !path.includes("__tests__"));
+  const read = (path: string) => readFileSync(path, "utf8");
+
+  it("has no server action and no route handler", () => {
+    for (const path of CONSOLE_SOURCES) {
+      expect(read(path), path).not.toMatch(/^\s*["']use server["']/m);
+      expect(/[/\\]route\.(ts|tsx|js)$/.test(path), path).toBe(false);
+    }
+  });
+
+  it("POSTs only to the desk's three confirm routes, same-origin, with confirm=true", () => {
+    const api = read(join(WEB_SRC, "components", "options-desk", "api.ts"));
+    const union = /export type ConsolePost\s*=([^;]+);/.exec(api)?.[1] ?? "";
+    const paths = [...union.matchAll(/path: "([^"]+)"/g)].map((m) => m[1]);
+    expect(paths.sort()).toEqual(["/fno/execute", "/nifty-options/close", "/nifty-options/execute"]);
+    expect(api).toMatch(/fetch\(`\$\{DESK\}\$\{post\.path\}`/);
+    expect(api.match(/confirm: "true"/g)?.length).toBe(2);
+    expect(api).not.toMatch(/https?:\/\//);
+    for (const path of CONSOLE_SOURCES.filter((p) => !p.endsWith("api.ts"))) {
+      expect(read(path), path).not.toMatch(/method:\s*"POST"/);
+    }
+  });
+
+  it("sends a plan through an explicit review step, staff only", () => {
+    const confirm = read(join(WEB_SRC, "components", "options-desk", "confirm-action.tsx"));
+    expect(confirm).toMatch(/useIsStaff\(\)/);
+    expect(confirm).toMatch(/if \(!staff\) return null/);
+    expect(confirm).toMatch(/stage !== "review"/);
+  });
+
+  it("gates both pages to staff on the server", () => {
+    for (const dir of CONSOLES) {
+      const page = read(join(dir, "page.tsx"));
+      expect(page).toMatch(/if \(!me\?\.is_staff\) notFound\(\)/);
+    }
+  });
+
+  it("never names the F3 auto-exit flag as something to change", () => {
+    for (const path of CONSOLE_SOURCES) {
+      expect(read(path), path).not.toMatch(/BASKFY_FNO_F3_AUTO_EXIT\s*=/);
+    }
   });
 });

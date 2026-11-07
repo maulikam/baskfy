@@ -13,25 +13,64 @@ use super::super::rules::{PLAN_TTL_MINUTES, dec_of_float, gate_str, py_dec, q2};
 use super::super::store::SwingStore;
 use super::super::swing_monitor::runner::uuid_text;
 use super::super::values::{Val, bind, col, int};
-use super::open_store;
+use super::{open_store, opps_ticket};
 use crate::app::AppState;
 use crate::lanes::exec_core::exec_kite::status_session;
 use crate::lanes::twt::common::{FormFields, HttpError, json_response, server_error};
 use crate::storage::Param;
-use crate::wire::{PyDict, PyValue, dict};
+use crate::wire::{PyDict, PyValue};
+
+fn opt_dec(form: &FormFields, name: &str) -> Result<Option<Decimal>, Box<Response<Body>>> {
+    match form.opt(name) {
+        None => Ok(None),
+        Some(v) => Decimal::from_str(v.trim())
+            .map(Some)
+            .map_err(|_| Box::new(HttpError::new(400, format!("{name} must be a number")).response())),
+    }
+}
+
+fn book_setup(setup: &str) -> &'static str {
+    match setup.trim().to_uppercase().as_str() {
+        "EP" | "EPISODIC_PIVOT" => "EP",
+        _ => "FLAG",
+    }
+}
 
 #[allow(clippy::too_many_lines)]
 pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Response<Body> {
     let mut form = FormFields::parse(&body);
     let symbol = form.str("symbol").trim().to_uppercase();
     let instrument_id = form.int("instrument_id");
-    let setup = form.str("setup");
-    let amount_raw = form.str("amount_inr");
     let product_raw = form.str("product");
     let last_raw = form.str("last_price");
-    let trigger_raw = form.str("trigger");
-    let stop_raw = form.str("stop");
-    let lot_size = form.int("lot_size");
+    let setup = form.opt("setup").unwrap_or_default();
+    let source = form.opt("source").unwrap_or_else(|| "opportunities".to_owned());
+    let order_type = form
+        .opt("order_type")
+        .unwrap_or_else(|| "MARKET".to_owned())
+        .trim()
+        .to_uppercase();
+    let basis = form
+        .opt("amount_basis")
+        .unwrap_or_else(|| "order_value".to_owned());
+    let lot = form
+        .opt("lot_size")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(1)
+        .max(1);
+    let qty_in = form
+        .opt("quantity")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0);
+    let (amount, limit, trigger_in, stop_in) = match (
+        opt_dec(&form, "amount_inr"),
+        opt_dec(&form, "limit_price"),
+        opt_dec(&form, "trigger"),
+        opt_dec(&form, "stop"),
+    ) {
+        (Ok(a), Ok(l), Ok(t), Ok(s)) => (a, l, t, s),
+        (Err(r), ..) | (_, Err(r), ..) | (_, _, Err(r), _) | (.., Err(r)) => return *r,
+    };
     if let Some(r) = form.finish() {
         return r;
     }
@@ -49,82 +88,175 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
         )
         .response();
     }
-    let Ok(amount) = Decimal::from_str(amount_raw.trim()) else {
-        return HttpError::new(400, "amount_inr must be a number of rupees").response();
-    };
-    if amount <= Decimal::ZERO {
-        return HttpError::new(400, "amount_inr must be positive").response();
+    if order_type != "MARKET" && order_type != "LIMIT" {
+        return HttpError::new(400, "order_type must be MARKET or LIMIT").response();
+    }
+    if basis != "order_value" && basis != "own" {
+        return HttpError::new(400, "amount_basis must be order_value or own").response();
+    }
+    let limit = limit.filter(|l| *l > Decimal::ZERO);
+    if order_type == "LIMIT" && limit.is_none() {
+        return HttpError::new(400, "a LIMIT order needs a positive limit_price").response();
+    }
+    if qty_in <= 0 && !amount.is_some_and(|a| a > Decimal::ZERO) {
+        return HttpError::new(400, "give a positive quantity or amount_inr").response();
     }
     let Ok(form_price) = Decimal::from_str(last_raw.trim()) else {
         return HttpError::new(400, "last_price must be a price").response();
     };
-    let Ok(trigger) = Decimal::from_str(trigger_raw.trim()) else {
-        return HttpError::new(400, "trigger must be a price").response();
-    };
-    let Ok(stop) = Decimal::from_str(stop_raw.trim()) else {
-        return HttpError::new(400, "stop must be a price").response();
-    };
-    if stop >= trigger {
-        return HttpError::new(400, "stop must be below the trigger").response();
-    }
-    let lot = lot_size.max(1);
     let settings = state.settings_snapshot();
     let gates = swing_gates(&settings);
+    let simulated = gates.dry_run;
     let session = status_session(&state).await;
     let kite_authed = matches!(session.get("authed"), Some(PyValue::Bool(true)));
-    let live = super::last_price(&state, &symbol).await;
-    let price = live.unwrap_or(form_price);
-    if price <= Decimal::ZERO {
+    let q = if kite_authed {
+        opps_ticket::quote(&state, &symbol, "NSE").await
+    } else {
+        None
+    };
+    let quote_price = q.as_ref().map_or(form_price, |x| x.price);
+    let stale = q.as_ref().is_none_or(|x| x.stale);
+    if quote_price <= Decimal::ZERO {
         return HttpError::new(400, "last_price must be positive").response();
     }
-    let shares = (amount / price).trunc();
-    let mut qty: i64 = shares.to_string().parse().unwrap_or(0);
-    qty = (qty / lot) * lot;
+    let price = if order_type == "LIMIT" { limit.unwrap_or(quote_price) } else { quote_price };
+    let band_mid = (dec_of_float(settings.swing_stop_band_min)
+        + dec_of_float(settings.swing_stop_band_max))
+        / Decimal::TWO;
+    let (stop, stop_basis) = match stop_in.filter(|s| *s > Decimal::ZERO) {
+        Some(s) => (s, "setup"),
+        None => (q2(price * (Decimal::ONE - band_mid)), "band"),
+    };
+    let trigger = trigger_in.filter(|t| *t > Decimal::ZERO).unwrap_or(price);
+    if stop >= trigger || stop >= price {
+        return HttpError::new(400, "stop must be below the trigger and the order price").response();
+    }
+    let lot_floor = |n: i64| (n / lot) * lot;
+    let to_i = |d: Decimal| -> i64 { d.trunc().to_string().parse().unwrap_or(0) };
+    let mut qty = if qty_in > 0 {
+        lot_floor(qty_in)
+    } else {
+        lot_floor(to_i(amount.unwrap_or(Decimal::ZERO) / price))
+    };
+    let mut margin: Option<opps_ticket::MarginQuote> = None;
+    let mut margin_err: Option<String> = None;
+    if kite_authed && qty > 0 {
+        if qty_in <= 0 && basis == "own" && product == "MTF" {
+            let budget = amount.unwrap_or(Decimal::ZERO);
+            match opps_ticket::margin_detail(&state, &symbol, "NSE", lot, &product, &order_type, price).await {
+                Ok(one) if one.total > Decimal::ZERO => {
+                    qty = lot_floor(to_i(budget / (one.total / Decimal::from(lot))));
+                }
+                Ok(_) => {}
+                Err(e) => margin_err = Some(e),
+            }
+            for _ in 0..4 {
+                if qty <= 0 || margin_err.is_some() {
+                    break;
+                }
+                match opps_ticket::margin_detail(&state, &symbol, "NSE", qty, &product, &order_type, price).await {
+                    Ok(m) if m.total + m.charges > budget => {
+                        let per = m.total / Decimal::from(qty);
+                        let over = ((m.total + m.charges - budget) / per).ceil();
+                        qty = lot_floor(qty - to_i(over).max(1));
+                    }
+                    Ok(m) => {
+                        margin = Some(m);
+                        break;
+                    }
+                    Err(e) => margin_err = Some(e),
+                }
+            }
+        } else {
+            match opps_ticket::margin_detail(&state, &symbol, "NSE", qty, &product, &order_type, price).await {
+                Ok(m) => margin = Some(m),
+                Err(e) => margin_err = Some(e),
+            }
+        }
+    }
+    let funds = if kite_authed { opps_ticket::available_funds(&state).await } else { None };
     let now = state.clock.now_ist();
     let Ok(mut store) = open_store(&state).await else {
         return server_error();
     };
-    let day = now.date_naive();
-    let context = match store.session_context(day).await {
+    let context = match store.session_context(now.date_naive()).await {
         Ok(c) => c,
         Err(_) => return server_error(),
     };
+    let order_value = q2(price * Decimal::from(qty.max(0)));
+    let own = margin.as_ref().map(|m| m.total);
+    let charges = margin.as_ref().map(|m| m.charges);
+    let funding = own.map(|o| (order_value - o).max(Decimal::ZERO));
+    let rate = opps_ticket::mtf_interest_pct_per_day();
+    let interest = if product == "MTF" {
+        funding.map(|f| q2(f * rate / Decimal::ONE_HUNDRED))
+    } else {
+        None
+    };
     let mut skip = String::new();
     if qty <= 0 {
-        skip = format!("{symbol}: amount {amount} is below one lot at {price}");
+        skip = format!("{symbol}: the amount is below one lot at {}", py_dec(q2(price)));
     } else if !context.tier.new_entries_allowed {
         skip = format!(
             "GATE_RED: {symbol} — new entries are closed (rung {})",
             context.tier.level
         );
+    } else if product == "MTF" && margin.is_none() {
+        skip = format!(
+            "MTF_UNAVAILABLE: {}",
+            margin_err.clone().unwrap_or_else(|| "connect Kite to quote MTF margin".to_owned())
+        );
+    } else if !simulated && !kite_authed {
+        skip = "KITE_NOT_CONNECTED: connect Kite on the desk before a live order".to_owned();
+    } else if !simulated && margin.is_none() {
+        skip = format!(
+            "MARGIN_UNAVAILABLE: {}",
+            margin_err.clone().unwrap_or_else(|| "the broker returned no margin".to_owned())
+        );
+    } else if !simulated && order_type == "MARKET" && stale {
+        skip = format!("STALE_QUOTE: {symbol} — no fresh broker quote; a live market order is not sent on it");
+    } else if !simulated && funds.is_none() {
+        skip = "FUNDS_UNAVAILABLE: the broker did not return available funds".to_owned();
+    } else if !simulated
+        && let (Some(f), Some(o), Some(c)) = (funds, own, charges)
+        && f < o + c
+    {
+        skip = format!(
+            "INSUFFICIENT_FUNDS: needs ₹{} (margin + charges), ₹{} available",
+            py_dec(q2(o + c)),
+            py_dec(q2(f))
+        );
     }
-    let simulated = gates.dry_run;
     let gtt_note = if product == "MTF" {
-        "A same-session GTT stop is still required (vol-scaled 8–12%). Kite GTT legs are CNC \
-         cash triggers — Kite GTT does not accept product MTF — so the stop sells the shares, \
-         it does not attach to the MTF facility. If Kite refuses the GTT, arm it from the desk."
+        "A same-session GTT stop is placed after the fill (vol-scaled 8–12%). Kite GTT does not \
+         accept product MTF, so the stop is a CNC cash trigger that sells the shares."
             .to_owned()
     } else {
-        "A same-session GTT stop is required (vol-scaled 8–12%).".to_owned()
+        "A same-session GTT stop is placed after the fill (vol-scaled 8–12%).".to_owned()
     };
-    let mut margin: Option<Decimal> = None;
-    if skip.is_empty() && qty > 0 {
-        margin = margin_quote(&state, &symbol, qty, &product).await;
-    }
     let mut plan_id = String::new();
     let mut line_id: Option<i64> = None;
     let mut expires_at = None;
     if skip.is_empty() {
+        let mut note = format!(
+            "product={product} amount={} order={order_type} ref={} src={} setup={}",
+            py_dec(q2(amount.unwrap_or(order_value))),
+            py_dec(q2(quote_price)),
+            source.split_whitespace().collect::<String>(),
+            if setup.trim().is_empty() { "-".to_owned() } else { setup.split_whitespace().collect::<String>() },
+        );
+        if let Some(l) = limit.filter(|_| order_type == "LIMIT") {
+            note.push_str(&format!(" price={}", py_dec(q2(l))));
+        }
         let built = persist_plan(
             &mut store,
             &state,
             now,
             &symbol,
             instrument_id,
-            &setup,
+            book_setup(&setup),
             qty,
-            &product,
-            &amount,
+            &note,
             trigger,
             stop,
             price,
@@ -141,36 +273,46 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
             Err(_) => return server_error(),
         }
     }
+    let dv = |d: Option<Decimal>| d.map_or(PyValue::None, |v| PyValue::Str(py_dec(q2(v))));
     let mut body = PyDict::new();
     body.insert("confirmable", PyValue::Bool(skip.is_empty() && line_id.is_some()));
     body.insert(
         "plan_id",
-        if plan_id.is_empty() {
-            PyValue::None
-        } else {
-            PyValue::Str(plan_id)
-        },
+        if plan_id.is_empty() { PyValue::None } else { PyValue::Str(plan_id) },
     );
-    body.insert(
-        "line_id",
-        line_id.map_or(PyValue::None, PyValue::Int),
-    );
+    body.insert("line_id", line_id.map_or(PyValue::None, PyValue::Int));
     body.insert("symbol", PyValue::Str(symbol));
+    body.insert("exchange", PyValue::Str("NSE".to_owned()));
     body.insert("product", PyValue::Str(product));
-    body.insert("quantity", PyValue::Int(qty));
-    body.insert("amount_inr", PyValue::Str(py_dec(q2(amount))));
-    body.insert("last_price", PyValue::Str(py_dec(q2(price))));
+    body.insert("order_type", PyValue::Str(order_type));
+    body.insert("limit_price", dv(limit));
+    body.insert("quantity", PyValue::Int(qty.max(0)));
+    body.insert("amount_inr", dv(amount));
+    body.insert("amount_basis", PyValue::Str(basis));
+    body.insert("last_price", PyValue::Str(py_dec(q2(quote_price))));
+    body.insert("order_price", PyValue::Str(py_dec(q2(price))));
     body.insert(
-        "required_margin_inr",
-        margin.map_or(PyValue::None, |m| PyValue::Str(py_dec(q2(m)))),
+        "quote_at",
+        q.as_ref().and_then(|x| x.at.clone()).map_or(PyValue::None, PyValue::Str),
     );
+    body.insert("quote_live", PyValue::Bool(q.is_some()));
+    body.insert("stale_quote", PyValue::Bool(stale));
+    body.insert("order_value", PyValue::Str(py_dec(order_value)));
+    body.insert("required_margin_inr", dv(own));
+    body.insert("own_contribution", dv(own));
+    body.insert("broker_funding", dv(funding));
+    body.insert("charges", dv(charges));
+    body.insert("leverage", dv(margin.as_ref().and_then(|m| m.leverage)));
+    body.insert("available_funds", dv(funds));
+    body.insert("margin_error", margin_err.map_or(PyValue::None, PyValue::Str));
+    body.insert("mtf_interest_pct_per_day", PyValue::Str(py_dec(rate)));
+    body.insert("mtf_interest_per_day", dv(interest));
+    body.insert("stop", PyValue::Str(py_dec(q2(stop))));
+    body.insert("stop_basis", PyValue::Str(stop_basis.to_owned()));
+    body.insert("trigger", PyValue::Str(py_dec(q2(trigger))));
     body.insert(
         "skip",
-        if skip.is_empty() {
-            PyValue::None
-        } else {
-            PyValue::Str(skip)
-        },
+        if skip.is_empty() { PyValue::None } else { PyValue::Str(skip) },
     );
     body.insert("simulated", PyValue::Bool(simulated));
     body.insert("kite_authed", PyValue::Bool(kite_authed));
@@ -199,8 +341,7 @@ async fn persist_plan(
     instrument_id: i64,
     setup: &str,
     qty: i64,
-    product: &str,
-    amount: &Decimal,
+    note_body: &str,
     trigger: Decimal,
     stop: Decimal,
     price: Decimal,
@@ -211,7 +352,7 @@ async fn persist_plan(
     let expires_at = now + chrono::Duration::minutes(PLAN_TTL_MINUTES);
     let risk = q2((trigger - stop) * Decimal::from(qty));
     let value = q2(price * Decimal::from(qty));
-    let note = format!("{OPPS_NOTE_PREFIX}product={product} amount={amount}");
+    let note = format!("{OPPS_NOTE_PREFIX}{note_body}");
     let plan_hash = format!("opps:{plan_id}");
     let plan_row = store
         .conn
@@ -281,43 +422,4 @@ async fn persist_plan(
         .filter(|i| *i > 0)
         .ok_or_else(|| "no line id".to_owned())?;
     Ok((plan_id, line_id, expires_at))
-}
-
-async fn margin_quote(
-    state: &crate::app::AppState,
-    symbol: &str,
-    qty: i64,
-    product: &str,
-) -> Option<Decimal> {
-    if qty <= 0 {
-        return None;
-    }
-    let basket = [PyValue::Map(dict([
-        ("exchange", PyValue::Str("NSE".to_owned())),
-        ("tradingsymbol", PyValue::Str(symbol.to_owned())),
-        ("transaction_type", PyValue::Str("BUY".to_owned())),
-        ("variety", PyValue::Str("regular".to_owned())),
-        ("product", PyValue::Str(product.to_owned())),
-        ("order_type", PyValue::Str("MARKET".to_owned())),
-        ("quantity", PyValue::Int(qty)),
-    ]))];
-    let resp = state
-        .kite
-        .basket_order_margins(&basket, true, None)
-        .await
-        .ok()?;
-    let fin = match &resp {
-        PyValue::Map(m) => m.get("final").cloned().unwrap_or(PyValue::None),
-        _ => PyValue::None,
-    };
-    let total = match &fin {
-        PyValue::Map(m) => m.get("total").cloned().unwrap_or(PyValue::None),
-        _ => PyValue::None,
-    };
-    match total {
-        PyValue::Float(f) if f > 0.0 => Some(dec_of_float(f)),
-        PyValue::Int(i) if i > 0 => Some(Decimal::from(i)),
-        PyValue::Str(s) => Decimal::from_str(s.trim()).ok().filter(|d| *d > Decimal::ZERO),
-        _ => None,
-    }
 }

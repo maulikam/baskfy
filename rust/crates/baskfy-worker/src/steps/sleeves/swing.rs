@@ -869,15 +869,35 @@ async fn write_market_row(
             .collect();
         swing_market::breadth_snapshot(&rows, &config.market)
     };
-    let (reading, used_slug) = load_index_reading(
-        conn,
-        lookup,
-        index_slug,
-        &config.market,
-        extras.live_index_level,
-    )
-    .await?;
-    let gate = swing_market::market_gate(&breadth, reading.as_ref(), &config.market);
+    // Index-led (BASKFY_REGIME_MODE=index_led): the leading-index verdict replaces the
+    // benchmark's EMA half; breadth still decides. `None` = legacy, or nothing to read.
+    let regime = crate::regime::gate_verdict(conn, trade_date, extras.provisional).await?;
+    // Per-stock (BASKFY_REGIME_MODE default): each name's own signal is the index half, applied
+    // when the plan is built; the market row carries breadth only.
+    // No signal rows within a week: per-stock is off (REGIME-SIGNAL.md), the legacy half applies.
+    let per_stock = regime.is_none()
+        && crate::regime_signal::per_stock_active(conn).await?
+        && crate::regime_signal::signals_on(conn, trade_date).await?.is_some();
+    let (reading, used_slug) = if regime.is_some() {
+        (None, Some(baskfy_core::regime::INDEX_LED_SLUG.to_owned()))
+    } else if per_stock {
+        (None, Some(baskfy_core::regime::PER_STOCK_SLUG.to_owned()))
+    } else {
+        load_index_reading(
+            conn,
+            lookup,
+            index_slug,
+            &config.market,
+            extras.live_index_level,
+        )
+        .await?
+    };
+    let gate = match &regime {
+        Some(v) if !v.open => baskfy_core::swing::market::MarketGate::Red,
+        Some(_) => swing_market::market_gate(&breadth, None, &config.market),
+        None if per_stock => swing_market::market_gate(&breadth, None, &config.market),
+        None => swing_market::market_gate(&breadth, reading.as_ref(), &config.market),
+    };
 
     let closed = load_closed_trades(conn, user_id, trade_date).await?;
     let current = cfg_row.map_or(0, |r| r.exposure_level);
@@ -930,6 +950,28 @@ async fn write_market_row(
         ),
     ];
     pyjson::update(&mut detail, "funnel", funnel);
+    if let Some(v) = &regime {
+        let n = |x: usize| pyjson::int(i64::try_from(x).unwrap_or(i64::MAX));
+        pyjson::update(
+            &mut detail,
+            "regime",
+            pyjson::object([
+                ("mode", pyjson::s("index_led")),
+                ("open", OrderedJson::Bool(v.open)),
+                ("leading", n(v.leading)),
+                ("evaluated", n(v.evaluated)),
+                ("min_leading", n(v.min_leading)),
+                ("source", pyjson::s(v.source)),
+            ]),
+        );
+    }
+    if per_stock {
+        pyjson::update(
+            &mut detail,
+            "regime",
+            pyjson::object([("mode", pyjson::s("per_stock"))]),
+        );
+    }
     if let Some(scan) = &extras.scan {
         pyjson::update(&mut detail, "scan", scan.clone());
     }

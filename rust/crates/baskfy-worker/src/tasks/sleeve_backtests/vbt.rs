@@ -41,7 +41,7 @@ pub(super) fn default_start() -> NaiveDate {
 }
 
 /// `WARMUP_DAYS`: history loaded before `start` so the 200-session window is full on day one.
-const WARMUP_DAYS: u64 = 400;
+pub(super) const WARMUP_DAYS: u64 = 400;
 
 /// The finished row, as the task reads it back.
 pub(super) struct VbRun {

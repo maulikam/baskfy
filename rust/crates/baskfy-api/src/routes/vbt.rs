@@ -271,6 +271,8 @@ pub async fn get_today(
                     .copied();
                 crate::routes::sleeves::common::set_field(row, "last_price", J::opt_dec(mark));
             }
+            super::regime_signal::attach(state.db.pool(), Some(date), &mut signal).await?;
+            super::regime_signal::attach(state.db.pool(), Some(date), &mut scan_only).await?;
             let shut: i64 = sqlx::query_scalar(
                 "SELECT count(*) FROM (SELECT gate FROM vb_breadth_daily \
                  WHERE user_id = $1 AND date <= $2 ORDER BY date DESC LIMIT $3) recent \

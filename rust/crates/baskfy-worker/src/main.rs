@@ -62,13 +62,16 @@ use baskfy_worker::steps::{PipelineStep, RunStatus};
 use baskfy_worker::tasks::{self, TaskContext, context::TaskClock};
 use chrono::NaiveDate;
 
+mod regime_cli;
+
 const USAGE: &str = "usage: baskfy-worker nightly --date YYYY-MM-DD [--replay-bundle DIR]\n       \
                      baskfy-worker step <name> --date YYYY-MM-DD --run-id N [--context FILE] \
                      [--replay-bundle DIR]\n       baskfy-worker catch-up [--now YYYY-MM-DDTHH:MM[:SS]] [--replay-bundle DIR]\n       \
                      baskfy-worker task <name> [--args JSON] [--now YYYY-MM-DDTHH:MM[:SS]] \
                      [--replay-bundle DIR] [--replay-upstream URL]\n       baskfy-worker tasks\n       \
                      baskfy-worker beat --now YYYY-MM-DDTHH:MM\n       baskfy-worker beat --serve\n       \
-                     baskfy-worker serve --queues q1,q2 [--concurrency N]";
+                     baskfy-worker serve --queues q1,q2 [--concurrency N]\n       \
+                     baskfy-worker regime candidates|signals|ema-backfill|intraday|backtest|backfill [--date D] [--start D] [--end D] [--days N]";
 
 #[derive(Debug, Default)]
 struct Args {
@@ -85,6 +88,7 @@ struct Args {
     serve: bool,
     queues: Vec<String>,
     concurrency: Option<usize>,
+    rest: Vec<String>,
 }
 
 fn parse_args(raw: &[String]) -> Result<Args, String> {
@@ -96,6 +100,10 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
     }
     if args.command == "task" {
         args.task = Some(it.next().cloned().ok_or("task needs a Celery task name")?);
+    }
+    if args.command == "regime" {
+        args.rest = it.cloned().collect();
+        return Ok(args);
     }
     while let Some(flag) = it.next() {
         let mut value = || it.next().cloned().ok_or(format!("{flag} needs a value"));
@@ -223,6 +231,12 @@ async fn run(args: Args) -> ExitCode {
         Ok(db) => db,
         Err(e) => return fail(&format!("database: {e}")),
     };
+    if args.command == "regime" {
+        let ctx = TaskContext::new(db, settings, worker, TaskClock::system(), None, None);
+        let code = regime_cli::run(&ctx, &args.rest).await;
+        ctx.db.close().await;
+        return code;
+    }
     if args.command == "task" {
         let clock = args
             .now

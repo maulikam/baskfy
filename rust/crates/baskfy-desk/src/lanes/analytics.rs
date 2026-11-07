@@ -27,6 +27,7 @@ pub mod breadth;
 pub mod daily_cli;
 pub mod daily_runs;
 pub mod desk_daily;
+pub mod desk_json;
 pub mod desk_settings;
 pub mod index_cache;
 pub mod ops;
@@ -39,7 +40,7 @@ pub mod web;
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::{Path as AxPath, State};
-use axum::http::{Response, StatusCode, Uri};
+use axum::http::{HeaderMap, Response, StatusCode, Uri};
 use axum::routing::{get, post};
 
 use crate::app::AppState;
@@ -47,7 +48,7 @@ use crate::storage::{Conn, DbValue, StorageError};
 use crate::wire::{PyValue, dict};
 
 use desk_settings::Failure;
-use web::{MultiDict, detail, json, redirect_303, render, storage_500};
+use web::{MultiDict, detail, json, render, storage_500};
 
 /// The lane's routes.
 pub fn routes() -> Router<AppState> {
@@ -77,9 +78,7 @@ pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), Stri
                 clock: std::sync::Arc::clone(&state.clock),
             };
             let program = sl::program();
-            Some(
-                sl::blocking(move || desk_daily::run_forever(&mut seams, &program, None)).await,
-            )
+            Some(sl::blocking(move || desk_daily::run_forever(&mut seams, &program, None)).await)
         }
         "daily" => Some(sl::exit_with(
             Box::pin(daily_cli::main(state, &sl::service_args())).await,
@@ -149,7 +148,11 @@ fn failure_500(e: &Failure) -> Response<Body> {
 // settings
 // ---------------------------------------------------------------------------------------------
 
-async fn settings_page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+async fn settings_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    uri: Uri,
+) -> Response<Body> {
     let q = MultiDict::from_query(&uri);
     let env = desk_settings::process_env;
     let settings = state.settings_snapshot();
@@ -202,6 +205,9 @@ async fn settings_page(State(state): State<AppState>, uri: Uri) -> Response<Body
         ("dry_run", PyValue::Bool(settings.dry_run)),
         ("risk", risk),
     ]);
+    if desk_json::wants_json(&headers) {
+        return desk_json::context(ctx);
+    }
     render(&state, uri.path(), "settings.html", ctx)
 }
 
@@ -251,7 +257,11 @@ async fn settings_data(State(state): State<AppState>) -> Response<Body> {
     )
 }
 
-async fn settings_save(State(state): State<AppState>, body: Bytes) -> Response<Body> {
+async fn settings_save(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response<Body> {
     let form = MultiDict::from_form(&body);
     let note = form.get("note").unwrap_or_default().trim().to_owned();
     let mut updates: Vec<(String, String)> = form
@@ -283,14 +293,23 @@ async fn settings_save(State(state): State<AppState>, body: Bytes) -> Response<B
             } else {
                 format!("{} changed: {}", res.changed.len(), res.changed.join(", "))
             };
-            redirect_303(&format!("/settings?saved={msg}"))
+            desk_json::outcome(&headers, true, &format!("/settings?saved={msg}"), &msg)
         }
-        Err(Failure::Refused(e)) => redirect_303(&format!("/settings?error={e}")),
+        Err(Failure::Refused(e)) => desk_json::outcome(
+            &headers,
+            false,
+            &format!("/settings?error={e}"),
+            &e.to_string(),
+        ),
         Err(e) => failure_500(&e),
     }
 }
 
-async fn settings_reset(State(state): State<AppState>, body: Bytes) -> Response<Body> {
+async fn settings_reset(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response<Body> {
     let form = MultiDict::from_form(&body);
     let keys = form.getlist("key");
     let keys = if keys.is_empty() { None } else { Some(keys) };
@@ -301,10 +320,10 @@ async fn settings_reset(State(state): State<AppState>, body: Bytes) -> Response<
     let now = web::now_iso_seconds(&state);
     let env = desk_settings::process_env;
     match desk_settings::reset(&mut conn, &state.settings, &env, keys, &now).await {
-        Ok(reset) => redirect_303(&format!(
-            "/settings?saved=reset {} override(s)",
-            reset.len()
-        )),
+        Ok(reset) => {
+            let msg = format!("reset {} override(s)", reset.len());
+            desk_json::outcome(&headers, true, &format!("/settings?saved={msg}"), &msg)
+        }
         Err(e) => failure_500(&e),
     }
 }
@@ -313,7 +332,7 @@ async fn settings_reset(State(state): State<AppState>, body: Bytes) -> Response<
 // operations
 // ---------------------------------------------------------------------------------------------
 
-async fn ops_page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+async fn ops_page(State(state): State<AppState>, headers: HeaderMap, uri: Uri) -> Response<Body> {
     let q = MultiDict::from_query(&uri);
     let mut conn = match connect(&state).await {
         Ok(c) => c,
@@ -337,10 +356,13 @@ async fn ops_page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
     }
     ctx.insert("started", PyValue::Str(q.str_or_empty("started")));
     ctx.insert("error", PyValue::Str(q.str_or_empty("error")));
+    if desk_json::wants_json(&headers) {
+        return desk_json::context(ctx);
+    }
     render(&state, uri.path(), "ops.html", ctx)
 }
 
-async fn ops_run(State(state): State<AppState>, body: Bytes) -> Response<Body> {
+async fn ops_run(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response<Body> {
     let form = MultiDict::from_form(&body);
     let name = form.get("op").unwrap_or_default().to_owned();
     let values: Vec<(String, String)> = form
@@ -353,8 +375,15 @@ async fn ops_run(State(state): State<AppState>, body: Bytes) -> Response<Body> {
         Err(e) => return storage_500(&e),
     };
     match ops::start(&mut conn, &state, &name, &values).await {
-        Ok(res) => redirect_303(&format!("/ops?started={}", res.name)),
-        Err(ops::StartError::Refused(e)) => redirect_303(&format!("/ops?error={e}")),
+        Ok(res) => desk_json::outcome(
+            &headers,
+            true,
+            &format!("/ops?started={}", res.name),
+            &res.name,
+        ),
+        Err(ops::StartError::Refused(e)) => {
+            desk_json::outcome(&headers, false, &format!("/ops?error={e}"), &e.to_string())
+        }
         Err(ops::StartError::Storage(e)) => storage_500(&e),
     }
 }
@@ -390,6 +419,7 @@ fn path_int(raw: &str) -> Option<i64> {
 async fn ops_job(
     State(state): State<AppState>,
     AxPath(job_id): AxPath<String>,
+    headers: HeaderMap,
     uri: Uri,
 ) -> Response<Body> {
     let Some(id) = path_int(&job_id) else {
@@ -400,6 +430,9 @@ async fn ops_job(
         Err(e) => return storage_500(&e),
     };
     match ops::job(&mut conn, id).await {
+        Ok(Some(j)) if desk_json::wants_json(&headers) => {
+            desk_json::context(dict([("j", PyValue::Map(j))]))
+        }
         Ok(Some(j)) => render(
             &state,
             uri.path(),

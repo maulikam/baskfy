@@ -100,7 +100,7 @@ export const PRIMARY_NAV: readonly NavItem[] = [
     status: "ready",
   },
   {
-    href: "/market/today",
+    href: "/market/indices",
     label: "Market",
     blurb: "Indices, mood, and new listings.",
     icon: "line-chart",
@@ -149,7 +149,7 @@ export const SECTION_TABS = {
      nothing for a tab row to switch between. The key exists so `primarySection` can name it. */
   home: [],
   market: [
-    { href: "/market/today" as Route, label: "Today" },
+    { href: "/market/indices" as Route, label: "Indices" },
     { href: "/market/mood" as Route, label: "Mood" },
     { href: "/market/listings" as Route, label: "Listings" },
   ],
@@ -289,7 +289,8 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
  * E2e and vitest import this list so the route table cannot drift silently.
  */
 export const LEGACY_REDIRECTS = [
-  { source: "/dashboard", destination: "/market/today" },
+  { source: "/dashboard", destination: "/market/indices" },
+  { source: "/indices", destination: "/market/indices" },
   { source: "/market-health", destination: "/market/mood" },
   { source: "/listings", destination: "/market/listings" },
   { source: "/explore", destination: "/discover" },
@@ -350,30 +351,30 @@ export interface DeskMenuLink {
 
 export const DESK_MENU: readonly (readonly DeskMenuLink[])[] = [
   [
-    { label: "Desk", href: "/desk/" },
-    { label: "Indices", href: "/desk/indices" },
-    { label: "Performance", href: "/desk/performance" },
+    { label: "Desk", href: "/rebalance" },
+    { label: "Indices", href: "/market/indices" },
+    { label: "Performance", href: "/performance" },
     {
       label: "Regime",
-      href: "/desk/regime",
+      href: "/regime",
       children: [
-        { label: "Regime", href: "/desk/regime" },
-        { label: "Backtest", href: "/desk/regime/backtest" },
+        { label: "Regime", href: "/regime" },
+        { label: "Backtest", href: "/regime/backtest" },
       ],
     },
-    { label: "Tradebook", href: "/desk/tradebook" },
-    { label: "Stops", href: "/desk/stops" },
-    { label: "Reconcile", href: "/desk/reconcile" },
-    { label: "Lifecycle", href: "/desk/lifecycle" },
+    { label: "Tradebook", href: "/tradebook" },
+    { label: "Stops", href: "/stops" },
+    { label: "Reconcile", href: "/reconcile" },
+    { label: "Lifecycle", href: "/lifecycle" },
   ],
   [
-    { label: "Swing", href: "/desk/swing" },
-    { label: "NIFTY Options", href: "/desk/nifty-options" },
-    { label: "F&O Overnight", href: "/desk/fno" },
+    { label: "Swing", href: "/swing" },
+    { label: "NIFTY Options", href: "/options/nifty" },
+    { label: "F&O Overnight", href: "/options/desk" },
   ],
   [
-    { label: "Operations", href: "/desk/ops" },
-    { label: "Settings", href: "/desk/settings" },
+    { label: "Operations", href: "/ops" },
+    { label: "Settings", href: "/desk-settings" },
     { label: "Status", href: "/desk/status" },
   ],
 ];
@@ -433,6 +434,7 @@ export function buildSectionTabs(
 export function primarySection(pathname: string): SectionKey | null {
   if (pathname === "/home" || pathname.startsWith("/home/")) return "home";
   if (pathname === "/market" || pathname.startsWith("/market/")) return "market";
+  if (pathname === "/indices") return "market";
   if (
     pathname === "/discover" ||
     pathname.startsWith("/discover/") ||
@@ -516,6 +518,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/holdings", "wallet"),
       page("/tradebook", "arrow-left-right"),
       page("/regime", "gauge"),
+      /* Indices moved to Market → Indices (primary nav), so it is not repeated here. */
       page("/reconcile", "check-check"),
     ],
   },
@@ -523,11 +526,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Operator",
     items: [
       page("/build/desk", "landmark"),
+      page("/rebalance", "arrow-left-right"),
+      page("/stops", "check-check"),
+      page("/lifecycle", "activity"),
       page("/swing", "activity"),
       page("/vbt", "trending-up"),
       page("/twt", "line-chart"),
       page("/options", "activity"),
       page("/opportunities/swing", "compass"),
+      page("/options/desk", "activity"),
+      page("/options/nifty", "activity"),
+      page("/ops", "wrench"),
+      page("/desk-settings", "wrench"),
     ],
   },
   {

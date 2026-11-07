@@ -53,8 +53,13 @@ export const PAGES = {
     blurb: "What you hold, what needs a decision, and what is worth a look.",
   },
   /* —— Tree 6 canonical hubs (label = route section = tab title) —— */
+  "/market/indices": {
+    title: "Indices · Market",
+    blurb: "Every NSE index: today's move, its 20-day trend, and the stocks inside it.",
+    formerly: "Dashboard",
+  },
   "/market/today": {
-    title: "Today · Market",
+    title: "Indices · Market",
     blurb: "Every NSE index, and how each one moved.",
     formerly: "Dashboard",
   },
@@ -257,7 +262,7 @@ export const PAGES = {
     blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
   },
   "/dashboard": {
-    title: "Today · Market",
+    title: "Indices · Market",
     blurb: "Every NSE index, and how each one moved.",
     formerly: "Dashboard",
   },
@@ -325,6 +330,38 @@ export const PAGES = {
     title: "Risk dial",
     blurb: "How much of the portfolio the strategy is willing to hold in shares this week.",
     formerly: "Market stance",
+  },
+  "/regime/backtest": {
+    title: "Risk dial backtest",
+    blurb: "How the risk dial would have behaved, tested over past markets.",
+  },
+  "/rebalance": {
+    title: "Weekly rebalance",
+    blurb: "Upload the weekly scan, review the order plan, confirm it on the desk.",
+  },
+  "/stops": {
+    title: "Stops",
+    blurb: "Positions without a working stop, and the GTT triggers that would cover them.",
+  },
+  "/lifecycle": {
+    title: "Lifecycle",
+    blurb: "Open positions as the desk tracks them, and adopting a hand-bought one.",
+  },
+  "/ops": {
+    title: "Operations",
+    blurb: "Data collection health, daily runs, and the allowlisted jobs.",
+  },
+  "/desk-settings": {
+    title: "Desk settings",
+    blurb: "The desk's settings, where each comes from, and their history.",
+  },
+  "/options/desk": {
+    title: "F&O desk",
+    blurb: "Today's F&O plans with live legs, open structures, and the confirm for each plan.",
+  },
+  "/options/nifty": {
+    title: "NIFTY desk",
+    blurb: "Today's NIFTY options plans and open positions, with confirm and close.",
   },
   "/reconcile": {
     title: "Planned vs done",

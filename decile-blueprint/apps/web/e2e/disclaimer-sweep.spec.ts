@@ -148,7 +148,7 @@ test("the route table is not empty and covers the analytics surfaces", () => {
   expect(ROUTES.length).toBeGreaterThan(15);
   const analytics = ROUTES.filter((route) => route.analytics).map((route) => route.path);
   for (const required of [
-    "/market/today",
+    "/market/indices",
     "/discover",
     "/build",
     "/portfolio/overview",

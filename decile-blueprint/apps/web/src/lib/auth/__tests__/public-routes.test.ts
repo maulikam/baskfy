@@ -27,6 +27,7 @@ describe("the gate is closed by default", () => {
     "/screens/exmpl0000001/columns",
     "/instruments/CUPID",
     "/market/today",
+    "/market/indices",
     "/market-health",
     "/dashboard",
     "/listings",

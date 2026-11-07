@@ -48,8 +48,6 @@ const MENU_GROUPS = NAV_GROUPS.filter(
   (group) => group.label === "Account" || group.label === "Help",
 );
 
-const STAFF_ONLY_GROUPS = new Set(["Real money", "Operator"]);
-
 export function UserMenu({ signedIn, email, name, isStaff = false }: UserMenuProps) {
   if (!(signedIn ?? email !== null)) {
     return (

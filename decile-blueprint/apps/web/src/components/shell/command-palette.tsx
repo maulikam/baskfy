@@ -140,7 +140,7 @@ export function CommandPalette() {
       // scheduled after `router.push` is a race with React's own teardown.
       setRecents(rememberRecent(hit));
       dismiss();
-      // `hrefFor` builds `/market/today?q=…` for an index, so this is not always a bare pathname.
+      // `hrefFor` builds `/market/indices?q=…` for an index, so this is not always a bare pathname.
       // `push` takes a string; the typed `Route` guarantee belongs to `lib/nav.ts`'s constants,
       // and `lib/search/hrefs.ts` is where these four are checked instead.
       router.push(hrefFor(hit));

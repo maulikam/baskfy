@@ -73,6 +73,26 @@ pub fn in_session(moment: &DateTime<FixedOffset>) -> bool {
 pub trait LiveLevel: Send + Sync {
     /// The level now.
     async fn level(&self) -> Option<f64>;
+
+    /// Per-stock regime: last prices of several NSE index tradingsymbols (none by default).
+    async fn levels(&self, symbols: &[String]) -> std::collections::HashMap<String, f64> {
+        let _ = symbols;
+        std::collections::HashMap::new()
+    }
+}
+
+fn py_price(value: &crate::wire::PyValue) -> Option<f64> {
+    let price = match value {
+        crate::wire::PyValue::Map(row) => row.get("last_price").cloned()?,
+        other => other.clone(),
+    };
+    let level = match price {
+        crate::wire::PyValue::Float(f) => f,
+        #[allow(clippy::cast_precision_loss)]
+        crate::wire::PyValue::Int(i) => i as f64,
+        _ => return None,
+    };
+    (level > 0.0).then_some(level)
 }
 
 /// `kite_level`: a [`LiveLevel`] over the desk's Kite client (`Kite.ltp`).
@@ -116,6 +136,22 @@ impl LiveLevel for KiteLevel {
         };
         // Python: `float(value) if value else None` — a zero is no level.
         if level == 0.0 { None } else { Some(level) }
+    }
+    async fn levels(&self, symbols: &[String]) -> std::collections::HashMap<String, f64> {
+        let keys: Vec<String> = symbols.iter().map(|s| format!("NSE:{s}")).collect();
+        let mut out = std::collections::HashMap::new();
+        if keys.is_empty() {
+            return out;
+        }
+        let Ok(crate::wire::PyValue::Map(m)) = self.kite.ltp(&keys).await else {
+            return out;
+        };
+        for s in symbols {
+            if let Some(level) = m.get(&format!("NSE:{s}")).and_then(py_price) {
+                out.insert(s.clone(), level);
+            }
+        }
+        out
     }
 }
 

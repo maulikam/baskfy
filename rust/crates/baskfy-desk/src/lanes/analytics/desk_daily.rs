@@ -192,9 +192,15 @@ mod tests {
         assert_eq!(
             f.runs,
             vec![
-                (ist(25, 18, 30), s(&["daily", "--quiet", "--source", "schedule"])),
+                (
+                    ist(25, 18, 30),
+                    s(&["daily", "--quiet", "--source", "schedule"])
+                ),
                 (ist(25, 18, 50), s(&["autorun"])),
-                (ist(28, 18, 30), s(&["daily", "--quiet", "--source", "schedule"])),
+                (
+                    ist(28, 18, 30),
+                    s(&["daily", "--quiet", "--source", "schedule"])
+                ),
             ]
         );
     }

@@ -15,7 +15,7 @@ import { PAGES } from "@/lib/vocabulary";
  * `/home` — the signed-in landing surface (docs/smallcase/05 §6.1, SC9).
  *
  * **Why this is not `/dashboard`.** `/dashboard` was the screener's market dashboard and now
- * permanently redirects to `/market/today`: it answers "what did the market do today", which is
+ * permanently redirects to `/market/indices`: it answers "what did the market do today", which is
  * a question about the world. This page answers "what is mine, and what needs me" — a question
  * about one person's position. Putting both on one route was the thing Tree 6 untangled, and
  * merging them back would undo it.

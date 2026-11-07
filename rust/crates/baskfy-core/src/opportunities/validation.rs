@@ -117,14 +117,19 @@ impl ValidationResult {
     /// Ports `hit_rate_pct`.
     #[must_use]
     pub fn hit_rate_pct(&self) -> Option<f64> {
-        (!self.trades.is_empty())
-            .then(|| self.wins() as f64 / self.trades.len() as f64 * PCT)
+        (!self.trades.is_empty()).then(|| self.wins() as f64 / self.trades.len() as f64 * PCT)
     }
 
     /// Ports `avg_return_pct`.
     #[must_use]
     pub fn avg_return_pct(&self) -> Option<f64> {
-        mean(&self.trades.iter().map(|t| t.net_return_pct).collect::<Vec<_>>())
+        mean(
+            &self
+                .trades
+                .iter()
+                .map(|t| t.net_return_pct)
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Ports `avg_r`.
@@ -230,17 +235,29 @@ pub fn simulate(
     let last = usize::try_from(last_i)
         .map_err(|_| CoreError::InvalidInput(format!("horizon must be >= 0, got {horizon}")))?;
     for (index, bar) in rows.iter().enumerate().take(last + 1).skip(entry_row) {
-        let (open, high, low) = (f(bar.open, "open")?, f(bar.high, "high")?, f(bar.low, "low")?);
+        let (open, high, low) = (
+            f(bar.open, "open")?,
+            f(bar.high, "high")?,
+            f(bar.low, "low")?,
+        );
         let r = (low - entry) / risk;
         if r < worst {
             worst = r;
         }
         if low <= stop {
-            let fill = if index > entry_row && open < stop { open } else { stop };
+            let fill = if index > entry_row && open < stop {
+                open
+            } else {
+                stop
+            };
             return Ok(Some((index, fill, ExitReason::STOP, worst)));
         }
         if high >= target {
-            let fill = if index > entry_row && open > target { open } else { target };
+            let fill = if index > entry_row && open > target {
+                open
+            } else {
+                target
+            };
             return Ok(Some((index, fill, ExitReason::TARGET, worst)));
         }
     }
@@ -318,8 +335,7 @@ pub fn validate_setup(
                 Some(h) => h.set_end(index).then_some(&*h),
                 None => None,
             };
-            let Some(evaluation) = evaluate_on(at, row, setup, params, horizon)
-            else {
+            let Some(evaluation) = evaluate_on(at, row, setup, params, horizon) else {
                 continue;
             };
             if evaluation.status != TriggerStatus::Triggered {

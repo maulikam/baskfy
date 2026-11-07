@@ -41,7 +41,13 @@ const UNIVERSES: [(&str, &str); 10] = [
 const LIQUID_CR: f64 = 25.0;
 const HIGHLY_LIQUID_CR: f64 = 100.0;
 const ROLES: [&str; 7] = [
-    "user", "assistant", "system", "developer", "tool", "activity", "reasoning",
+    "user",
+    "assistant",
+    "system",
+    "developer",
+    "tool",
+    "activity",
+    "reasoning",
 ];
 
 type Rx = LazyLock<Option<Regex>>;
@@ -60,23 +66,24 @@ static RANGE_DTE: Rx = LazyLock::new(|| {
 static RANGE_SESSIONS: Rx = LazyLock::new(|| {
     re(r"(\d+)\s*(?:-|\x{2013}|\x{2014}|to)\s*(\d+)\s*(?:trading\s+)?(?:sessions|days)")
 });
-static SYMBOL_FOR: Rx =
-    LazyLock::new(|| re(r"\bfor\s+(?:the\s+)?([A-Z][A-Z0-9&-]{1,19})\b"));
+static SYMBOL_FOR: Rx = LazyLock::new(|| re(r"\bfor\s+(?:the\s+)?([A-Z][A-Z0-9&-]{1,19})\b"));
 static TICKER: Rx = LazyLock::new(|| re(r"\b[A-Z][A-Z0-9&-]{1,19}\b"));
 static MAX_LOSS: Rx = LazyLock::new(|| {
-    re(r"(?:max(?:imum)?\s+loss|risk(?:ing)?|lose)\D{0,25}?(?:₹|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)\s*(k|thousand|lakh|lac)?")
+    re(
+        r"(?:max(?:imum)?\s+loss|risk(?:ing)?|lose)\D{0,25}?(?:₹|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)\s*(k|thousand|lakh|lac)?",
+    )
 });
 static LONG_CALL: Rx = LazyLock::new(|| re(r"\blong calls?\b"));
 static LONG_PUT: Rx = LazyLock::new(|| re(r"\blong puts?\b"));
-static BEARISH: Rx =
-    LazyLock::new(|| re(r"\b(bearish|downside|fall|decline|drop)\b"));
-static RR: Rx = LazyLock::new(|| {
-    re(r"(?:r:r|r/r|risk.{0,4}reward|reward.{0,4}risk)\D{0,12}(\d+(?:\.\d+)?)")
-});
+static BEARISH: Rx = LazyLock::new(|| re(r"\b(bearish|downside|fall|decline|drop)\b"));
+static RR: Rx =
+    LazyLock::new(|| re(r"(?:r:r|r/r|risk.{0,4}reward|reward.{0,4}risk)\D{0,12}(\d+(?:\.\d+)?)"));
 static OPTIONS_WORDS: Rx =
     LazyLock::new(|| re(r"\b(options?|calls?|puts?|spreads?|strikes?|expiry)\b"));
 static SWING_WORDS: Rx = LazyLock::new(|| {
-    re(r"\b(swing|setups?|breakouts?|pullbacks?|relative strength|scan|liquid|patterns?|vcps?|volatility contraction|twt|weeks tight|episodic pivots?|gap[- ]?ups?|gappers?|flags?|htf|inside bars?|nr7|nr-7|squeeze|52[- ]?(?:week|wk|w)|cups?|bounces?|ema|vbt)\b")
+    re(
+        r"\b(swing|setups?|breakouts?|pullbacks?|relative strength|scan|liquid|patterns?|vcps?|volatility contraction|twt|weeks tight|episodic pivots?|gap[- ]?ups?|gappers?|flags?|htf|inside bars?|nr7|nr-7|squeeze|52[- ]?(?:week|wk|w)|cups?|bounces?|ema|vbt)\b",
+    )
 });
 
 /// Setup phrases, most specific first; a matched phrase is consumed so "52 week high
@@ -131,7 +138,9 @@ fn bounded_str(v: Option<&Value>, loc: &str, errors: &mut Vec<String>) -> String
                 return s.clone();
             }
         }
-        Some(_) => errors.push(format!("{loc}\n  Input should be a valid string [type=string_type]")),
+        Some(_) => errors.push(format!(
+            "{loc}\n  Input should be a valid string [type=string_type]"
+        )),
     }
     String::new()
 }
@@ -184,7 +193,9 @@ pub(crate) fn parse_run_input(body: &[u8]) -> Result<RunInput, String> {
         if let Some(v) = obj.get(key)
             && !matches!(v, Value::Array(_) | Value::Null)
         {
-            errors.push(format!("{key}\n  Input should be a valid list [type=list_type]"));
+            errors.push(format!(
+                "{key}\n  Input should be a valid list [type=list_type]"
+            ));
         }
     }
     if !errors.is_empty() {
@@ -288,10 +299,10 @@ fn symbol(original: &str, state: &Value) -> Option<String> {
     {
         return Some(c[1].to_owned());
     }
-    if let Some(m) = TICKER
-        .as_ref()
-        .and_then(|r| r.find_iter(original).find(|m| !TICKER_STOPWORDS.contains(&m.as_str())))
-    {
+    if let Some(m) = TICKER.as_ref().and_then(|r| {
+        r.find_iter(original)
+            .find(|m| !TICKER_STOPWORDS.contains(&m.as_str()))
+    }) {
         return Some(m.as_str().to_owned());
     }
     match state.get("symbol") {
@@ -312,7 +323,12 @@ fn max_loss(text: &str) -> Option<Decimal> {
 }
 
 fn strings(items: &[&str]) -> Value {
-    Value::Array(items.iter().map(|s| Value::String((*s).to_owned())).collect())
+    Value::Array(
+        items
+            .iter()
+            .map(|s| Value::String((*s).to_owned()))
+            .collect(),
+    )
 }
 
 fn options_intent(text: &str, original: &str, state: &Value) -> Intent {
@@ -358,7 +374,11 @@ fn options_intent(text: &str, original: &str, state: &Value) -> Intent {
         ("strategies".to_owned(), strings(&strategies)),
     ];
     if let Some(loss) = max_loss(text) {
-        set(&mut args, "max_loss_inr", Value::String(wire::py_decimal(loss)));
+        set(
+            &mut args,
+            "max_loss_inr",
+            Value::String(wire::py_decimal(loss)),
+        );
     }
     if let Some((lo, hi)) = range(text, &RANGE_DTE) {
         set(&mut args, "min_dte", Value::from(lo));
@@ -445,14 +465,19 @@ async fn resolve_intent(original: &str, state: &Value) -> Intent {
                 // Direction and strategies come from the user's words, never the model's guess.
                 let grounded = options_intent(&original.to_lowercase(), original, state).arguments;
                 for key in ["direction", "strategies"] {
-                    let value = get(&grounded, key).or_else(|| get(&arguments, key)).cloned();
+                    let value = get(&grounded, key)
+                        .or_else(|| get(&arguments, key))
+                        .cloned();
                     set(&mut arguments, key, value.unwrap_or(Value::Null));
                 }
                 OPTIONS_TOOL
             } else {
                 // "liquid"/"highly liquid" have fixed meanings here (25 / 100 crore).
-                if let Some(liquidity) =
-                    get(&swing_intent(&original.to_lowercase()).arguments, "min_turnover_cr").cloned()
+                if let Some(liquidity) = get(
+                    &swing_intent(&original.to_lowercase()).arguments,
+                    "min_turnover_cr",
+                )
+                .cloned()
                 {
                     set(&mut arguments, "min_turnover_cr", liquidity);
                 }
@@ -476,7 +501,11 @@ async fn resolve_intent(original: &str, state: &Value) -> Intent {
     };
     Intent {
         tool: intent.tool,
-        arguments: if intent.tool.is_some() { intent.arguments } else { Vec::new() },
+        arguments: if intent.tool.is_some() {
+            intent.arguments
+        } else {
+            Vec::new()
+        },
         note: format!("{} ({source}.)", intent.note),
     }
 }
@@ -563,7 +592,12 @@ fn py_repr(v: &J) -> String {
     match v {
         J::Str(s) => baskfy_providers::py::repr_str(s),
         J::Dec(_) | J::NegZero(_) => format!("Decimal('{}')", py_str(Some(v))),
-        J::Date(d) => format!("datetime.date({}, {}, {})", d.format("%Y"), d.format("%-m"), d.format("%-d")),
+        J::Date(d) => format!(
+            "datetime.date({}, {}, {})",
+            d.format("%Y"),
+            d.format("%-m"),
+            d.format("%-d")
+        ),
         other => py_str(Some(other)),
     }
 }
@@ -584,7 +618,10 @@ fn summarize_scan(result: &J) -> String {
         py_str(field(counts, "pending")),
     );
     if !matches!(field(result, "data_status"), Some(J::Str(s)) if s == "FRESH") {
-        head.push_str(&format!(" Not actionable: {}", py_str(field(result, "stale_reason"))));
+        head.push_str(&format!(
+            " Not actionable: {}",
+            py_str(field(result, "stale_reason"))
+        ));
     }
     let mut lines = vec![head];
     for row in rows.iter().take(5) {
@@ -637,7 +674,10 @@ fn summarize_options(result: &J) -> String {
             let extra = match field(result, "warnings") {
                 Some(J::Arr(w)) => format!(
                     " {}",
-                    w.iter().map(|x| py_str(Some(x))).collect::<Vec<_>>().join("; ")
+                    w.iter()
+                        .map(|x| py_str(Some(x)))
+                        .collect::<Vec<_>>()
+                        .join("; ")
                 ),
                 _ => String::new(),
             };
@@ -654,7 +694,11 @@ fn summarize_options(result: &J) -> String {
             continue;
         }
         let profit = field(row, "max_profit_per_lot");
-        let profit = if falsy(profit) { "unlimited".to_owned() } else { py_str(profit) };
+        let profit = if falsy(profit) {
+            "unlimited".to_owned()
+        } else {
+            py_str(profit)
+        };
         lines.push(format!(
             "- {} {}: max loss/lot {} after costs, max profit/lot {}, breakeven {}",
             py_str(field(row, "strategy")),
@@ -664,9 +708,7 @@ fn summarize_options(result: &J) -> String {
             py_str(field(row, "breakevens")),
         ));
     }
-    lines.push(
-        "Candidates to evaluate, not recommendations; Greeks are model-derived.".to_owned(),
-    );
+    lines.push("Candidates to evaluate, not recommendations; Greeks are model-derived.".to_owned());
     lines.join("\n")
 }
 
@@ -692,7 +734,10 @@ fn errors_repr(fail: &Fail) -> String {
                 Vec::new()
             } else {
                 loc.split('.')
-                    .map(|p| p.parse::<i64>().map_or_else(|_| baskfy_providers::py::repr_str(p), |i| i.to_string()))
+                    .map(|p| {
+                        p.parse::<i64>()
+                            .map_or_else(|_| baskfy_providers::py::repr_str(p), |i| i.to_string())
+                    })
                     .collect()
             };
             let loc = match parts.len() {
@@ -741,7 +786,10 @@ async fn execute(intent: &Intent, db: &Db, user_id: i64) -> Result<(J, String), 
     let args = args_ordered(&intent.arguments);
     if intent.tool == Some(SWING_TOOL) {
         let body = SwingScanIn::from_args(&args).map_err(|f| {
-            run_error(&format!("Invalid tool arguments: {}", errors_repr(&f)), "invalid_arguments")
+            run_error(
+                &format!("Invalid tool arguments: {}", errors_repr(&f)),
+                "invalid_arguments",
+            )
         })?;
         let scan = service::run_swing_scan(db.pool(), &body.universe, &body.filters(), now, None)
             .await
@@ -752,15 +800,19 @@ async fn execute(intent: &Intent, db: &Db, user_id: i64) -> Result<(J, String), 
     }
     let options = OptionsIn::from_args(&args)
         .map_err(|f| {
-            run_error(&format!("Invalid tool arguments: {}", errors_repr(&f)), "invalid_arguments")
+            run_error(
+                &format!("Invalid tool arguments: {}", errors_repr(&f)),
+                "invalid_arguments",
+            )
         })?
         .map_err(|_| Stop::Abort)?;
     crate::routes::common::scoped_sole_user_id(db, Some(user_id), Some("opportunities"))
         .await
         .map_err(|p| problem_stop(&p))?;
-    let analysis = service::run_options_analysis(&options.request(), now, options.rules.max_quote_age_s)
-        .await
-        .map_err(|_| Stop::Abort)?;
+    let analysis =
+        service::run_options_analysis(&options.request(), now, options.rules.max_quote_age_s)
+            .await
+            .map_err(|_| Stop::Abort)?;
     let payload = options_json(&options.symbol, &analysis).map_err(|_| Stop::Abort)?;
     let summary = summarize_options(&payload);
     Ok((payload, summary))
@@ -784,7 +836,10 @@ pub(crate) async fn run(input: RunInput, db: Db, user_id: i64, tx: mpsc::Sender<
     emit!(event("RUN_STARTED", ids()));
     emit!(event("STEP_STARTED", vec![("stepName", J::s("interpret"))]));
     let intent = resolve_intent(&last_user_text(&input.messages), &input.state).await;
-    emit!(event("STEP_FINISHED", vec![("stepName", J::s("interpret"))]));
+    emit!(event(
+        "STEP_FINISHED",
+        vec![("stepName", J::s("interpret"))]
+    ));
     for frame in text_events(&intent.note) {
         emit!(frame);
     }

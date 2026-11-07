@@ -4,7 +4,7 @@
 use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{Response, Uri};
+use axum::http::{HeaderMap, Response, StatusCode, Uri, header};
 use axum::routing::get;
 
 use super::get_only;
@@ -64,7 +64,14 @@ async fn autorun(state: &AppState, logged_in: &str, started: &str, note: &str) -
     ]))
 }
 
-async fn home(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+fn wants_json(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("application/json"))
+}
+
+async fn home(State(state): State<AppState>, headers: HeaderMap, uri: Uri) -> Response<Body> {
     let q = MultiDict::from_query(&uri);
     let authed = match exec_kite::kite(&state) {
         Ok(k) => k.is_authed().await,
@@ -90,16 +97,16 @@ async fn home(State(state): State<AppState>, uri: Uri) -> Response<Body> {
     )
     .await;
     let opt = |d: Option<PyDict>| d.map_or(PyValue::None, PyValue::Map);
-    web::render(
-        &state,
-        uri.path(),
-        "index.html",
-        dict([
-            ("authed", PyValue::Bool(authed)),
-            ("dry_run", PyValue::Bool(state.settings_snapshot().dry_run)),
-            ("collection", opt(collection)),
-            ("auto", opt(auto)),
-            ("protection", opt(protection)),
-        ]),
-    )
+    let ctx = dict([
+        ("authed", PyValue::Bool(authed)),
+        ("dry_run", PyValue::Bool(state.settings_snapshot().dry_run)),
+        ("collection", opt(collection)),
+        ("auto", opt(auto)),
+        ("protection", opt(protection)),
+    ]);
+    // The web app's /rebalance reads the same context as JSON; the HTML page is unchanged.
+    if wants_json(&headers) {
+        return web::json(StatusCode::OK, &PyValue::Map(ctx));
+    }
+    web::render(&state, uri.path(), "index.html", ctx)
 }

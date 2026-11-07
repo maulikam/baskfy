@@ -108,7 +108,11 @@ fn opportunity_json(
                 .put("status", J::s(ev.status.value()))
                 .put(
                     "triggered_on",
-                    if triggered { J::Date(opp.data_as_of) } else { J::Null },
+                    if triggered {
+                        J::Date(opp.data_as_of)
+                    } else {
+                        J::Null
+                    },
                 )
                 .done(),
         )
@@ -262,11 +266,19 @@ fn candidate_json(c: &OptionCandidate, status: DataStatus) -> Result<J, Problem>
                 .put("spread_pct", J::Dec(leg.quote.spread_pct))
                 .put("volume", J::Int(contract.volume.unwrap_or(0)))
                 .put("oi", J::Int(contract.oi.unwrap_or(0)))
-                .put("iv", leg.iv.map_or(J::Null, |iv| J::Float(py_round(iv * 100.0, 2))))
+                .put(
+                    "iv",
+                    leg.iv
+                        .map_or(J::Null, |iv| J::Float(py_round(iv * 100.0, 2))),
+                )
                 .put("delta", round_j(leg.delta, 4))
                 .put(
                     "greeks_source",
-                    if leg.iv.is_some() { J::s("MODEL_BLACK76") } else { J::Null },
+                    if leg.iv.is_some() {
+                        J::s("MODEL_BLACK76")
+                    } else {
+                        J::Null
+                    },
                 )
                 .done()
         })
@@ -278,10 +290,16 @@ fn candidate_json(c: &OptionCandidate, status: DataStatus) -> Result<J, Problem>
         .put("dte", J::Int(c.dte))
         .put("lot_size", J::Int(c.lot_size))
         .put("lots", J::Int(c.lots))
-        .put("actionable", J::Bool(c.actionable && status == DataStatus::Fresh))
+        .put(
+            "actionable",
+            J::Bool(c.actionable && status == DataStatus::Fresh),
+        )
         .put("legs", J::Arr(legs))
         .put("net_debit_per_unit", q2(c.net_debit_per_unit))
-        .put("net_debit_per_lot", q2(c.net_debit_per_lot().map_err(fail)?))
+        .put(
+            "net_debit_per_lot",
+            q2(c.net_debit_per_lot().map_err(fail)?),
+        )
         .put("max_loss_per_unit", q2(c.max_loss_per_unit))
         .put("max_loss_per_lot", q2(c.max_loss_per_lot().map_err(fail)?))
         .put(
@@ -292,7 +310,10 @@ fn candidate_json(c: &OptionCandidate, status: DataStatus) -> Result<J, Problem>
             "max_profit_per_lot",
             c.max_profit_per_lot().map_err(fail)?.map_or(J::Null, q2),
         )
-        .put("breakevens", J::Arr(c.breakevens.iter().map(|b| J::Dec(*b)).collect()))
+        .put(
+            "breakevens",
+            J::Arr(c.breakevens.iter().map(|b| J::Dec(*b)).collect()),
+        )
         .put(
             "costs",
             Obj::new()
@@ -356,8 +377,7 @@ pub(crate) fn options_json(symbol: &str, a: &OptionsAnalysis) -> Result<J, Probl
                 .put("spot", J::opt_dec(a.spot))
                 .put(
                     "spot_as_of",
-                    a.spot_as_of
-                        .map_or(J::Null, |t| iso(t.with_timezone(&Utc))),
+                    a.spot_as_of.map_or(J::Null, |t| iso(t.with_timezone(&Utc))),
                 )
                 .done(),
         )
@@ -420,7 +440,12 @@ pub(crate) fn validation_json(r: &ValidationResult) -> J {
 }
 
 /// `unavailable_validation(setup, start, end, reason)`.
-pub(crate) fn unavailable_validation(setup: &str, start: NaiveDate, end: NaiveDate, reason: &str) -> J {
+pub(crate) fn unavailable_validation(
+    setup: &str,
+    start: NaiveDate,
+    end: NaiveDate,
+    reason: &str,
+) -> J {
     Obj::new()
         .put("available", J::Bool(false))
         .put("reason", J::s(reason))

@@ -10,6 +10,7 @@ import {
   sleeveUnavailable,
 } from "@/lib/api/sleeve-read";
 import { auth } from "@/lib/auth";
+import type { RegimeSignal } from "@/lib/regime-signal/types";
 
 /**
  * Server-side reads for the `/swing` hub — SW4, `docs/swing/05` §2.
@@ -71,6 +72,9 @@ export interface SwingSetup {
   sector_slug: string | null;
   listed_within_2y: boolean;
   catalyst_feed?: SwingCatalystFeed | null;
+  /** Per-stock market regime; absent until the backend serves it. */
+  regime_signal?: RegimeSignal | null;
+  series?: string | null;
 }
 
 /** The counts `05` §2's empty state is written from. */

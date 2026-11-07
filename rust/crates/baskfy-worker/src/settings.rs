@@ -138,6 +138,8 @@ pub struct WorkerSettings {
     pub task_max_redeliveries: i64,
     /// `BASKFY_TASK_RETRY_BACKOFF_SECONDS` (Python default `60`).
     pub task_retry_backoff_seconds: i64,
+    /// `BASKFY_REGIME_MODE` / `_MIN_LEADING` / `_INDEX_GROUPS` (Rust-only; not in [`Self::FIELDS`]).
+    pub regime: baskfy_core::regime::RegimeConfig,
 }
 
 impl Default for WorkerSettings {
@@ -196,6 +198,7 @@ impl Default for WorkerSettings {
             task_max_retries: 3,
             task_max_redeliveries: 3,
             task_retry_backoff_seconds: 60,
+            regime: baskfy_core::regime::RegimeConfig::default(),
         }
     }
 }
@@ -506,6 +509,12 @@ impl WorkerSettings {
             {
                 errors.push(format!("{field}: {e}"));
             }
+        }
+        match baskfy_core::regime::RegimeConfig::from_lookup(&|k: &str| {
+            values.get(&k.to_lowercase()).cloned()
+        }) {
+            Ok(r) => settings.regime = r,
+            Err(e) => errors.push(e),
         }
         if errors.is_empty() {
             errors = settings.field_errors();

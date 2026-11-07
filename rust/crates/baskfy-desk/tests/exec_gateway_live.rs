@@ -118,6 +118,7 @@ fn place_order(a: &Value) -> PlaceOrder {
         tenant: tenant(a, "tenant"),
         plan_tenant: tenant(a, "plan_tenant"),
         fo_plan: fo_plan(a),
+        screen_mtf: d.screen_mtf,
     }
 }
 

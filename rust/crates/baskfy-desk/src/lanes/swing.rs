@@ -47,6 +47,7 @@ pub mod gateway;
 pub mod live_gate;
 pub mod monitor_loop;
 pub mod notify;
+pub mod per_stock;
 pub mod rules;
 pub mod store;
 pub mod swing_exec;

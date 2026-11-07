@@ -586,12 +586,14 @@ async fn build_plan(
 ) -> Result<Built, WorkerError> {
     let (exits, _, _) = eod::manage_open_positions(conn, user_id, exits_on, config).await?;
     let (items, mut instrument_ids) = eod::watch_items(conn, user_id, exits_on).await?;
+    let watched = items.len();
+    let (items, regime_red) = crate::regime_signal::split_watch(conn, as_of, items).await?;
     let (capital, left) = sleeve_row(conn, user_id).await?;
     let account = eod::sleeve_account(conn, user_id, capital).await?;
     let multiplier =
         first_live_multiplier(left, execution_enabled, &config.sizing).map_err(core_err)?;
     let risk = eod::risk_pct_in_force(config, multiplier)?;
-    let entries = build_entries(
+    let mut entries = build_entries(
         as_of,
         &items,
         &account,
@@ -607,8 +609,9 @@ async fn build_plan(
     let entry_lines = kind_count(LineKind::BuyOnTrigger, &entries.lines);
     let pending_lines = kind_count(LineKind::PendingRange, &entries.lines);
     let exit_lines = count(exits.len());
+    entries.skipped.extend(regime_red);
     let skips = count(entries.skipped.len());
-    let watching = count(items.len());
+    let watching = count(watched);
     let plan = eod::assemble(
         as_of,
         market.gate,

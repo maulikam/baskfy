@@ -154,9 +154,65 @@ describe("the swing hub's server actions are exactly the six non-money writes", 
     }
   });
 
-  it("says on the setups page that nothing here can trade", () => {
+  it("says on the setups page that an order is sent only on Place Buy Order", () => {
     const setups = readFileSync(join(APP, "swing", "page.tsx"), "utf8");
-    expect(setups).toContain("can place an order");
+    expect(setups).toContain("Place Buy Order");
     expect(setups).toContain("desk console");
+  });
+
+  it("gates every order control to staff on the server", () => {
+    const setups = readFileSync(join(APP, "swing", "page.tsx"), "utf8");
+    expect(setups).toContain("me?.is_staff");
+    expect(setups).toMatch(/\{isStaff \? <SwingDeskConsole \/> : null\}/);
+    expect(setups).toMatch(/\{isStaff \? \(\s*<BuyTicketButton/);
+  });
+});
+
+/**
+ * The desk console (6 Nov 2026, Option A): the desk's swing page moved into `/swing`. Orders still
+ * live on the desk — the web posts one line at a time, same-origin, to `/desk/swing/*`, after a
+ * confirm dialog, with `confirm=true` and the desk-issued `plan_id`. Staff only.
+ */
+describe("the desk console orders only through the desk, staff-only, after a confirm", () => {
+  const COMPONENTS = join(APP, "..", "..", "components", "swing");
+  const read = (name: string) => readFileSync(join(COMPONENTS, name), "utf8");
+  const files = readdirSync(COMPONENTS).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
+
+  it("calls no fetch and no broker directly; desk POSTs go through the shared desk helpers", () => {
+    for (const name of files) {
+      const source = read(name);
+      expect(source, `${name} calls fetch`).not.toMatch(/\bfetch\s*\(/);
+      for (const word of ["place_order", "kiteconnect", "kite_client", "baskfy_execution", "confirm all", "confirm-all", "confirmall"]) {
+        expect(source.toLowerCase(), `${name} mentions ${word}`).not.toContain(word);
+      }
+    }
+    const data = read("desk-data.ts");
+    expect(data).toContain('from "@/lib/desk-actions/client"');
+    const posts = [...data.matchAll(/deskForm<\w+>\("([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(posts).toEqual(["/swing/cutoff", "/swing/rearm"]);
+    for (const path of posts) {
+      expect(data).toMatch(new RegExp(`"${path}", \\{[^}]*confirm: "true"`));
+    }
+  });
+
+  it("executes a plan line only with the desk's plan_id, via the shared OPPS-MTF helper", () => {
+    const console_ = read("desk-console.tsx");
+    expect(console_).toContain("executeDeskBuy(line.plan_id, line.id)");
+    expect(console_).toContain('from "@/lib/opportunities/desk-buy"');
+  });
+
+  it("renders nothing for a non-staff viewer", () => {
+    expect(read("desk-console.tsx")).toMatch(/if \(!isStaff\) return null;/);
+  });
+
+  it("puts every action behind a confirm dialog that sends once", () => {
+    const console_ = read("desk-console.tsx");
+    const calls = (console_.match(/executeDeskBuy\(|rearmGtt\(|cutoffSweep\(|reconcileFills\(/g) ?? []).length;
+    const confirms = (console_.match(/<ConfirmAction/g) ?? []).length;
+    expect(calls).toBe(4);
+    expect(confirms).toBe(4);
+    const actions = read("desk-actions.tsx");
+    expect(actions).toContain("if (sent.current) return;");
+    expect(actions).not.toMatch(/setInterval|setTimeout/);
   });
 });

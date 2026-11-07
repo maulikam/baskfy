@@ -129,7 +129,8 @@ pub fn config_from_env() -> Option<LlmConfig> {
 }
 
 fn swing_parameters() -> Value {
-    let slug = json!({"maxLength": 64, "minLength": 1, "pattern": "^[a-z0-9-]+$", "type": "string"});
+    let slug =
+        json!({"maxLength": 64, "minLength": 1, "pattern": "^[a-z0-9-]+$", "type": "string"});
     let mut universe = slug.clone();
     if let Value::Object(m) = &mut universe {
         m.insert("default".into(), json!("nifty-500"));
@@ -193,13 +194,13 @@ pub fn tool_definitions() -> Value {
             "function": {
                 "name": SWING_TOOL,
                 "description": "Scan NSE stocks for swing setups on completed daily bars, with \
-liquidity, horizon, volatility and reward-to-risk filters. Setups: BREAKOUT, PULLBACK, \
-RELATIVE_STRENGTH, VCP (volatility contraction pattern), THREE_WEEKS_TIGHT (TWT), \
-EPISODIC_PIVOT (gap up on volume), FLAG (flag or high tight flag), INSIDE_BAR_NR7 \
-(inside bar / NR7 squeeze), HIGH_52W_BREAKOUT (52-week high), CUP_WITH_HANDLE, MA_BOUNCE \
-(bounce off the 10/20/50 EMA) and VBT (volume breakout thrust). min_turnover_cr is average \
-daily turnover in rupee crore; 'liquid' means about 25. Smallcaps is the universe \
-nifty-smallcap-250, midcaps nifty-midcap-150.",
+    liquidity, horizon, volatility and reward-to-risk filters. Setups: BREAKOUT, PULLBACK, \
+    RELATIVE_STRENGTH, VCP (volatility contraction pattern), THREE_WEEKS_TIGHT (TWT), \
+    EPISODIC_PIVOT (gap up on volume), FLAG (flag or high tight flag), INSIDE_BAR_NR7 \
+    (inside bar / NR7 squeeze), HIGH_52W_BREAKOUT (52-week high), CUP_WITH_HANDLE, MA_BOUNCE \
+    (bounce off the 10/20/50 EMA) and VBT (volume breakout thrust). min_turnover_cr is average \
+    daily turnover in rupee crore; 'liquid' means about 25. Smallcaps is the universe \
+    nifty-smallcap-250, midcaps nifty-midcap-150.",
                 "parameters": swing_parameters(),
             }
         },
@@ -208,8 +209,8 @@ nifty-smallcap-250, midcaps nifty-midcap-150.",
             "function": {
                 "name": OPTIONS_TOOL,
                 "description": "Compare listed option structures (LONG_CALL, LONG_PUT, BULL_CALL_SPREAD, \
-BEAR_PUT_SPREAD) on one NSE underlying for a BULLISH or BEARISH view, \
-optionally within a maximum loss in rupees and a days-to-expiry window.",
+    BEAR_PUT_SPREAD) on one NSE underlying for a BULLISH or BEARISH view, \
+    optionally within a maximum loss in rupees and a days-to-expiry window.",
                 "parameters": options_parameters(),
             }
         }
@@ -223,7 +224,11 @@ fn state_symbol(state: Option<&str>) -> Option<String> {
         .map(str::to_uppercase)
 }
 
-fn grounded_symbol(arguments: &Map<String, Value>, text: &str, selected: Option<&str>) -> Option<String> {
+fn grounded_symbol(
+    arguments: &Map<String, Value>,
+    text: &str,
+    selected: Option<&str>,
+) -> Option<String> {
     if let Some(Value::String(proposed)) = arguments.get("symbol") {
         let candidate = proposed.trim().to_uppercase();
         if !candidate.is_empty() {

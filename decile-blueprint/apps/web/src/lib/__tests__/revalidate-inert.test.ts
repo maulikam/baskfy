@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
  */
 describe("inert revalidate removed; market fetch times out", () => {
   for (const relative of [
-    "app/(app)/market/today/page.tsx",
+    "app/(app)/market/indices/page.tsx",
     "app/(app)/market/mood/page.tsx",
     "app/(app)/instruments/[symbol]/page.tsx",
   ] as const) {

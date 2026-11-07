@@ -6,6 +6,7 @@
 #     bash tools/deploy/local.sh down      # stop; data stays in the named volumes
 #     bash tools/deploy/local.sh verify    # every money flag false; reports DRY_RUN per service
 #     bash tools/deploy/local.sh live|dry  # DRY_RUN false|true on every service ($HOME_DIR/dry_run)
+#     bash tools/deploy/local.sh pipeline [tag]  # redeploy worker/ingest-worker/beat only (pipeline.tag)
 #
 # LIVE BY DEFAULT since 1 Nov 2026 (Maulik: "I want DRY_RUN off from entire system, i want to
 # take real trades"; DECISIONS-MERGE DRY-LIVE): a confirmed /execute reaches Zerodha. Orders go
@@ -37,6 +38,11 @@ DRY="$(cat "$HOME_DIR/dry_run" 2>/dev/null || echo false)"; [ "$DRY" = true ] ||
 SVC="caddy web api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
 RS_TAG="${BASKFY_LOCAL_RS_TAG:-$(cat "$HOME_DIR/rs.tag" 2>/dev/null || echo local)}"
 RS_SVC="api worker ingest-worker beat desk desk-daily session-supervisor swing-monitor twt-auto fno-monitor options-monitor"
+# The data pipeline is deployed apart from the app (Maulik, 7 Nov 2026): its own image tag
+# (pipeline.tag), recreated only by `local.sh pipeline [tag]`; `up` never restarts it.
+PIPE_SVC="worker ingest-worker beat"
+APP_SVC=""; for _s in $SVC; do [[ " $PIPE_SVC " == *" $_s "* ]] || APP_SVC="$APP_SVC $_s"; done
+PIPE_TAG="${BASKFY_LOCAL_PIPELINE_TAG:-$(cat "$HOME_DIR/pipeline.tag" 2>/dev/null || echo "$RS_TAG")}"
 
 die() { echo "✗ $*" >&2; exit 1; }
 compose() {
@@ -64,6 +70,7 @@ MONEY='(EXECUTION_ENABLED|AUTO_EXECUTE|AUTO_EXIT|_AUTO|CARRY_ENABLED|INTRADAY_EN
 
 stage() {
   mkdir -p "$HOME_DIR/box"
+  [ -s "$HOME_DIR/pipeline.tag" ] || echo "$PIPE_TAG" > "$HOME_DIR/pipeline.tag"   # pin on first use
   [ -f "$HOME_DIR/box/.env.staging" ] || tar -C "$HOME_DIR/box" -xzf "$BUNDLE/config.tgz"
   chmod -R go-rwx "$HOME_DIR/box"
   cp "$DOCK/compose.prod.yml" "$DOCK/Caddyfile" "$HOME_DIR/"
@@ -83,10 +90,6 @@ BASKFY_TWT_EXECUTION_ENABLED=false
 BASKFY_TWT_AUTO_EXECUTE=false
 BASKFY_VBT_EXECUTION_ENABLED=false
 BASKFY_FNO_F3_AUTO_EXIT=false
-BASKFY_PY_IMAGE=baskfy-py:$TAG
-BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG
-BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG
-BASKFY_RS_IMAGE=baskfy-rs:$RS_TAG
 BASKFY_SITE_ADDRESS=:80
 BASKFY_DESK_SITE_ADDRESS=:8081
 BASKFY_PUBLIC_URL=$URL
@@ -100,6 +103,11 @@ BASKFY_LLM_URL=http://host.docker.internal:11434/v1
 BASKFY_LLM_MODEL=qwen3:8b
 BASKFY_LLM_TIMEOUT_S=20
 EOF
+      # Image tags only interpolate compose; kept out of the containers' env_file so a new app
+      # image does not change the pipeline services' config and recreate them.
+      if [ "$f" = .env.staging.compose ]; then printf '%s\n' "BASKFY_PY_IMAGE=baskfy-py:$TAG" \
+        "BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG" "BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG" \
+        "BASKFY_RS_IMAGE=baskfy-rs:$RS_TAG" "BASKFY_RS_PIPELINE_IMAGE=baskfy-rs:$PIPE_TAG"; fi
     } > "$HOME_DIR/$f.tmp" && mv "$HOME_DIR/$f.tmp" "$HOME_DIR/$f" && chmod 600 "$HOME_DIR/$f"
   done
   # The API reads the JWT secret from .env.staging (env_file); the web signs with the one compose
@@ -159,7 +167,7 @@ switch() {
     grep -vxF -f <(printf '%s\n' $want) "$HOME_DIR/rust.services" > "$HOME_DIR/rust.services.tmp" || true
   fi
   mv "$HOME_DIR/rust.services.tmp" "$HOME_DIR/rust.services"
-  pipeline_guard
+  case " $want " in *" worker "*|*" ingest-worker "*|*" beat "*) pipeline_guard ;; esac
   stage
   compose up -d --no-deps $want
   if ! verify; then
@@ -246,11 +254,11 @@ restore)
   else die "row counts differ from the box (diff above) — do NOT tear down AWS"; fi
   ;;
 up)
-  pipeline_guard
   stage
   compose up -d --wait postgres redis
   compose run --rm migrate
-  compose up -d $SVC
+  compose up -d --no-deps $APP_SVC
+  compose up -d --no-deps --no-recreate $PIPE_SVC   # started if absent, never restarted
   verify || { echo "✗ stopping the stack" >&2; compose stop $SVC; exit 1; }
   echo "app  http://localhost:8480    desk http://localhost:8480/desk"
   echo "remote (after 'tailscale serve' — see docs/LOCAL.md): $URL"
@@ -271,6 +279,16 @@ tailscale)
     echo "nightly window: not restarting now — run 'local.sh up' after 21:20 IST so the app uses this URL"
   else exec bash "$0" up; fi
   ;;
+pipeline)
+  # The only path that restarts the pipeline services; refuses while a chain is running.
+  [ -n "${2:-}" ] && { docker image inspect "baskfy-rs:$2" >/dev/null 2>&1 || die "no image baskfy-rs:$2"; PIPE_TAG="$2"; }
+  pipeline_guard
+  echo "$PIPE_TAG" > "$HOME_DIR/pipeline.tag"
+  stage
+  compose up -d --no-deps $PIPE_SVC
+  verify
+  echo "pipeline on baskfy-rs:$PIPE_TAG (app on baskfy-rs:$RS_TAG)"
+  ;;
 stage)   stage ;;
 down)    pipeline_guard; compose stop ;;
 verify)  verify ;;
@@ -288,5 +306,5 @@ rowcounts) rowcounts ;;
 rust)    shift; switch rust "$@" ;;
 python)  shift; switch python "$@" ;;
 rust-check) rust_check ;;
-*) echo "usage: $0 restore|up|down|verify|live|dry|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
+*) echo "usage: $0 restore|up|down|verify|live|dry|pipeline [tag]|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
 esac

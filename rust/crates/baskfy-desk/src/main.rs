@@ -247,6 +247,9 @@ async fn main() -> ExitCode {
     // as Python's module-level global does (DECISIONS-RS R8.F2 / R8.8).
     baskfy_desk::lanes::fno::install(&state);
 
+    // Morning MTF leverage for every NSE stock (multi-buy reads it from the table).
+    baskfy_desk::lanes::swing::desk::mtf_daily::spawn_daily(state.clone());
+
     let app = baskfy_desk::build_app(state);
     let Ok(address) = format!("{host}:{port}").parse::<SocketAddr>() else {
         return fail("--host/--port do not form a socket address");

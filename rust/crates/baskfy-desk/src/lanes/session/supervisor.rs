@@ -615,8 +615,7 @@ impl DeskDeps {
                 return;
             }
         };
-        if let Err(e) =
-            intent::resolve_from_order_book(db, self.state.clock.time(), &orders).await
+        if let Err(e) = intent::resolve_from_order_book(db, self.state.clock.time(), &orders).await
         {
             eprintln!("WARNING:session_supervisor:intent reconcile: {e}");
         }

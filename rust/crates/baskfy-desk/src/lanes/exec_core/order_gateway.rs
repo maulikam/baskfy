@@ -23,12 +23,12 @@ use super::Broker;
 use super::gtt::{
     TickSizes, band_finding, drop_pct, gtt_params, py_round, py_round0, refuse_stop, to_tick,
 };
-use super::intent::{self, IntentStore, NewIntent, Reservation};
 use super::guards::{
     self, CoverageRule, FO_CARRY_PRODUCT, assert_not_overnight_option,
     assert_overnight_option_is_covered, assert_tradeable, fo_gtt_refusal, fo_order_refusal,
     product_exchange_refusal,
 };
+use super::intent::{self, IntentStore, NewIntent, Reservation};
 use super::journal::Journal;
 use super::ratelimit::{GatewayLimits, KiteLimits};
 use super::risk::{RiskError, RiskLayer};
@@ -514,10 +514,7 @@ impl OrderGateway {
                 }
                 Ok(Reservation::Paused(reason)) => {
                     self.sent.lock().await.remove(&cid);
-                    return Ok(blocked(
-                        symbol,
-                        &format!("new orders are paused: {reason}"),
-                    ));
+                    return Ok(blocked(symbol, &format!("new orders are paused: {reason}")));
                 }
                 Err(why) => {
                     self.sent.lock().await.remove(&cid);

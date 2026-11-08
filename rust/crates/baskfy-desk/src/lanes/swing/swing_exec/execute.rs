@@ -1031,7 +1031,11 @@ async fn buy(
                 context.tier.level
             )));
         }
-        if context.per_stock.as_ref().is_some_and(|g| !g.allows(&symbol)) {
+        if context
+            .per_stock
+            .as_ref()
+            .is_some_and(|g| !g.allows(&symbol))
+        {
             return Ok(blocked(format!(
                 "REGIME_RED: {symbol} — none of its indices is in an uptrend (per-stock regime)"
             )));

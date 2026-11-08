@@ -1206,9 +1206,8 @@ fn allocation_changed(approved: &SizedBook, fresh: &SizedBook) -> bool {
 
 fn accepted_qty(order: &ScreenOrderOut, planned: i64) -> Option<i64> {
     match order.status.as_str() {
-        "REJECTED" | "CANCELLED" | "ERROR" | "BLOCKED" | "RISK_BLOCKED" | "NOT_SENT" | "UNKNOWN" => {
-            None
-        }
+        "REJECTED" | "CANCELLED" | "ERROR" | "BLOCKED" | "RISK_BLOCKED" | "NOT_SENT"
+        | "UNKNOWN" => None,
         _ => {
             let filled = order.filled_quantity.unwrap_or(0);
             if filled > 0 {
@@ -1727,11 +1726,7 @@ struct DeskOrder {
 }
 
 /// Every row with one status: the desk answered nothing row-by-row.
-fn all_rows(
-    planned: &[&ScreenInvestHoldingOut],
-    status: &str,
-    error: &str,
-) -> Vec<ScreenOrderOut> {
+fn all_rows(planned: &[&ScreenInvestHoldingOut], status: &str, error: &str) -> Vec<ScreenOrderOut> {
     planned
         .iter()
         .map(|row| {
@@ -1769,8 +1764,8 @@ async fn send_screen_mtf(
             None,
         )];
     }
-    let base = std::env::var("BASKFY_DESK_INTERNAL_URL")
-        .unwrap_or_else(|_| "http://desk:8420".to_owned());
+    let base =
+        std::env::var("BASKFY_DESK_INTERNAL_URL").unwrap_or_else(|_| "http://desk:8420".to_owned());
     let lines: Vec<serde_json::Value> = planned.iter().map(|row| desk_line(row)).collect();
     let wait = 30 + 10 * u64::try_from(lines.len()).unwrap_or(u64::MAX / 20);
     let client = match reqwest::Client::builder()
@@ -1781,7 +1776,10 @@ async fn send_screen_mtf(
         Err(error) => return all_rows(&planned, "NOT_SENT", &error.to_string()),
     };
     let mut request = client
-        .post(format!("{}/screen-invest/execute", base.trim_end_matches('/')))
+        .post(format!(
+            "{}/screen-invest/execute",
+            base.trim_end_matches('/')
+        ))
         .header("Origin", "http://desk")
         .json(&serde_json::json!({"confirm": true, "plan_id": plan_id, "lines": lines}));
     if let Ok(password) = std::env::var("DESK_PASSWORD")
@@ -1822,7 +1820,9 @@ async fn send_screen_mtf(
                     None,
                 );
             };
-            let filled = (order.status == "DRY_RUN").then_some(row.quantity).flatten();
+            let filled = (order.status == "DRY_RUN")
+                .then_some(row.quantity)
+                .flatten();
             order_result(
                 &row.symbol,
                 &order.status,

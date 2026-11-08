@@ -240,8 +240,16 @@ async fn execute(
         let (status, order_id, error, stop) = match placed {
             Ok(res) => {
                 let unknown = outcome_unknown(&res);
-                let status = if unknown { "UNKNOWN".to_owned() } else { text(&res, "status") };
-                let order_id = if unknown { String::new() } else { text(&res, "order_id") };
+                let status = if unknown {
+                    "UNKNOWN".to_owned()
+                } else {
+                    text(&res, "status")
+                };
+                let order_id = if unknown {
+                    String::new()
+                } else {
+                    text(&res, "order_id")
+                };
                 let error = text(&res, "error");
                 let stop = if matches!(status.as_str(), "PLACED" | "DRY_RUN" | "DUPLICATE") {
                     arm_stop(&state, &plan_id, &symbol, line.qty, line.price).await
@@ -287,7 +295,9 @@ fn outcome_unknown(res: &crate::wire::PyDict) -> bool {
 /// is a name.
 fn series_of(symbol: &str) -> &str {
     match symbol.rsplit_once('-') {
-        Some((_, suffix)) if suffix.len() == 2 && suffix.bytes().all(|b| b.is_ascii_alphabetic()) => {
+        Some((_, suffix))
+            if suffix.len() == 2 && suffix.bytes().all(|b| b.is_ascii_alphabetic()) =>
+        {
             suffix
         }
         _ => "EQ",

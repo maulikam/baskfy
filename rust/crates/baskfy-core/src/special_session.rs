@@ -24,6 +24,7 @@ pub fn special_session_open(now: DateTime<FixedOffset>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::special_session_open;
     use chrono::DateTime;
 

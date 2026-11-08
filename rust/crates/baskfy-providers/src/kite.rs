@@ -1108,8 +1108,19 @@ impl KiteConnect {
     /// The SDK's exceptions ([`KiteError`]).
     pub async fn margins_orders(&self, orders: &[KiteValue]) -> Result<KiteValue, KiteError> {
         let body = KiteValue::List(orders.to_vec());
+        self.post_margin_calculator("/margins/orders", &[], &body)
+            .await
+    }
+
+    // The adapter's only POST; takes no caller-supplied path beyond the two margin endpoints.
+    async fn post_margin_calculator(
+        &self,
+        path: &'static str,
+        query: &[(String, String)],
+        body: &KiteValue,
+    ) -> Result<KiteValue, KiteError> {
         match self
-            .request(reqwest::Method::POST, "/margins/orders", &[], Some(&body))
+            .request(reqwest::Method::POST, path, query, Some(body))
             .await?
         {
             Body::Json(v) => Ok(v),
@@ -1135,102 +1146,6 @@ impl KiteConnect {
         {
             Body::Json(v) => Ok(v),
             Body::Csv(bytes) => Ok(KiteValue::Bytes(bytes)),
-        }
-    }
-
-    /// Form POST used by order and GTT writes. The response is still Kite's JSON envelope.
-    ///
-    /// # Errors
-    /// The SDK's exceptions ([`KiteError`]).
-    pub async fn post_form(
-        &self,
-        path: &str,
-        fields: &[(String, String)],
-    ) -> Result<KiteValue, KiteError> {
-        let joined = self.root.join(path).map_err(|e| {
-            ProviderError::value_error(format!("invalid Kite path {}: {e}", repr_str(path)))
-        })?;
-        let mut request = self
-            .http
-            .request(reqwest::Method::POST, joined.as_str())?
-            .header("User-Agent", USER_AGENT)
-            .header("Accept-Encoding", ACCEPT_ENCODING)
-            .header("Accept", "*/*")
-            .header("Connection", "keep-alive")
-            .header("X-Kite-Version", KITE_HEADER_VERSION)
-            .header("Content-Type", "application/x-www-form-urlencoded");
-        let token = self.access_token();
-        if self.api_key.is_set() && token.is_set() {
-            let header = format!("token {}:{}", self.api_key.expose(), token.expose());
-            request = match reqwest::header::HeaderValue::from_str(&header) {
-                Ok(mut value) => {
-                    value.set_sensitive(true);
-                    request.header(reqwest::header::AUTHORIZATION, value)
-                }
-                Err(_) => request.header("Authorization", header),
-            };
-        }
-        let response = request
-            .body(encode_query(fields))
-            .send()
-            .await
-            .map_err(requests_error)?;
-        let status = response.status().as_u16();
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
-        let content = response.bytes().await.map_err(requests_error)?.to_vec();
-        let Some(content_type) = content_type else {
-            return Err(ProviderError::foreign("KeyError", "'content-type'").into());
-        };
-        if !content_type.contains("json") {
-            return Err(KiteError::kite(
-                KiteExceptionKind::Data,
-                format!(
-                    "Unknown Content-Type ({content_type}) with response: ({})",
-                    repr_bytes(&content)
-                ),
-            ));
-        }
-        let Ok(data) = KiteValue::from_json(&content) else {
-            return Err(KiteError::kite(
-                KiteExceptionKind::Data,
-                format!(
-                    "Couldn't parse the JSON response received from the server: {}",
-                    repr_bytes(&content)
-                ),
-            ));
-        };
-        let KiteValue::Map(map) = &data else {
-            return Err(no_attribute(&data, "get").into());
-        };
-        let status_field = map.get("status").unwrap_or(&NONE);
-        let error_type = map.get("error_type").unwrap_or(&NONE);
-        let is_error = matches!(status_field, KiteValue::Str(s) if s == "error");
-        if is_error || error_type.truthy() {
-            let KiteValue::Str(class) = error_type else {
-                return Err(ProviderError::foreign(
-                    "TypeError",
-                    format!(
-                        "attribute name must be string, not '{}'",
-                        error_type.type_name()
-                    ),
-                )
-                .into());
-            };
-            let Some(message) = map.get("message") else {
-                return Err(ProviderError::foreign("KeyError", "'message'").into());
-            };
-            return Err(KiteError::Kite {
-                kind: KiteExceptionKind::from_class_name(class),
-                message: message.py_str(),
-                code: status,
-            });
-        }
-        match map.get("data") {
-            Some(inner) => Ok(inner.clone()),
-            None => Err(ProviderError::foreign("KeyError", "'data'").into()),
         }
     }
 
@@ -1433,18 +1348,8 @@ impl KiteClient for KiteConnect {
             query.push(("mode".to_owned(), m.to_owned()));
         }
         let body = KiteValue::List(params.to_vec());
-        match self
-            .request(
-                reqwest::Method::POST,
-                "/margins/basket",
-                &query,
-                Some(&body),
-            )
-            .await?
-        {
-            Body::Json(v) => Ok(v),
-            Body::Csv(bytes) => Ok(KiteValue::Bytes(bytes)),
-        }
+        self.post_margin_calculator("/margins/basket", &query, &body)
+            .await
     }
 }
 

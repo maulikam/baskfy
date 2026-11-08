@@ -8696,3 +8696,7 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 - An Alembic database adopts the baseline only at the frozen revision and only if its fingerprint matches. Otherwise nothing changes.
 - ⚠ UNREVIEWED: `compose.prod.yml` still names the unused Python `migrate` and `seed` services; `compose.rust.yml` overrides `migrate`. `seed` has no Rust port, so a database with no restore has no reference data beyond the baseline's two tables.
 - Reverse: restore the `compose run --rm migrate` line and the Python image; `_sqlx_migrations` is ignored by Alembic.
+
+## RELEASE-2026-11-08 ⚠ UNREVIEWED
+- Merged Cursor WIP, order-path and Rust migrations. Removed `KiteConnect::post_form`; the guard test is unchanged. Both margin calculator POSTs now share one private helper, so the adapter has one `Method::POST`.
+- Reverse: redeploy a prior image only with `api-invest` stopped and its Caddy routes absent; `_sqlx_migrations` is additive and Alembic's table is untouched.

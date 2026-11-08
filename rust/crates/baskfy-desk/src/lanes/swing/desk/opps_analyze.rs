@@ -245,8 +245,14 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
             "GATE_RED: {symbol} — new entries are closed (rung {})",
             context.tier.level
         );
-    } else if context.per_stock.as_ref().is_some_and(|g| !g.allows(&symbol)) {
-        skip = format!("REGIME_RED: {symbol} — none of its indices is in an uptrend (per-stock regime)");
+    } else if context
+        .per_stock
+        .as_ref()
+        .is_some_and(|g| !g.allows(&symbol))
+    {
+        skip = format!(
+            "REGIME_RED: {symbol} — none of its indices is in an uptrend (per-stock regime)"
+        );
     } else if product == "MTF" && margin.is_none() {
         skip = format!(
             "MTF_UNAVAILABLE: {}",

@@ -296,7 +296,8 @@ async fn session_day_and_market_open(
     let today = now.date_naive();
     let weekday = !matches!(today.weekday(), Weekday::Sat | Weekday::Sun);
     let session_day = weekday && is_session_day(state, today).await?;
-    let open = session_open(now, session_day) || baskfy_core::special_session::special_session_open(now);
+    let open =
+        session_open(now, session_day) || baskfy_core::special_session::special_session_open(now);
     Ok((session_day, open))
 }
 

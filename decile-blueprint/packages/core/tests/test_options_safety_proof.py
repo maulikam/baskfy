@@ -263,7 +263,7 @@ AUTO_FLAG = re.compile(r"OPTIONS\w*AUTO|AUTO\w*OPTIONS")
 
 def test_no_options_auto_execute_flag_is_read_anywhere() -> None:
     tops = [SCREENER / "packages", SCREENER / "services", SCREENER / "apps", SCREENER / "infra",
-            DESK / "app", DESK / "scripts", ROOT / "tools", ROOT / "infra"]  # fmt: skip
+            DESK / "app", DESK / "scripts", ROOT / "tools", ROOT / "deploy", ROOT / "infra"]  # fmt: skip
     tops += [p for p in (*SCREENER.glob(".env*"), *DESK.glob(".env*.example")) if p.is_file()]
     scanned = list(_files(*(p for p in tops if p.exists())))
     assert len(scanned) > 500
@@ -273,7 +273,7 @@ def test_no_options_auto_execute_flag_is_read_anywhere() -> None:
 
 def test_nothing_schedules_the_options_execute_route() -> None:
     tops = [SCREENER / "services", SCREENER / "infra", DESK / "app", DESK / "scripts",
-            ROOT / "tools", ROOT / "infra"]  # fmt: skip
+            ROOT / "tools", ROOT / "deploy", ROOT / "infra"]  # fmt: skip
     route = re.compile(r"nifty-options/execute")
     allowed = {DESK / "app/options_desk.py", DESK / "app/templates/nifty_options.html"}
     hits = [

@@ -19,8 +19,8 @@ from scripts import options_monitor_loop as L
 
 IST = L.IST
 REPO = Path(__file__).resolve().parents[2]
-COMPOSE = REPO / "decile-blueprint" / "infra" / "docker" / "compose.prod.yml"
-DOCKERFILE = REPO / "decile-blueprint" / "infra" / "docker" / "Dockerfile.desk"
+COMPOSE = REPO / "deploy" / "compose.prod.yml"
+DOCKERFILE = REPO / "deploy" / "Dockerfile.desk"
 WED = dt.date(2026, 10, 28)
 
 

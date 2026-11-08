@@ -118,7 +118,7 @@ def test_it_finds_the_desk() -> None:
 # =====================================================================================
 # Beat must not fire collection — the desk-daily container does
 # =====================================================================================
-_COMPOSE = Path(__file__).resolve().parents[3] / "infra" / "docker" / "compose.prod.yml"
+_COMPOSE = Path(__file__).resolve().parents[4] / "deploy" / "compose.prod.yml"
 
 
 def test_beat_does_not_schedule_desk_collection() -> None:

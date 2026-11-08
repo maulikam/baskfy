@@ -37,9 +37,7 @@ IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 DOCKERFILE = (
     Path(__file__).resolve().parents[2]
-    / "decile-blueprint"
-    / "infra"
-    / "docker"
+    / "deploy"
     / "Dockerfile.desk"
 )
 

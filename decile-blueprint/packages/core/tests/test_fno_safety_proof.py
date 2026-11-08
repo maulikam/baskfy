@@ -383,7 +383,7 @@ def _auto_scan_tops() -> list[Path]:
     tops = [
         SCREENER / "packages", SCREENER / "services", SCREENER / "apps", SCREENER / "infra",
         DESK / "app", DESK / "scripts", DESK / "deploy", DESK / "config", ROOT / "tools",
-        ROOT / "ops", ROOT / "infra",
+        ROOT / "ops", ROOT / "deploy", ROOT / "infra",
     ]  # fmt: skip
     env_files = (
         *ROOT.glob(".env*.example"), *ROOT.glob(".env*.compose"), *ROOT.glob(".env.example"),
@@ -531,7 +531,7 @@ def test_nothing_schedules_the_fno_execute_route() -> None:
         DESK / "deploy",
         ROOT / "tools",
         ROOT / "ops",
-        ROOT / "infra",
+        ROOT / "deploy", ROOT / "infra",
     ]
     allowed = {DESK / "app/fno_desk.py", DESK / "app/templates/fno.html",
                ROOT / "tools/runs/fno/drill.py"}  # fmt: skip

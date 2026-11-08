@@ -45,8 +45,8 @@ BUILT = dt.datetime(2026, 9, 21, 9, 5, tzinfo=IST)
 D = Decimal
 
 REPO = Path(__file__).resolve().parents[2]
-DOCKERFILE = REPO / "decile-blueprint" / "infra" / "docker" / "Dockerfile.desk"
-COMPOSE = REPO / "decile-blueprint" / "infra" / "docker" / "compose.prod.yml"
+DOCKERFILE = REPO / "deploy" / "Dockerfile.desk"
+COMPOSE = REPO / "deploy" / "compose.prod.yml"
 
 
 class _Calendar:

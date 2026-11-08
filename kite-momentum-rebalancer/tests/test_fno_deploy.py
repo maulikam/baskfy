@@ -18,8 +18,8 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[2]
-COMPOSE = REPO / "decile-blueprint" / "infra" / "docker" / "compose.prod.yml"
-DOCKERFILE = REPO / "decile-blueprint" / "infra" / "docker" / "Dockerfile.desk"
+COMPOSE = REPO / "deploy" / "compose.prod.yml"
+DOCKERFILE = REPO / "deploy" / "Dockerfile.desk"
 DEPLOY = REPO / "tools" / "deploy"
 MONEY_FLAGS = (
     "BASKFY_FNO_CARRY_ENABLED",
@@ -67,7 +67,7 @@ def test_a_deploy_restarts_it_and_ship_expects_it_and_verifies_it() -> None:
     deploy = (DEPLOY / "deploy-swing.sh").read_text()
     lines = [ln for ln in deploy.splitlines() if ln.strip().startswith("RESTART_SERVICES=")]
     assert lines and all(" fno-monitor " in ln for ln in lines)  # both, KEEP_MONITOR or not
-    ship = (DEPLOY / "ship.sh").read_text()
+    ship = (DEPLOY / "retired" / "ship.sh").read_text()
     assert ship.index("verify-options.sh") < ship.index("bash tools/deploy/verify-fno.sh")
     running = re.findall(r'running=(\d+)"\*\)', ship)
     assert running == [str(len(_expected_running()))]

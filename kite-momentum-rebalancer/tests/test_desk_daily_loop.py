@@ -30,8 +30,8 @@ from scripts.desk_daily_loop import (
 IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 REPO = Path(__file__).resolve().parents[2]
-DOCKERFILE = REPO / "decile-blueprint" / "infra" / "docker" / "Dockerfile.desk"
-COMPOSE = REPO / "decile-blueprint" / "infra" / "docker" / "compose.prod.yml"
+DOCKERFILE = REPO / "deploy" / "Dockerfile.desk"
+COMPOSE = REPO / "deploy" / "compose.prod.yml"
 
 FRIDAY = dt.datetime(2026, 9, 11, 13, 9, tzinfo=IST)
 FRIDAY_EVENING = dt.datetime(2026, 9, 11, 19, 0, tzinfo=IST)

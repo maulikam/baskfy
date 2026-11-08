@@ -68,6 +68,17 @@ def load_index_series(data: Path) -> pl.DataFrame:
     )
 
 
+def load_fundamentals(data: Path) -> pl.DataFrame:
+    """fundamental_pit export; ``available_on`` is the only date a feature may join on."""
+    numeric = ["revenue", "ebitda", "depreciation", "pat", "total_debt", "total_equity", "cfo"]
+    return pl.read_csv(
+        data / "fundamental_pit.csv.gz", schema_overrides=dict.fromkeys(numeric, pl.Float64)
+    ).with_columns(
+        pl.col("period_end").str.to_date(), pl.col("available_on").str.to_date(),
+        pl.col("filed_at").str.to_datetime(),
+    )
+
+
 def load_index_membership(data: Path) -> pl.DataFrame:
     """Point-in-time membership flags where the export has them (2021-08 →); null before."""
     members = pl.read_csv(data / "index_member_daily.csv.gz").with_columns(pl.col("date").str.to_date())

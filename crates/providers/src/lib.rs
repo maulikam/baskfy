@@ -55,5 +55,6 @@ pub mod factory;
 pub mod fixtures;
 pub mod kite;
 pub mod nse;
+pub mod nse_results;
 
 pub use errors::{ErrorKind, ProviderError};

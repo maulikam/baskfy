@@ -33,7 +33,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 
 ## PM4 — The re-run (the gate for everything after)
 **Goal:** one number decides. Rebuild features with PM1–PM3, same walk-forward, same book.
-- AC1 Signal-year **2024** investable top-20 12-month mean return ≥ investable universe's (was +1 % vs 0 %; the unfiltered was −19 % vs 0 %) **and** 2024 top-20 hit rate ≥ 1.5× base (was 1.5×).
+- AC1 For **each** of signal-years **2024 and 2025** (complete 12-month paths only): investable top-20 12-month mean return ≥ investable universe's **and** top-20 hit rate ≥ 1.5× the investable universe's. Price-only on the 6 Nov 2026 export: 2024 +5.1 % vs +0.6 %, 18.8 % vs 7.5 % (2.5×), passes; 2025 −2.2 % vs +3.9 %, 4.5 % vs 5.4 % (0.8×), fails.
 - AC2 No year's AUC falls below the price-only model's by more than 0.02.
 - AC3 STRATEGY §3/§4 regenerated; feature importance shows fundamentals/shareholding/mcap in the top 12.
 - If AC1 fails: record it, keep the price-only model as the sleeve's model, and PM5–PM9 proceed with the better of the two. A negative result is a result.

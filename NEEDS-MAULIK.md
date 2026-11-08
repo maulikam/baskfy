@@ -2516,3 +2516,9 @@ session and the 18:40–21:15 nightly window:
 - **Advisories ignored in `rust/deny.toml`:** RUSTSEC-2025-0141, RUSTSEC-2026-0194, -0195, -0391, -0398, -0403. Each needs a dependency bump.
 
 ## Portfolio-ML (PM0) — fresh export ✅ done 9 Nov 2026 by an agent; data through 6 Nov 2026.
+
+## Portfolio-ML (PM1) — deploy the migration, then run the fundamentals backfill (9 Nov 2026)
+
+- **Needed:** ship an image with `db/migrations/0002_fundamental_pit.sql` (additive), then in the worker container `baskfy-worker fundamentals_pit backfill` (resumable; `--limit N` / `--symbols A,B` to start small).
+- **Why:** PM1 AC2 (coverage) and PM4 need the data. About 2,660 names × ~32 requests ≈ 85k requests, ~24 h at the 1 req/s NSE limit, shared with the nightly's NSE calls.
+- **Done meanwhile:** code, tests, and a 3-name end-to-end run against a throwaway database. The agent did not touch the running stack.

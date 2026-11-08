@@ -46,6 +46,7 @@ use crate::clock::{Clock, SystemClock};
 use crate::composite::SupplementaryReads;
 use crate::errors::{ErrorKind, ProviderError};
 use crate::net::GuardedClient;
+use crate::nse_results::{ResultsFiling, parse_integrated_listing, parse_reg33_listing};
 use crate::ports::{
     CapabilitySet, HealthReporting, ProviderHealth, ReferenceProvider, reference_capabilities,
 };
@@ -119,6 +120,16 @@ const CRORE: Decimal = Decimal::from_parts(10_000_000, 0, 0, false, 0);
 pub const KIND_ANNOUNCEMENTS: &str = "announcements";
 /// SW11B: archive kind of the per-symbol event calendar.
 pub const KIND_EVENT_CALENDAR: &str = "event-calendar";
+/// PM1: archive kind of the per-symbol quarterly financial-results listing.
+pub const KIND_FINANCIAL_RESULTS: &str = "financial-results";
+/// PM1: archive kind of the per-symbol integrated-filing listing (results after Dec 2024).
+pub const KIND_INTEGRATED_FILINGS: &str = "integrated-filings";
+const INTEGRATED_FILINGS_API: &str =
+    "/api/integrated-filing-results?index=equities&type=Integrated%20Filing-%20Financials&symbol=";
+/// PM1: archive kind of one XBRL results filing.
+pub const KIND_FINANCIAL_RESULTS_XBRL: &str = "financial-results-xbrl";
+const FINANCIAL_RESULTS_API: &str =
+    "/api/corporates-financial-results?index=equities&period=Quarterly&symbol=";
 const ANNOUNCEMENTS_API: &str = "/api/corporate-announcements?index=equities&symbol=";
 const EVENT_CALENDAR_API: &str = "/api/event-calendar?index=equities&symbol=";
 /// Where a row links out to when the calendar entry has no attachment of its own.
@@ -196,6 +207,10 @@ pub fn ist() -> FixedOffset {
 // ---------------------------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------------------------
+
+pub(crate) fn json_context_error(message: String) -> ProviderError {
+    unexpected(message)
+}
 
 fn unexpected(message: impl Into<String>) -> ProviderError {
     ProviderError::unexpected_payload(message).with_provider(PROVIDER_NAME)
@@ -1571,6 +1586,66 @@ impl NseProvider {
             }
         }
         Ok(records)
+    }
+
+    /// PM1: every quarterly results filing NSE lists for `symbol`, from both feeds. A feed that
+    /// answers 404 contributes nothing.
+    ///
+    /// # Errors
+    /// Every failure but a 404.
+    pub async fn results_filings(
+        &self,
+        symbol: &str,
+        on: NaiveDate,
+    ) -> Result<Vec<ResultsFiling>, ProviderError> {
+        let token = py_strip(symbol).to_uppercase();
+        let mut filings = Vec::new();
+        if let Some(payload) = self
+            .inner
+            .filings_payload(KIND_FINANCIAL_RESULTS, FINANCIAL_RESULTS_API, &token, on)
+            .await?
+        {
+            filings.extend(parse_reg33_listing(&payload, &token)?);
+        }
+        if let Some(payload) = self
+            .inner
+            .filings_payload(KIND_INTEGRATED_FILINGS, INTEGRATED_FILINGS_API, &token, on)
+            .await?
+        {
+            filings.extend(parse_integrated_listing(&payload, &token)?);
+        }
+        Ok(filings)
+    }
+
+    /// PM1: one XBRL filing named by the listing, archived under the day it was filed. A URL
+    /// outside NSE's archive host is refused: it came out of a payload.
+    ///
+    /// # Errors
+    /// `UnexpectedPayload` for a foreign URL; fetch and archive failures.
+    pub async fn financial_results_xbrl(
+        &self,
+        symbol: &str,
+        url: &str,
+        filed_on: NaiveDate,
+    ) -> Result<Vec<u8>, ProviderError> {
+        if !url.starts_with(&format!("{}/", self.inner.settings.nse_archive_url)) {
+            return Err(unexpected(format!("not an NSE archive URL: {url}")));
+        }
+        let token = py_strip(symbol).to_uppercase();
+        let stem = url
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches(".xml");
+        self.inner
+            .archived(
+                &format!("{KIND_FINANCIAL_RESULTS_XBRL}/{token}/{stem}"),
+                filed_on,
+                url.to_owned(),
+                "xml",
+                "application/xml",
+            )
+            .await
     }
 
     /// SW11B: board meetings whose purpose is a financial result, from NSE's event calendar.
@@ -3198,7 +3273,7 @@ fn first_stamp(
 
 /// `_filings_rows`: the list NSE's filings endpoints answer with. A `{}` or a non-list is damage;
 /// an empty list is an honest "nothing filed".
-fn filings_rows(payload: &[u8], context: &str) -> Result<Vec<Row>, ProviderError> {
+pub(crate) fn filings_rows(payload: &[u8], context: &str) -> Result<Vec<Row>, ProviderError> {
     let data = json_loads(payload)
         .map_err(|e| unexpected(format!("could not parse {context} as JSON: {e}")))?;
     let mut value = PyValue::from_json(&data);

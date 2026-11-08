@@ -14,6 +14,7 @@ mod eq_bars;
 mod factors;
 mod fno;
 mod fundamentals;
+mod fundamentals_pit;
 mod kite_session;
 mod options;
 mod pipeline;
@@ -38,6 +39,7 @@ pub const CLI_MODULES: &[&str] = &[
     "factors_cli",
     "fno_cli",
     "fundamentals_cli",
+    "fundamentals_pit_cli",
     "kite_session_cli",
     "options_cli",
     "pipeline_cli",

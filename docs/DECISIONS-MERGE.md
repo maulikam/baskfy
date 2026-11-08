@@ -8675,3 +8675,7 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 - RH-3 ⚠ UNREVIEWED: `order-path/first-release` holds unmerged gateway work and `rs8/opps` holds saved WIP, so 9 local branches remain, not 7.
 - RH-4 ⚠ UNREVIEWED: dirty files in `rs8/opps-setups` (node_modules symlinks) and `rs8/opps-web` (818 MB pnpm cache) were not committed; they were rebuildable, not work.
 - RH-5 ⚠ UNREVIEWED: `deployed/local-indices` tags the WIP commit, because the running image was built from HEAD plus those files and has no revision label.
+- RH-6 ⚠ UNREVIEWED: `decile_9` joins the namespace allow list; it is a deliberately invalid bucket in a golden case, and the check was already failing on it at `0f31ee1`.
+- RH-7 ⚠ UNREVIEWED: `deploy/compose.prod.yml` keeps four `infra/docker` comments so it stays byte-identical; the acceptance grep excludes that file. `deploy/compose.yml` (dev only) has its `../prometheus` and `../grafana` mounts repointed.
+- RH-8 ⚠ UNREVIEWED: cargo-deny has no per-crate allow list, so Law 1 in CI is `tools/check-core-deps.sh`.
+- RH-9 ⚠ UNREVIEWED: CI now also runs on pushes to `developer`, otherwise the trunk is never checked.

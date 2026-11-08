@@ -67,7 +67,8 @@ EXCLUDES=(
 #                        exclusion above, but scoped to the token rather than the file: if
 #                        REMAINING.md ever says `decile_core`, that is still a bug and still
 #                        fails. Added 12 Sep 2026; docs/DECISIONS-MERGE.md M2.1.
-ALLOWED='^(decile_[1-6]|decile_bucket|DECILE_RANK_KEY|decile_decile)$'
+#   decile_9             a deliberately invalid bucket: the golden proving validation refuses it.
+ALLOWED='^(decile_[1-6]|decile_9|decile_bucket|DECILE_RANK_KEY|decile_decile)$'
 
 violations=0
 while IFS= read -r line; do

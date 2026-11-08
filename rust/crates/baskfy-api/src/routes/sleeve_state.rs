@@ -494,9 +494,12 @@ pub async fn sleeve_states(
     now: DateTime<FixedOffset>,
 ) -> Result<Vec<SleeveStateOut>, Problem> {
     let today = now.with_timezone(&ist()).date_naive();
-    let session_day =
-        today.weekday().num_days_from_monday() < 5 && is_session_day(state, today).await?;
-    let market_open = is_nse_session_open(now, session_day);
+    // A special session (Muhurat) is a session day, but the monitor and auto loops stay asleep, so
+    // it never reads as "monitoring" or "entry window missed".
+    let special = baskfy_core::special_session::special_session_open(now);
+    let session_day = special
+        || (today.weekday().num_days_from_monday() < 5 && is_session_day(state, today).await?);
+    let market_open = !special && is_nse_session_open(now, session_day);
     let broker = broker_session_exists(now)?;
     let mut out = Vec::new();
     for sleeve in SLEEVES {

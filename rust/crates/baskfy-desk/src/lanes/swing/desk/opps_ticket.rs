@@ -66,6 +66,9 @@ fn str_of(v: Option<&PyValue>) -> Option<String> {
 
 pub(super) fn market_open(state: &AppState) -> bool {
     let now = state.clock.now_ist();
+    if baskfy_core::special_session::special_session_open(now) {
+        return true;
+    }
     let wd = now.weekday().num_days_from_monday();
     let minutes = now.hour() * 60 + now.minute();
     wd < 5 && (9 * 60 + 15..=15 * 60 + 30).contains(&minutes)

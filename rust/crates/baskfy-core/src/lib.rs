@@ -37,6 +37,7 @@ pub mod rank_buffer;
 pub mod ranking_engine;
 pub mod ranking_selection;
 pub mod screener;
+pub mod special_session;
 pub mod swing;
 pub mod twt;
 pub mod vbt;

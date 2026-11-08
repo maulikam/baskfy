@@ -23,6 +23,9 @@ pub fn now_ist() -> DateTime<FixedOffset> {
 /// 09:15–15:30 IST on a weekday (holidays are not modelled; a holiday quote is the last close).
 #[must_use]
 pub fn market_open(now: DateTime<FixedOffset>) -> bool {
+    if baskfy_core::special_session::special_session_open(now) {
+        return true;
+    }
     if matches!(now.weekday(), Weekday::Sat | Weekday::Sun) {
         return false;
     }

@@ -57,6 +57,7 @@ async fn drift(pool: &PgPool, dir: &Path) -> Result<Vec<String>, Failure> {
 }
 
 /// An Alembic database joins at the baseline, only if its schema really is the baseline.
+#[allow(clippy::print_stdout)]
 async fn adopt(
     pool: &PgPool,
     conn: &mut PoolConnection<Postgres>,
@@ -138,6 +139,7 @@ async fn up(pool: &PgPool, migrator: &Migrator, dir: &Path) -> Result<(), Failur
     Ok(())
 }
 
+#[allow(clippy::print_stdout)]
 async fn status(pool: &PgPool, migrator: &Migrator) -> Result<ExitCode, Failure> {
     let done = applied(pool).await?;
     let pending: Vec<i64> = migrator

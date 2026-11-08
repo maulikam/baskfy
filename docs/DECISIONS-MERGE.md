@@ -8709,3 +8709,13 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 - Root Cargo and pnpm workspaces; `apps/`, `crates/`, `packages/`, `db/migrations`, `testdata`. All Python under `legacy/python/` (Maulik, in session), including `tools/parity` and `tools/runs`, which the brief had kept in place; `frozen/strangle` stays put.
 - Active: `deploy/monitoring` (dev compose, CI promtool), `deploy/backup`. Historical: `legacy/python/decile-blueprint/infra/terraform`, `legacy/python/kite-momentum-rebalancer/deploy`.
 - The seed service is out of compose; seeding is `python -m baskfy_api.seed` from the legacy project. Reverse: `git revert` RF1-RF4 and move local data back.
+
+## SEAM-1 — the 2023-12-29 / 2024-01-01 price step was a double adjustment · ⚠ UNREVIEWED (9 Nov 2026)
+
+**Cause.** `deep_backfill` wrote spliced, vendor-adjusted bars with `adj_factor = 1`; `reprocess_instrument` then applied the seam factor to them again.
+**Repair.** 250 names (next bar `nse`, gap <= 10 days, correction smooths the seam): `kite_adjusted` OHLC and `close_raw` x `f(2026-08-21) / stored f`, `adj_factor` = seam factor. All other names: prices untouched, deep `adj_factor` made uniform. Jumps >25% on the seam day: 191 -> 1 of 1,694.
+**Code.** `deep.rs` now records the seam factor at write.
+**Rejected.** Refetching all deep history from Kite: a 3.6M-row rewrite for the same result.
+**Reverse.** Restore from `repair_20261109.ohlcv_deep_before`, or `backups/pre-seamfix-20261109`.
+**Second pass, same day.** 30 names had a `source='kite'` block whose vendor-adjusted `close_raw` was adjusted again: block rows now `close = close_raw`, `source='kite_adjusted'`, prior deep rows rescaled. GOODLUCK deep rows x3 (one of its two 3x actions counted twice; seam measured 3.19). Copies in `repair_20261109.kite_before` and `goodluck_before`.
+**Open.** 11 names keep multi-month holes across the seam, where a level change is not evidence of an error. Stored factors are being recomputed outside market hours.

@@ -120,11 +120,38 @@ pub async fn duplicate_pairs(conn: &mut PgConnection) -> Result<i64, WorkerError
     .await?)
 }
 
+/// The adjustment already inside bars spliced onto the instrument's earliest stored bar.
+async fn seam_adj_factor(
+    conn: &mut PgConnection,
+    instrument_id: i64,
+    earliest: NaiveDate,
+) -> Result<rust_decimal::Decimal, WorkerError> {
+    let found: Option<rust_decimal::Decimal> = sqlx::query_scalar(
+        "SELECT adj_factor FROM ohlcv_daily WHERE instrument_id = $1 AND date = $2",
+    )
+    .bind(instrument_id)
+    .bind(earliest)
+    .fetch_optional(&mut *conn)
+    .await?;
+    Ok(found.unwrap_or(rust_decimal::Decimal::ONE))
+}
+
 /// `write`.
 pub async fn write(
     conn: &mut PgConnection,
     instrument_id: i64,
     bars: &[(NaiveDate, Candle)],
+) -> Result<usize, WorkerError> {
+    write_at_factor(conn, instrument_id, bars, rust_decimal::Decimal::ONE).await
+}
+
+/// `write`, recording the factor the splice already put in the prices so a later
+/// `reprocess_instrument` does not apply it a second time.
+async fn write_at_factor(
+    conn: &mut PgConnection,
+    instrument_id: i64,
+    bars: &[(NaiveDate, Candle)],
+    adj_factor: rust_decimal::Decimal,
 ) -> Result<usize, WorkerError> {
     let mut written = 0;
     for chunk in bars.chunks(UPSERT_CHUNK) {
@@ -142,7 +169,7 @@ pub async fn write(
         sqlx::query(
             "INSERT INTO ohlcv_daily (instrument_id, date, open, high, low, close, volume, \
              close_raw, volume_raw, adj_factor, source) \
-             SELECT $1, u.d, u.o, u.h, u.l, u.c, u.v, u.c, u.v, 1, 'kite_adjusted' \
+             SELECT $1, u.d, u.o, u.h, u.l, u.c, u.v, u.c, u.v, $8, 'kite_adjusted' \
              FROM UNNEST($2::date[], $3::numeric[], $4::numeric[], $5::numeric[], \
              $6::numeric[], $7::int8[]) AS u(d, o, h, l, c, v) \
              ON CONFLICT (instrument_id, date) DO NOTHING",
@@ -154,6 +181,7 @@ pub async fn write(
         .bind(&cols[2])
         .bind(&cols[3])
         .bind(&volume)
+        .bind(adj_factor)
         .execute(&mut *conn)
         .await?;
         written += chunk.len();
@@ -292,7 +320,11 @@ pub async fn run(
             continue;
         }
         let mut tx = db.begin().await?;
-        report.written += write(&mut tx, instrument_id, &bars).await?;
+        let adj_factor = match earliest {
+            Some(day) => seam_adj_factor(&mut tx, instrument_id, day).await?,
+            None => rust_decimal::Decimal::ONE,
+        };
+        report.written += write_at_factor(&mut tx, instrument_id, &bars, adj_factor).await?;
         tx.commit().await?;
     }
 

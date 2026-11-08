@@ -598,6 +598,31 @@ pub struct DeskDeps {
     pass: Arc<dyn ReconcilePass>,
 }
 
+impl DeskDeps {
+    /// Open intents against today's book. A failed read leaves them open, never released.
+    #[allow(clippy::print_stderr)]
+    async fn settle_open_intents(&self) {
+        use crate::lanes::exec_core::intent;
+        let db = &self.state.db;
+        if !matches!(intent::open_intents(db).await, Ok(open) if !open.is_empty()) {
+            return;
+        }
+        let orders = match self.state.kite.orders().await {
+            Ok(PyValue::List(rows)) => rows,
+            Ok(_) => Vec::new(),
+            Err(e) => {
+                eprintln!("WARNING:session_supervisor:intent reconcile: {e}");
+                return;
+            }
+        };
+        if let Err(e) =
+            intent::resolve_from_order_book(db, self.state.clock.time(), &orders).await
+        {
+            eprintln!("WARNING:session_supervisor:intent reconcile: {e}");
+        }
+    }
+}
+
 impl std::fmt::Debug for DeskDeps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeskDeps")
@@ -677,6 +702,7 @@ impl Deps for DeskDeps {
     }
 
     async fn reconcile(&self, now: DateTime<FixedOffset>) -> Result<PassOutcome, DepError> {
+        self.settle_open_intents().await;
         self.pass.run(now).await
     }
 

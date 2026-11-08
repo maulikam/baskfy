@@ -8679,3 +8679,12 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 - RH-7 ⚠ UNREVIEWED: `deploy/compose.prod.yml` keeps four `infra/docker` comments so it stays byte-identical; the acceptance grep excludes that file. `deploy/compose.yml` (dev only) has its `../prometheus` and `../grafana` mounts repointed.
 - RH-8 ⚠ UNREVIEWED: cargo-deny has no per-crate allow list, so Law 1 in CI is `tools/check-core-deps.sh`.
 - RH-9 ⚠ UNREVIEWED: CI now also runs on pushes to `developer`, otherwise the trunk is never checked.
+## ORDER-PATH (8 Nov 2026) ⚠ UNREVIEWED
+
+- Screen Invest no longer writes to Kite from the API. `send_screen_mtf` posts to the desk's `/screen-invest/execute` with the stable `plan_id`, so guards, risk, limits and the journal apply. Tests: `baskfy-api/tests/law_two.rs`.
+- The stop policy is unchanged: `stop_from_vol(price, 0.0)` is the 8% floor. Passing a real volatility is a separate decision.
+- `order_intent` is committed before every Kite POST, with a primary key shared by all desk processes and a 20-character Kite `tag`. A match in the order book settles an open intent. No match never frees it; only `POST /execution/intents/resolve` does. Tests: `exec_gateway_intent.rs`.
+- The tables are `CREATE IF NOT EXISTS` in `intent.rs`, not a numbered migration, because `MIGRATIONS` is pinned verbatim to the Python desk. An older binary ignores them, so rollback is safe.
+- `GET /execution/ready`, `POST /execution/pause` and `/resume` added. A pause stops new `place()` only and survives restarts.
+- Not done: GTT intents, session lock held across the POST, push order updates and quotes.
+- Reverse: drop `.with_intents` in `desk.rs`.

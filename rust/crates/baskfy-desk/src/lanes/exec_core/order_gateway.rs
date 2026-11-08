@@ -23,6 +23,7 @@ use super::Broker;
 use super::gtt::{
     TickSizes, band_finding, drop_pct, gtt_params, py_round, py_round0, refuse_stop, to_tick,
 };
+use super::intent::{self, IntentStore, NewIntent, Reservation};
 use super::guards::{
     self, CoverageRule, FO_CARRY_PRODUCT, assert_not_overnight_option,
     assert_overnight_option_is_covered, assert_tradeable, fo_gtt_refusal, fo_order_refusal,
@@ -75,6 +76,7 @@ pub struct OrderGateway {
     sent: Mutex<HashMap<String, String>>,
     gtt_sent: Mutex<HashMap<String, PyValue>>,
     ticks: Mutex<TickSizes>,
+    intents: Option<Arc<dyn IntentStore>>,
 }
 
 impl std::fmt::Debug for OrderGateway {
@@ -212,7 +214,39 @@ impl OrderGateway {
             sent: Mutex::new(replayed.sent),
             gtt_sent: Mutex::new(replayed.gtt_sent),
             ticks: Mutex::new(TickSizes::default()),
+            intents: None,
         })
+    }
+
+    /// Commit every order to `store` before it is sent, and tag it at Kite.
+    #[must_use]
+    pub fn with_intents(mut self, store: Arc<dyn IntentStore>) -> Self {
+        self.intents = Some(store);
+        self
+    }
+
+    async fn settle_intent(
+        &self,
+        cid: &str,
+        state: &str,
+        order_id: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<(), GatewayError> {
+        let Some(store) = &self.intents else {
+            return Ok(());
+        };
+        match store.settle(cid, state, order_id, error).await {
+            Ok(()) => Ok(()),
+            // The row stays open and the reconciler settles it by tag.
+            Err(why) => self.journal(
+                dict([
+                    ("event", s("intent_settle_error")),
+                    ("state", s(state)),
+                    ("error", s(&why)),
+                ]),
+                Some(cid),
+            ),
+        }
     }
 
     /// The journal file.
@@ -436,9 +470,69 @@ impl OrderGateway {
             sent.insert(cid.clone(), format!("PENDING-{cid}"));
         }
         self.limits.order_slot().await; // layer 4: rate limits
+        let tag = intent::kite_tag(&cid);
+        if let Some(store) = &self.intents {
+            // Layer 5: committed before the broker can hear of it, or not sent at all.
+            let reserved = store
+                .reserve(&NewIntent {
+                    client_id: &cid,
+                    tag: &tag,
+                    symbol,
+                    side: &o.side,
+                    qty: o.qty,
+                    product: &o.product,
+                    order_type: &o.order_type,
+                })
+                .await;
+            match reserved {
+                Ok(Reservation::Proceed) => {}
+                Ok(Reservation::Placed(oid)) => {
+                    self.sent.lock().await.insert(cid.clone(), oid.clone());
+                    return Ok(dict([
+                        ("symbol", s(symbol)),
+                        ("status", s("DUPLICATE")),
+                        ("order_id", s(&oid)),
+                    ]));
+                }
+                Ok(Reservation::Unresolved(state)) => {
+                    self.sent.lock().await.remove(&cid);
+                    let why = format!(
+                        "{cid}: an earlier send has no known outcome ({state}); it must be \
+                         reconciled before this order can be sent"
+                    );
+                    self.journal(
+                        dict([("event", s("intent_unresolved")), ("symbol", s(symbol))]),
+                        Some(&cid),
+                    )?;
+                    return Ok(dict([
+                        ("symbol", s(symbol)),
+                        ("status", s("ERROR")),
+                        ("error", s(&why)),
+                        ("exception", s("UnresolvedIntent")),
+                        ("reached_exchange", PyValue::None),
+                    ]));
+                }
+                Ok(Reservation::Paused(reason)) => {
+                    self.sent.lock().await.remove(&cid);
+                    return Ok(blocked(
+                        symbol,
+                        &format!("new orders are paused: {reason}"),
+                    ));
+                }
+                Err(why) => {
+                    self.sent.lock().await.remove(&cid);
+                    return Ok(blocked(
+                        symbol,
+                        &format!("the order intent could not be committed: {why}"),
+                    ));
+                }
+            }
+        }
         if gates.dry_run {
             let oid = format!("DRY-{cid}");
             self.sent.lock().await.insert(cid.clone(), oid.clone());
+            self.settle_intent(&cid, intent::DRY_RUN, Some(&oid), None)
+                .await?;
             let mut rec = dict([
                 ("event", s("dry_run")),
                 ("symbol", s(symbol)),
@@ -482,6 +576,10 @@ impl OrderGateway {
             validity: Some("DAY".to_owned()),
             ..OrderParams::default()
         };
+        if self.intents.is_some() {
+            params.insert("tag", s(&tag));
+            wire.tag = Some(tag.clone());
+        }
         if let Some(mp) = o.market_protection
             && o.order_type == "MARKET"
         {
@@ -494,6 +592,8 @@ impl OrderGateway {
         {
             if !px.is_finite() {
                 self.sent.lock().await.remove(&cid);
+                self.settle_intent(&cid, intent::NOT_SENT, None, Some("non-finite price"))
+                    .await?;
                 return Ok(blocked(
                     symbol,
                     &format!(
@@ -512,6 +612,8 @@ impl OrderGateway {
         match self.kite.place_order(&wire).await {
             Ok(oid) => {
                 self.sent.lock().await.insert(cid.clone(), oid.clone());
+                self.settle_intent(&cid, intent::PLACED, Some(&oid), None)
+                    .await?;
                 let mut rec = dict([("event", s("placed")), ("order_id", s(&oid))]);
                 for (k, v) in params.iter() {
                     rec.insert(k, v.clone());
@@ -532,6 +634,12 @@ impl OrderGateway {
                     self.sent.lock().await.remove(&cid);
                 }
                 let text = exc.to_string();
+                let outcome = if definitive {
+                    intent::REJECTED
+                } else {
+                    intent::UNKNOWN
+                };
+                self.settle_intent(&cid, outcome, None, Some(&text)).await?;
                 self.journal(
                     dict([
                         ("event", s(if definitive { "rejected" } else { "error" })),

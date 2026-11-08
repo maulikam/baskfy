@@ -15,6 +15,7 @@ use tokio::sync::OnceCell;
 
 use super::Broker;
 use super::guards::{CoverageRule, core_coverage};
+use super::intent::DbIntentStore;
 use super::kite_client::DeskKite;
 use super::order_gateway::{GatewayOptions, OrderGateway};
 use super::risk::{PgRiskStateStore, RiskBacking, RiskError, RiskLayer, RiskManager, risk_config};
@@ -321,7 +322,11 @@ impl DeskGateway {
                 ids: parts.ids.clone(),
                 limits: None,
             },
-        )?;
+        )?
+        .with_intents(Arc::new(DbIntentStore::new(
+            parts.db.clone(),
+            parts.clock.clone(),
+        )));
         let kite_client = Arc::new(DeskKite::new(
             parts.kite.clone(),
             parts.settings.clone(),

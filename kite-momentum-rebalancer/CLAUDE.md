@@ -23,15 +23,7 @@ GTT stop-losses placed for every position.
   <10 orders/sec needs no algo registration. The rate limiter enforces ≤9 OPS.
 
 ## Legacy layout
-- `app/main.py` — FastAPI server + webview (upload, plan review, execute with confirm)
-- `app/scoring.py` — Momentum Quality Score /100 (the strategy brain; see skill below)
-- `app/rebalance.py` — target weights, deltas vs holdings, cash reconciliation, stops
-- `app/kite_client.py` — Kite Connect wrapper (auth, holdings incl. pledged qty, margins, LTP, orders, GTT)
 - `app/config.py` — every strategy knob (filters, weights, caps). Change behaviour HERE, not in code.
-- `app/analytics/` — SQLite persistence (data/portfolio.db), EOD snapshots, metrics,
-  PRI/TRI benchmarks, regime adapters/store/view. Read-only w.r.t. the market.
-- `app/core/regime*.py` — regime overlay: pure domain engine + sleeve allocation solver.
-  `/regime` and `/regime/backtest` are read-only status pages.
 - `.claude/skills/momentum-rebalance/SKILL.md` — full strategy spec. READ IT before touching scoring/rebalance logic.
 
 ## Non-negotiable rules (do not "improve" these away)

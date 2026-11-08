@@ -42,7 +42,7 @@ x-python-image: &python-image
     # pulls it. Holds `kite-session` (the key) and `known_hosts` (the desk's pinned host key);
     # both paths are `ProviderSettings` defaults, so nothing else needs configuring.
     #
-    # Created by tools/deploy/retired/install-kite-session.sh, owned by uid 1001 — the container's
+    # Created by tools/deploy/install-kite-session.sh, owned by uid 1001 — the container's
     # `baskfy` user. ssh refuses a key it considers world-readable, and refuses one it cannot
     # read at all, so the ownership is load-bearing rather than tidiness.
     - /opt/baskfy/secrets/ssh:/var/lib/baskfy/.ssh:ro

@@ -2504,3 +2504,13 @@ session and the 18:40–21:15 nightly window:
   (set in the untracked env files); verified egress = `82.118.26.6`, Kite reachable (Python + Rust).
 * **Also:** the proxy password was pasted into a chat session; rotate it at staticip.in if you
   want it out of that transcript, then update the env files.
+
+## Repo hygiene, 8 Nov 2026
+
+- **Branches to decide:** `codex/sc-run` (SC0-SC2 plus saved WIP), `claude/jolly-brown-6aeyjb`, `af/{E,F,G}-rebased`, `rs8/opps` (saved WIP), `order-path/first-release` (unmerged gateway fix).
+- **`wip/cursor-2026-11-07`:** the running image was built from this code, but `developer` does not have it. Merge it or drop it.
+- **Gate password:** never committed; it now lives in `/Volumes/T7-Work/baskfy-local/`.
+- **`deployed/local-indices`:** tags `a4bdd35`. The image has no revision label, so this is inferred from file times.
+- **`go/`:** empty; remove it with `rmdir go`.
+- **Red test:** `nothing_in_the_kite_adapter_can_reach_an_order` fails because of the direct-Kite Screen Invest path.
+- **Advisories ignored in `rust/deny.toml`:** RUSTSEC-2025-0141, RUSTSEC-2026-0194, -0195, -0391, -0398, -0403. Each needs a dependency bump.

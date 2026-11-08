@@ -172,6 +172,10 @@ quartile / decile (33.1 % / 34.9 %, drawdown slightly *worse*). All 13 variants 
 with −20 to −29 % drawdowns. The ranking's information content sets the outcome; how the list is sliced
 does not. That is the argument for §6.1–6.3 over any further tuning.
 
+**Skip-held (PM0.2b, 6 Nov scores, investable, Jan 2020 → Nov 2026; `explore_cadence.py`).** A name held by any of the last 12 tranches is not eligible. Rebuy → skip: top-10 35.9 % / −19.5 % / 1.86 → 35.6 % / −19.7 % / 2.16, 346 → 574 names; top-20 35.7 % / −22.0 % / 1.98 → 33.8 % / −18.1 % / 2.14, 564 → 927 names. Top-10 2022 +12 → +11 %, 2025 −5 → −8 %; top-20 2022 +10 → +17 %, 2025 −9 → −5 %. Sharpe rises in both, but CAGR falls and the top-10's drawdown and bad years do not improve, so the 10 Sep result (33.6 → 36.9 %, −21.6 → −17.0 %) **did not replicate as a gain in return or in losses**. `skip_held` stays off by default.
+
+**Entry cadence (PM0.3b, all with skip-held).** Monthly top-10 35.6 % / −19.7 % / 2.16; monthly top-20 33.8 % / −18.1 % / 2.14; fortnightly top-5 33.9 % / −17.5 % / 2.11; weekly top-2 32.3 % / −17.3 % / 2.04; every-2-sessions top-1 32.3 % / −21.5 % / 2.07; daily top-1 34.1 % / −18.1 % / 2.19. Median pick +15 to +21 %, 490–949 names. One band, cadence does not matter, and no cell is picked from it.
+
 **What is flattering about this test and should be said plainly:** the window is Jan 2020 → Nov 2026
 — the COVID crash is only 3/12 invested, and the universe equal-weight itself compounded at 23.9 %.
 There is **one** real bear year for small caps (2022) and one correction (2024-25) in the out-of-sample

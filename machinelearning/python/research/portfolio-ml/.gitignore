@@ -3,6 +3,7 @@
 # summary tables in out/ are tracked.
 data/
 out/*.parquet
+out/*/*.parquet
 out/trades_*.csv
 out/equity_*.csv
 out/*.log

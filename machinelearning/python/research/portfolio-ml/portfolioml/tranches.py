@@ -20,6 +20,8 @@ class TrancheConfig:
     stop: float | None = None  # e.g. -0.35: a tranche line is closed at the first close below entry×(1+stop)
     weighting: str = "equal"  # or "rank": top pick gets ~2× the weight of the last
     keep_if_top_frac: float | None = None  # "re-rank, don't sell": a maturing name still in this top fraction rolls over at no cost
+    skip_held: bool = False  # a name in any of the last ``slices`` tranches is not eligible (ignored with keep_if_top_frac)
+    cadence_sessions: int | None = None  # enter every N sessions, one slice per entry; None = first session of each month, 12 slices
     max_per_sector: int | None = 3  # applies only when ds has a "sector" column; None switches it off
 
 
@@ -46,7 +48,12 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
     """Returns (picks with their 12-month outcome, daily equity of the rolling book)."""
     sessions = ds["date"].unique().sort().to_list()
     sidx = {d: i for i, d in enumerate(sessions)}
-    starts = [d for d in month_starts(sessions) if d in set(scores["date"].to_list())]
+    scored = set(scores["date"].to_list())
+    if cfg.cadence_sessions:
+        starts = [d for d in sessions if d in scored][:: cfg.cadence_sessions]
+        slices = -(-cfg.horizon // cfg.cadence_sessions)  # a slice's tranche ends before its next one starts
+    else:
+        starts, slices = [d for d in month_starts(sessions) if d in scored], 12
     cols = ["instrument_id", "date", "entry_px", "fwd_ret_h", "fwd_min_ret", "label"]
     cap = cfg.max_per_sector if "sector" in ds.columns else None
     if cfg.gate_col:
@@ -63,6 +70,8 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
             continue
         day = day.sort(score_col, descending=descending).with_columns(
             (pl.int_range(pl.len()) / pl.len()).alias("_pct"), pl.lit(False).alias("kept"))
+        if cfg.skip_held and cfg.keep_if_top_frac is None and picks:
+            day = day.filter(~pl.col("instrument_id").is_in(pl.concat([p["instrument_id"] for p in picks[-slices:]]).implode()))
         chosen = []
         if cfg.keep_if_top_frac is not None and j >= 12 and len(picks) >= 1:
             prev = picks[j - 12] if j - 12 < len(picks) and picks[j - 12]["date"][0] == starts[j - 12] else None
@@ -107,16 +116,16 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
     c2, c1 = (1 - cfg.cost_per_side) ** 2, (1 - cfg.cost_per_side)
     path = path.with_columns(pl.when(pl.col("kept")).then(c1).otherwise(c2).alias("c"))
     tv = path.group_by("signal_date", "date").agg((pl.col("mult") * pl.col("w") * pl.col("c")).sum().alias("v")).sort("signal_date", "date")
-    # twelve slices of capital; tranche j lives in slice j % 12 and compounds whatever that slice holds
+    # capital in equal slices; tranche j lives in slice j % slices and compounds whatever that slice holds
     tranche_dates = tv["signal_date"].unique().sort().to_list()
     i_first = sidx[tranche_dates[0]]
     days = sessions[i_first:]
     n = len(days)
-    slice_val = np.ones((n, 12))
-    level = np.ones(12)
-    cursor = np.zeros(12, dtype=int)  # first day index not yet written for the slice
+    slice_val = np.ones((n, slices))
+    level = np.ones(slices)
+    cursor = np.zeros(slices, dtype=int)  # first day index not yet written for the slice
     for j, sd in enumerate(tranche_dates):
-        k = j % 12
+        k = j % slices
         t = tv.filter(pl.col("signal_date") == sd)
         idx = np.array([sidx[d] - i_first for d in t["date"].to_list()])
         vals = t["v"].to_numpy() * level[k]
@@ -124,7 +133,7 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
         slice_val[idx, k] = vals
         level[k] = vals[-1]
         cursor[k] = idx[-1] + 1
-    for k in range(12):
+    for k in range(slices):
         slice_val[cursor[k]:, k] = level[k]
     daily = pl.DataFrame({"date": days, "equity": slice_val.mean(axis=1)})
     return p, daily

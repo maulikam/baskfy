@@ -4,21 +4,34 @@
 ARG RUST_IMAGE=rust:1.99.1-slim-bookworm
 ARG DEBIAN_IMAGE=debian:bookworm-slim
 
-FROM ${RUST_IMAGE} AS build
+FROM ${RUST_IMAGE} AS chef
 WORKDIR /src/rust
 # Beats rust/.cargo/config.toml's host path.
 ENV CARGO_TARGET_DIR=/src/rust/target
 COPY rust/rust-toolchain.toml ./
 RUN rustup toolchain install && rustup show active-toolchain
+RUN cargo install cargo-chef --locked --version 0.1.78
+
+FROM chef AS planner
+COPY rust/ ./
+RUN cargo chef prepare --recipe-path /recipe.json
+
+FROM chef AS build
+COPY --from=planner /recipe.json /recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo chef cook --release --locked --recipe-path /recipe.json \
+      -p baskfy-api -p baskfy-worker -p baskfy-desk --bins
 COPY rust/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,target=/src/rust/target,sharing=locked \
     cargo build --release --locked -p baskfy-api -p baskfy-worker -p baskfy-desk --bins \
  && install -d /out \
  && install -m 0755 target/release/baskfy-api target/release/baskfy-worker target/release/baskfy-desk /out/
 
 FROM ${DEBIAN_IMAGE} AS runtime
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
 ENV TZ=Asia/Kolkata \
     DRY_RUN=false \
     DESK_DB_BACKEND=postgres \
@@ -42,6 +55,19 @@ export KITE_TOKEN_ENCRYPTION_KEY="${BASKFY_KITE_TOKEN_ENCRYPTION_KEY:-${KITE_TOK
 exec "$@"
 EOF
 RUN chmod 0755 /usr/local/bin/baskfy-rs-entrypoint
+RUN cat > /usr/local/bin/baskfy-rs-healthcheck <<'EOF'
+#!/bin/sh
+# One image, many services: only the two HTTP servers have something to probe.
+cmd="$(tr '\0' ' ' </proc/1/cmdline)"
+case "$cmd" in
+  *"baskfy-desk service"*) exit 0 ;;
+  *baskfy-desk*) exec curl -fsS -m 4 -o /dev/null http://localhost:8420/status ;;
+  *baskfy-api*) exec curl -fsS -m 4 -o /dev/null http://localhost:8000/health ;;
+  *) exit 0 ;;
+esac
+EOF
+RUN chmod 0755 /usr/local/bin/baskfy-rs-healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["baskfy-rs-healthcheck"]
 WORKDIR /desk
 USER baskfy
 EXPOSE 8000 8420

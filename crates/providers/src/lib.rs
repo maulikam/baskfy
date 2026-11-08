@@ -56,5 +56,6 @@ pub mod fixtures;
 pub mod kite;
 pub mod nse;
 pub mod nse_results;
+pub mod nse_shareholding;
 
 pub use errors::{ErrorKind, ProviderError};

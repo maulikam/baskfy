@@ -6,7 +6,8 @@
 |---|---|---|---|
 | PM0 | Pack lands | ✅ green | Fresh export through 6 Nov 2026; §3/§4 and the ranking regenerated (9 Nov) |
 | PM1 | Point-in-time fundamentals | ⚠️ code done, not green | Migration, NSE parsers, `fundamentals_pit backfill`, features and look-ahead tests committed. Verified end to end on 3 names in a throwaway DB. **AC2 coverage needs the full backfill** (`NEEDS-MAULIK.md`) |
-| PM2–PM9 | | not started | PM6 not started |
+| PM2 | Shareholding, point-in-time | code complete, backfill pending | Verified on 4 names, same hash on re-run. Feed starts Sep 2021 (PM2.1) |
+| PM3–PM9 | | not started | |
 
 Research results (6 Nov export): investable top-20 book 35.7 % CAGR / −22.0 % / Sharpe 1.98 (Jan 2020 →
 6 Nov 2026); 13 book levers all 33–37 %. Signal-year 2024: investable top-20 +5.1 % vs investable universe

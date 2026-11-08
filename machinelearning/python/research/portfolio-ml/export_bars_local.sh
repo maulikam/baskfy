@@ -22,5 +22,8 @@ $PG -c "COPY (SELECT m.kite_tradingsymbol AS index_name, b.date, b.open, b.high,
 if $PG -At -c "SELECT to_regclass('public.fundamental_pit')" | grep -q fundamental_pit; then
   copy fundamental_pit "SELECT instrument_id, period_end, filed_on, period_type, filed_at, available_on, is_revision, revenue, other_income, finance_costs, depreciation, ebitda, pbt, pat, eps_diluted, shares_outstanding, total_debt, total_equity, cfo, capex, source FROM fundamental_pit"
 fi
+if $PG -At -c "SELECT to_regclass('public.shareholding_pit')" | grep -q shareholding_pit; then
+  copy shareholding_pit "SELECT instrument_id, period_end, filed_on, filed_at, available_on, is_revision, promoter_pct, promoter_pledged_pct, fii_pct, dii_pct, mf_pct, public_pct, n_shareholders, source FROM shareholding_pit"
+fi
 rm -f "$OUT/ohlcv_daily.parquet" "$OUT/dataset.parquet" "$OUT/features.parquet"
 echo "done: $(du -sh "$OUT" | cut -f1)"

@@ -47,6 +47,7 @@ use crate::composite::SupplementaryReads;
 use crate::errors::{ErrorKind, ProviderError};
 use crate::net::GuardedClient;
 use crate::nse_results::{ResultsFiling, parse_integrated_listing, parse_reg33_listing};
+use crate::nse_shareholding::{ShareholdingFiling, parse_shareholding_listing};
 use crate::ports::{
     CapabilitySet, HealthReporting, ProviderHealth, ReferenceProvider, reference_capabilities,
 };
@@ -122,6 +123,11 @@ pub const KIND_ANNOUNCEMENTS: &str = "announcements";
 pub const KIND_EVENT_CALENDAR: &str = "event-calendar";
 /// PM1: archive kind of the per-symbol quarterly financial-results listing.
 pub const KIND_FINANCIAL_RESULTS: &str = "financial-results";
+/// PM2: archive kind of the per-symbol shareholding listing.
+pub const KIND_SHAREHOLDING: &str = "shareholding";
+/// PM2: archive kind of one shareholding XBRL.
+pub const KIND_SHAREHOLDING_XBRL: &str = "shareholding-xbrl";
+const SHAREHOLDING_API: &str = "/api/corporate-share-holdings-master?index=equities&symbol=";
 /// PM1: archive kind of the per-symbol integrated-filing listing (results after Dec 2024).
 pub const KIND_INTEGRATED_FILINGS: &str = "integrated-filings";
 const INTEGRATED_FILINGS_API: &str =
@@ -1617,6 +1623,41 @@ impl NseProvider {
         Ok(filings)
     }
 
+    /// PM2: every quarter-end shareholding filing NSE lists for `symbol`.
+    ///
+    /// # Errors
+    /// Every failure but a 404.
+    pub async fn shareholding_filings(
+        &self,
+        symbol: &str,
+        on: NaiveDate,
+    ) -> Result<Vec<ShareholdingFiling>, ProviderError> {
+        let token = py_strip(symbol).to_uppercase();
+        match self
+            .inner
+            .filings_payload(KIND_SHAREHOLDING, SHAREHOLDING_API, &token, on)
+            .await?
+        {
+            Some(payload) => parse_shareholding_listing(&payload, &token),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// PM2: one shareholding XBRL named by the listing, archived under the day it was filed.
+    ///
+    /// # Errors
+    /// `UnexpectedPayload` for a foreign URL; fetch and archive failures.
+    pub async fn shareholding_xbrl(
+        &self,
+        symbol: &str,
+        url: &str,
+        filed_on: NaiveDate,
+    ) -> Result<Vec<u8>, ProviderError> {
+        self.inner
+            .filing_xbrl(KIND_SHAREHOLDING_XBRL, symbol, url, filed_on)
+            .await
+    }
+
     /// PM1: one XBRL filing named by the listing, archived under the day it was filed. A URL
     /// outside NSE's archive host is refused: it came out of a payload.
     ///
@@ -1628,23 +1669,8 @@ impl NseProvider {
         url: &str,
         filed_on: NaiveDate,
     ) -> Result<Vec<u8>, ProviderError> {
-        if !url.starts_with(&format!("{}/", self.inner.settings.nse_archive_url)) {
-            return Err(unexpected(format!("not an NSE archive URL: {url}")));
-        }
-        let token = py_strip(symbol).to_uppercase();
-        let stem = url
-            .rsplit('/')
-            .next()
-            .unwrap_or_default()
-            .trim_end_matches(".xml");
         self.inner
-            .archived(
-                &format!("{KIND_FINANCIAL_RESULTS_XBRL}/{token}/{stem}"),
-                filed_on,
-                url.to_owned(),
-                "xml",
-                "application/xml",
-            )
+            .filing_xbrl(KIND_FINANCIAL_RESULTS_XBRL, symbol, url, filed_on)
             .await
     }
 
@@ -2118,6 +2144,34 @@ impl Inner {
             return Ok(Some("EQ".to_owned()));
         }
         Ok(codes.into_iter().next())
+    }
+
+    /// One XBRL a listing named. A URL outside NSE's archive host is refused: it came out of a
+    /// payload.
+    async fn filing_xbrl(
+        &self,
+        kind: &str,
+        symbol: &str,
+        url: &str,
+        filed_on: NaiveDate,
+    ) -> Result<Vec<u8>, ProviderError> {
+        if !url.starts_with(&format!("{}/", self.settings.nse_archive_url)) {
+            return Err(unexpected(format!("not an NSE archive URL: {url}")));
+        }
+        let token = py_strip(symbol).to_uppercase();
+        let stem = url
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches(".xml");
+        self.archived(
+            &format!("{kind}/{token}/{stem}"),
+            filed_on,
+            url.to_owned(),
+            "xml",
+            "application/xml",
+        )
+        .await
     }
 
     async fn filings_payload(

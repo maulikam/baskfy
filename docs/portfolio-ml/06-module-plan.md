@@ -22,7 +22,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 **Goal:** promoter %, pledge %, FII/DII/MF %, public %, per quarter, by filing date.
 - Table `shareholding_pit(instrument_id, period_end, filed_on, promoter_pct, promoter_pledged_pct, fii_pct, dii_pct, mf_pct, public_pct, n_shareholders)`; source NSE shareholding pattern filings (the quote page's `shareholdingPatterns` is the latest only — not point-in-time; the filing archive is).
 - Features: level and 1q/4q change of each; pledge rising/falling flag; promoter buying flag.
-- AC as PM1 (no-lookahead test, coverage, idempotent).
+- AC as PM1 (no-lookahead test, coverage, idempotent). Coverage expected > 85 % from 2022: NSE's archive starts Sep 2021 (PM2.1).
 
 ## PM3 — Market cap and sector
 **Goal:** the model can learn size instead of share price, and the book can be sector-neutral.

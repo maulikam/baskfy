@@ -1,6 +1,6 @@
 # 01 — Requirements: the smallcase spec, translated
 
-Source: `smallcase-product-documentation.md` (repo root) — a build-ready walkthrough of the
+Source: `docs/history/smallcase-product-documentation.md` (repo root) — a build-ready walkthrough of the
 live product, 22 Aug 2026. This doc does not repeat it; it sorts every feature into
 **replicate**, **adapt**, or **skip**, and names the Baskfy owner for each. Section numbers
 (§) refer to the source document.

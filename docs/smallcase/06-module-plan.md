@@ -172,7 +172,7 @@ dark.
   67-second lesson — budget: catalog p95 < 1s on dev hardware, jobs bounded).
 - Runbook entry: how to publish a version, how to apply on Friday, how to fix drift, how
   to flip Track-B flags (deliberately manual).
-- `RUN-AND-TEST.md` extended with the SC stack's bring-up and test commands.
+- `docs/history/RUN-AND-TEST.md` extended with the SC stack's bring-up and test commands.
 - **AC:** CI green including the new suites; runbook section exists; a cold `make`-level
   bring-up of the dev stack renders `/explore` with seeded data.
 
@@ -183,7 +183,7 @@ dark.
 - Walk all seven flows in the dev stack (DRY_RUN), screenshotting or logging each;
   discrepancies against `04` become fixes or honest open items.
 - Sweep: every ⚠ UNREVIEWED decision listed; NEEDS-MAULIK updated; STATUS closed out.
-- Write `SC-FINAL-REPORT.md` at the repo root in FINAL-REPORT.md's register: what was
+- Write `docs/history/SC-FINAL-REPORT.md` at the repo root in FINAL-REPORT.md's register: what was
   built, what was decided, what is NOT done, what needs Maulik (expected entries: D3/D7
   before any flag flips; review of volatility thresholds and fee display copy; the
   decision on charging real fees to himself is a joke — but the ledger's accuracy isn't).

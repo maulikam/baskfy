@@ -60,7 +60,7 @@ rehearsal it bought is bought instead by one DRY_RUN morning on a real session. 
 five conditions are kept as history in git (`1c675f4`…`beb5ff5` built against them).
 
 `BASKFY_SWING_EXECUTION_ENABLED=true` may be set only when **all** of the following are true,
-each with its evidence in `SW-FINAL-REPORT.md`:
+each with its evidence in `docs/history/SW-FINAL-REPORT.md`:
 
 1. **SW10 green.** With the flag false a property test proves no swing code path reaches
    `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/swing/drill.py`) produces a
@@ -71,7 +71,7 @@ each with its evidence in `SW-FINAL-REPORT.md`:
    15:15 sweep, the 21:00 detect and the 21:05 evening all run on live quotes and write their
    `sw_session` row with `mode=DRY_RUN`; every confirm that morning journals `simulated=true`.
    The steps are in
-   `SW-FINAL-REPORT.md`. The session counter on `/swing/journal` and in the evening email
+   `docs/history/SW-FINAL-REPORT.md`. The session counter on `/swing/journal` and in the evening email
    (`sessions.required = 20`) is **information**, not a gate — it says how many mornings the
    machinery has run, nothing more.
 3. **The backtest on the page.** `tools/swing/backtest.py` has been run over the backfilled

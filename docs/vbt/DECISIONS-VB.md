@@ -720,7 +720,7 @@ it. Recorded in `05` §2 and STATUS as not done, rather than quietly dropped.
 `05` §2 names the hub's three tabs "Today | Book | Backtest". The label rendered is **Positions**;
 the route keeps its documented `/vbt/book` path.
 
-`PORTFOLIO_REDESIGN.md` §8 retires "book", "box" and "sleeve" from what a reader sees, and
+`docs/history/PORTFOLIO_REDESIGN.md` §8 retires "book", "box" and "sleeve" from what a reader sees, and
 `apps/web/src/lib/__tests__/no-jargon.test.ts` enforces it across the app. The swing hub already
 calls its equivalent tab "Positions". Two allocations that show the same thing should not name it
 two different ways, and the word this run uses in its own documents is not automatically the word
@@ -1120,7 +1120,7 @@ the schedule.
 
 ### VB14 — `/vbt` gains one server action, "Scan now", and the read-only test becomes a census · ⚠ UNREVIEWED
 
-**Context.** `PLAN-SCAN-SYNC.md` leaf 5: Maulik asked for the swing hub's "Scan now" button on the
+**Context.** `docs/history/PLAN-SCAN-SYNC.md` leaf 5: Maulik asked for the swing hub's "Scan now" button on the
 volume-breakout and three-weeks-tight pages. Until 12 Sep 2026 this tree had **no server action at
 all**, and `__tests__/read-only.test.tsx` asserted exactly that — VB8.4 had declined `05` §2's
 per-row *Dismiss* note because `03` has no table to put one in, so "no action at all" was the
@@ -1156,7 +1156,7 @@ wording is true again unchanged.
 
 ### VB15 — "Scan now" gets the contract's route shape, beside VB12's own name · ⚠ UNREVIEWED
 
-**Context.** `PLAN-SCAN-SYNC.md` leaf 3: the backend for the button leaf 5 is building. The
+**Context.** `docs/history/PLAN-SCAN-SYNC.md` leaf 3: the backend for the button leaf 5 is building. The
 contract fixes one shape across the three sleeves — `POST /vbt/scan` answering **202** queued,
 **409** one already in flight, **429** one a minute, `GET /vbt/scan/{run_id}` for the poll, and
 the status vocabulary `QUEUED | RUNNING | DONE | FAILED`. VBT already had the whole engine: the

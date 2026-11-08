@@ -9,7 +9,7 @@ them (root `CLAUDE.md`, "Safety rails"). No step places an order, touches `portf
 Kite or NSE.
 
 **Read before starting:** root `CLAUDE.md` house rules 5 and 7, the section "Which date the product
-shows", and `RUN-AND-TEST.md` §3e.
+shows", and `docs/history/RUN-AND-TEST.md` §3e.
 
 ---
 
@@ -199,7 +199,7 @@ by deleting the rows it inserted (§7).
 - **Recompute** is the nightly's `compute_factors` step alone. `pipeline_run_step.duration_ms` for
   07–11 Sep is **569–641 s** on days with ~4,400 bars. There is no measurement for the 2,500–3,000
   bar days before 27 Aug; the lower bound assumes they are proportionally faster.
-- **`backfill-ranking`** measured 682.5 s/day on 11 Sep (`RUN-AND-TEST.md` §3e). Its 41 computed
+- **`backfill-ranking`** measured 682.5 s/day on 11 Sep (`docs/history/RUN-AND-TEST.md` §3e). Its 41 computed
   days are 07-01…08-26, which are all incomplete after step 2 because desk rows ≠ the new factor
   row count, or there are no desk rows at all.
 
@@ -286,7 +286,7 @@ Expect about **107,898 / 131,786 / 92,515 / 372**. The market-health figure is 3
 confirm it from the output. Rerun the counts if the preflight was more than an hour ago.
 
 **`capped.sh`** is the only way this runbook starts a worker container. It enforces
-`RUN-AND-TEST.md` §3e.
+`docs/history/RUN-AND-TEST.md` §3e.
 
 ```bash
 #!/usr/bin/env bash

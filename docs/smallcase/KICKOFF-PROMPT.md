@@ -15,7 +15,7 @@ Read, in this order, before writing any code:
 4. docs/smallcase/02-scope-and-gating.md  ← the law of this run
 5. docs/smallcase/06-module-plan.md       ← the task list
 Read docs/smallcase/01, 03, 04, 05 as the modules cite them. The full product
-reference is smallcase-product-documentation.md at the repo root.
+reference is docs/history/smallcase-product-documentation.md at the repo root.
 
 Then execute modules SC0 through SC12 in order, under the Autonomy charter in
 CLAUDE.md: run long, decide-record-continue, questions to Maulik are the
@@ -41,7 +41,7 @@ exception. Specifically:
   is the spec for all money math), never current behaviour.
 
 Stop only for the charter's stop conditions. When SC12 is green — or when a
-hard blocker ends the run — write SC-FINAL-REPORT.md at the repo root in the
+hard blocker ends the run — write docs/history/SC-FINAL-REPORT.md at the repo root in the
 style of FINAL-REPORT.md: what was built, what was decided, what is NOT done,
 what needs Maulik. Then ask Maulik to review.
 ```

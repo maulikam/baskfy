@@ -116,7 +116,7 @@ matters is a floor. (DECISIONS-TW **TW0.5**.)
 > chance to leave a line naked.
 
 `BASKFY_TWT_EXECUTION_ENABLED=true` may be set only when **all** of the following are true, each
-with its evidence in `TW-FINAL-REPORT.md`:
+with its evidence in `docs/history/TW-FINAL-REPORT.md`:
 
 1. **TW10 green.** With the flag false, a property test proves no TWT code path reaches
    `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/twt/drill.py`) produces a

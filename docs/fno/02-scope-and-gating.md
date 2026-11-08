@@ -134,7 +134,7 @@ entries**: one confirm covers the plan's rule-driven exits (options PACK.2, carr
 
 `BASKFY_FNO_<SLEEVE>_EXECUTION_ENABLED=true` (with `OPTIONS_ENABLED`,
 `BASKFY_FNO_CARRY_ENABLED` and `DRY_RUN=false`) may be set only when **all** of these hold for that
-sleeve, each with its evidence in `FO-FINAL-REPORT.md` or a dated addendum:
+sleeve, each with its evidence in `docs/history/FO-FINAL-REPORT.md` or a dated addendum:
 
 1. **FO11 green**, including the options pack's `OPTIONS_ENABLED` side-door test and this pack's
    covered-overnight guard tests (§1).

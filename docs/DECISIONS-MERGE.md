@@ -9,7 +9,7 @@ here is not a licence — anything that changes an acceptance criterion stops th
 ## M0
 
 ### M0.1 — `python3.12` is not on `PATH`, and that is not a missing tool
-**Ambiguity.** `MERGE-PROMPTS.md` M0 step 1 says to verify `python3.12` and "stop if one is
+**Ambiguity.** `docs/history/MERGE-PROMPTS.md` M0 step 1 says to verify `python3.12` and "stop if one is
 missing". No binary answers to that name on this machine; `python3` is 3.14.2, which is outside
 decile's `requires-python = ">=3.12,<3.13"`.
 
@@ -106,7 +106,7 @@ baselines were taken on this exact tree and it is green (1385 passed / 0 failed,
 reference's base is `P_{t-(N-1)}`, not `P_{t-N}`), and the parity-test rewrite establishes that four
 more columns cannot be reproduced from bars at all — `beta` needs a benchmark argument, `marketcap`
 is an input the engine never computes, `high_ath` needs full listing history, and five `circuits_*`
-columns have an unresolved definition. `MERGE-PROMPTS.md` M11 asks for "all 93 numeric columns of
+columns have an unresolved definition. `docs/history/MERGE-PROMPTS.md` M11 asks for "all 93 numeric columns of
 all 271 rows" green. **That is not reachable as written**, which under rule 5 is a stop-and-ask.
 
 **Decided (Maulik, 22 Aug 2026).** Proceed on the existing script. At M11 the agent proposes a
@@ -159,7 +159,7 @@ command that does not apply to the technique the script itself mandates. **The c
 prove it are the table above**, and they belong in the status page for any future session.
 
 ### M1.2 — M1 is three commits, and cannot be one
-`MERGE-PROMPTS.md` asks for one commit per module. `git subtree add` creates its own merge commit
+`docs/history/MERGE-PROMPTS.md` asks for one commit per module. `git subtree add` creates its own merge commit
 by construction — that *is* the history-preserving mechanism — so M1 necessarily produces the
 initial root commit plus two subtree merges, then the module's own bookkeeping commit. Squashing
 them would defeat the module's entire purpose. The `M<N>: green` message is carried by the
@@ -197,7 +197,7 @@ names, distribution names, cookie and Razorpay note keys, and user-facing downlo
 | `decile_1` … `decile_6` | 67 | The D1–D6 bucket values of `apply_filters_on`. They are a **public API contract** — in `openapi.json`, the generated TS client, the JSON Schema, URL state and seed data. Renaming them changes every saved screen and every stored URL. `CLAUDE.md` D1 keeps this vocabulary. |
 | `DECILE_RANK_KEY` | 5 | The constant naming the key deciles are ranked by. Not an environment variable. |
 | `decile_bucket` / `screen_run_decile_bucket` | 2 | A query-plan name; `decile` is the statistic. |
-| `decile_core`/`_api`/`_worker`/`_providers`, `@decile/*` | 2 each | Only in `MERGE-PROMPTS.md` and `decile-blueprint/PROMPTS.md` — the two documents that *instruct* the rename. Rewriting them would make each read "rename `baskfy_core` → `baskfy_core`". |
+| `decile_core`/`_api`/`_worker`/`_providers`, `@decile/*` | 2 each | Only in `docs/history/MERGE-PROMPTS.md` and `decile-blueprint/PROMPTS.md` — the two documents that *instruct* the rename. Rewriting them would make each read "rename `baskfy_core` → `baskfy_core`". |
 
 **Zero namespace tokens remain in code.** The criterion's stated Goal — "the namespaces become
 Baskfy's" — is met in full; only its `grep` proxy over-reaches into vocabulary and into the
@@ -207,7 +207,7 @@ instructions describing the rename.
 
 ```
 git grep -I -o -h -E '(decile_[a-zA-Z0-9_]+|DECILE_[A-Z0-9_]+|@decile/[a-z-]+)' \
-  -- ':!docs/*' ':!*/docs/*' ':!MERGE-PROMPTS.md' ':!decile-blueprint/PROMPTS.md' \
+  -- ':!docs/*' ':!*/docs/*' ':!docs/history/MERGE-PROMPTS.md' ':!decile-blueprint/PROMPTS.md' \
   | grep -vE '^(decile_[1-6]|decile_bucket|DECILE_RANK_KEY)$'
 # must print nothing
 ```
@@ -278,7 +278,7 @@ operator would still change them in `.env` plus a restart. The four are also ren
 limits" group in `settings.html` and echoed by a derived block in `settings.py` (~line 439), so
 locking them is a UI change, not only a constant move.
 
-**SETTLED (Maulik, 22 Aug 2026): lock all four.** Carried into `MERGE-PROMPTS.md`
+**SETTLED (Maulik, 22 Aug 2026): lock all four.** Carried into `docs/history/MERGE-PROMPTS.md`
 §"Decisions already taken". Not `⚠ UNREVIEWED` — this one was answered directly.
 
 **What was done**
@@ -1603,7 +1603,7 @@ the real task against the real desk.
 
 ## M21 — the handover, and a drill that had to be made honest twice
 
-### M21.1 — `RUN-AND-TEST.md` ⚠ UNREVIEWED
+### M21.1 — `docs/history/RUN-AND-TEST.md` ⚠ UNREVIEWED
 At the root, and it says what is *not* running as prominently as what is: the frozen strangle
 subsystem, the generated scan that is built and off, the breadth wiring that is correct and inert,
 the timers that are still running, and the desk's Postgres default that stays `sqlite` because the
@@ -2169,7 +2169,7 @@ The repair in M28.2 used that path for real, on live data, before it was needed 
 able to write `SITE_NAME` was `"Decile"`. Rewording that to satisfy a checker would be the checker
 editing history — the same argument that allowlists CLAUDE.md D1's own sentence.
 
-Excluded deliberately alone. **`RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope**, because
+Excluded deliberately alone. **`docs/history/RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope**, because
 they are live operator documents rather than records: if either ever says the old name, that is a
 bug and the gate should catch it.
 
@@ -3216,7 +3216,7 @@ lesson is about the phrase, not about three comments.
 
 ### Tree6.1 Nav IA collapse + path reuse · ⚠ UNREVIEWED
 
-**Context.** `baskfynavrefactorreport.md` asks for `/baskets` as the catalog and a permanent
+**Context.** `docs/history/baskfynavrefactorreport.md` asks for `/baskets` as the catalog and a permanent
 redirect from old `/baskets` (MomentumScan) to `/baskets/featured`. Those two cannot both be true
 for the same path.
 
@@ -3260,7 +3260,7 @@ explanation and the env var to use. The lock lives in `node_modules/.cache/`, **
 directory — `next dev` clears that directory at start-up, which silently deleted the first version
 of the lock. `playwright.config.ts` builds into `.next-e2e` for the same reason: `pnpm run e2e`
 runs `next build`, which would otherwise overwrite a running dev server's chunks.
-`scripts/bundle-budget.mjs` follows the variable. Hazard written into `RUN-AND-TEST.md`.
+`scripts/bundle-budget.mjs` follows the variable. Hazard written into `docs/history/RUN-AND-TEST.md`.
 
 **Rejected.** Documenting the hazard only (this class of failure surfaces on a request, not at
 start-up, so a note is read after the afternoon is gone). Killing the older server automatically
@@ -3975,7 +3975,7 @@ share quantities from sleeve capital. Folding `/me/investments` away in the same
 
 Ten leaves, one migration (`0019_portfolio_graph` on `0018_trading_path_tenancy`). Every entry
 below is a judgement call the Autonomy charter says to decide, record and continue past. The plan
-and its full status log are `TREE-PORTFOLIO-PLAN.md`; this file carries the *why*.
+and its full status log are `docs/history/TREE-PORTFOLIO-PLAN.md`; this file carries the *why*.
 
 ## PM1 — A portfolio is a node in a forest; the depth cap is 6 · ⚠ UNREVIEWED
 
@@ -4727,7 +4727,7 @@ running.
 
 ## M46 — catalog search: one federated `GET /search`, four kinds, one round trip ⚠ UNREVIEWED
 
-**Context.** `baskfynavrefactorreport.md` §F11 ("Fragmented search") is the open item this closes:
+**Context.** `docs/history/baskfynavrefactorreport.md` §F11 ("Fragmented search") is the open item this closes:
 "Header search is stock-only … the indices table has its own separate search; baskets and screens
 aren't searchable at all from the header. One global search should cover stocks, indices, baskets,
 and screens." §"Global search" fixes the surface — "⌘K / tap-search opens a command palette
@@ -5101,7 +5101,7 @@ only when it is, and drops to a plain statement of its figure when it is not.
 
 ## PW1 — a sector comes from index membership, or it does not come at all ⚠ UNREVIEWED
 
-**Context.** `PORTFOLIO_REDESIGN.md` §6.6 wants unallocated holdings suggested "by sector", and
+**Context.** `docs/history/PORTFOLIO_REDESIGN.md` §6.6 wants unallocated holdings suggested "by sector", and
 `baskfy_core.grouping_suggestions.suggest_by_sector` takes `{instrument_id -> sector}` as a
 parameter (law 1). Nothing in this schema holds a sector: `instrument` has no such column, and
 the desk's `data/sectors.csv` is a file outside the repo's data plant.
@@ -5726,7 +5726,7 @@ rendered rather than rendered dead.
 
 **Not tagged `⚠ UNREVIEWED`, deliberately.** This is not an agent's judgement call under the
 autonomy charter; it is a direct instruction from Maulik on 27 Aug 2026, written down in
-`FLOW-REFINE-PROMPT.md` at the repo root. It is recorded here because it **reverses G1 of
+`docs/history/FLOW-REFINE-PROMPT.md` at the repo root. It is recorded here because it **reverses G1 of
 `gates/marketing-flow-refresh.md`** and reverses half of **MKT1** above, and a gate that quietly
 disagrees with the code is worse than no gate.
 
@@ -6678,7 +6678,7 @@ restores the Tree 6 rendering rather than merely being read.
 
 **12 Sep 2026.** Maulik said he does not hold PKTEA; the box held 147 shares of it,
 `kind=CAPITAL`, `added=2026-09-10`, in a group he had made that evening (`Swing Manual`, id 6).
-Investigated as Leaf 1 of `PLAN-SCAN-SYNC.md`. Gates: `gates/pktea-phantom.md`, 14/14.
+Investigated as Leaf 1 of `docs/history/PLAN-SCAN-SYNC.md`. Gates: `gates/pktea-phantom.md`, 14/14.
 
 **Context — and the row was never wrong.** PKTEA is in no seeder, no fixture and not in the
 regression corpus; the seeder does not reference `portfolio_holding` at all. The row was true on
@@ -7223,14 +7223,14 @@ The test was not touched — house rule 2, and the assertion was the correct hal
 
 **`tools/check-namespace.sh` has been red since VB10/SW12.** `d5d7c81` settled that "a run's
 historical record may name what was renamed" and excluded `FINAL-REPORT.md` by exact filename.
-`SW-FINAL-REPORT.md` and `VB-FINAL-REPORT.md` arrived afterwards, each naming the "Decile suite"
+`docs/history/SW-FINAL-REPORT.md` and `docs/history/VB-FINAL-REPORT.md` arrived afterwards, each naming the "Decile suite"
 in its table of what was measured — the decision already covered them and only its spelling did
 not, so the glob is now `*FINAL-REPORT.md`.
 
 **Rejected.** Rewording the two reports — `d5d7c81`'s own argument is that this would be the
 checker editing history. Adding "Decile suite" to `BRAND_ALLOWED` — that list is for the
 *statistic*, and CLAUDE.md's namespace rule forbids widening the pattern to silence a hit.
-`RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope, unchanged.
+`docs/history/RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope, unchanged.
 
 **Reverse.** Restore `default=None`'s bare pass-through and the exact-filename glob.
 
@@ -8667,3 +8667,11 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 * **Rust.** JSON answers only under `Accept: application/json` on `/`, `/stops`, `/stops/arm`, `/settings*`, `/ops*`, `/regime/backtest`, `/tradebook*`, `/lifecycle/adopt`; HTML/redirect paths unchanged. Needs a desk image rebuild.
 * **Desk pages retired (same day).** `BASKFY_DESK_WEB_UI=true` (set by `local.sh` for the desk; code default off, so the templates and their tests stay) 303s every browser page GET to its web route (`web_ui.rs`); JSON reads and POSTs untouched. `/build/desk` redirects to `/rebalance`. `/performance` reads live holdings from new `GET /desk/performance/holdings`, falling back to the EOD snapshot.
 * **Reverse.** Delete the new routes and repoint `DESK_MENU` to `/desk/*`.
+
+## RH — repo hygiene deviations (8 Nov 2026)
+
+- RH-1 ⚠ UNREVIEWED: the MTF guard test pinned a refusal that non-negotiable 5 and `c438ff1` removed; it now pins the decision.
+- RH-2 ⚠ UNREVIEWED: `Dockerfile.rust` and CI set `CARGO_TARGET_DIR`, because `.cargo/config.toml`'s host path does not exist there.
+- RH-3 ⚠ UNREVIEWED: `order-path/first-release` holds unmerged gateway work and `rs8/opps` holds saved WIP, so 9 local branches remain, not 7.
+- RH-4 ⚠ UNREVIEWED: dirty files in `rs8/opps-setups` (node_modules symlinks) and `rs8/opps-web` (818 MB pnpm cache) were not committed; they were rebuildable, not work.
+- RH-5 ⚠ UNREVIEWED: `deployed/local-indices` tags the WIP commit, because the running image was built from HEAD plus those files and has no revision label.

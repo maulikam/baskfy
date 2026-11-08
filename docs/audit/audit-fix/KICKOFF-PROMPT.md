@@ -1,10 +1,10 @@
-# AF run — fix AUDIT-2026-09-12.md, fast
+# AF run — fix docs/audit/AUDIT-2026-09-12.md, fast
 
 Paste everything below the line into Claude Code at the repo root, branch `developer`.
 
 ---
 
-You are the orchestrator of the AF run. Goal: every item in `AUDIT-2026-09-12.md` §0–§5 and §7
+You are the orchestrator of the AF run. Goal: every item in `docs/audit/AUDIT-2026-09-12.md` §0–§5 and §7
 fixed, tested, merged and **deployed to the box**, in two waves, with the minimum of words. Read the
 audit and `CLAUDE.md` once. Then spawn subagents and merge. You write no code yourself.
 
@@ -13,7 +13,7 @@ audit and `CLAUDE.md` once. Then spawn subagents and merge. You write no code yo
 - Write code, tests and commits. Do not write reports, summaries, runbooks, briefs, narrated
   progress, or restatements of the audit. The audit already says what and where; the diff says
   how.
-- The only prose artefacts of this run: `docs/audit-fix/STATUS.md` (one table, one row per audit
+- The only prose artefacts of this run: `docs/audit/audit-fix/STATUS.md` (one table, one row per audit
   item: item · lane · commit · state), one-line `⚠ UNREVIEWED` entries in `docs/DECISIONS-MERGE.md`
   for real judgement calls only, and one-line `NEEDS-MAULIK.md` entries for things only Maulik
   holds (a secret to rotate, a product decision). Nothing else. No `AF-FINAL-REPORT.md`, no
@@ -33,7 +33,7 @@ audit and `CLAUDE.md` once. Then spawn subagents and merge. You write no code yo
 Read CLAUDE.md first; its laws, non-negotiables and house rules bind you. DRY_RUN=true; never a
 live order. No `# type: ignore`, no `any`, no swallowed exceptions; money is Decimal/numeric.
 Fix only your items; touch only the files you own; if you need another file, add one line to
-docs/audit-fix/STATUS.md ("needs <file>: <what>") and continue.
+docs/audit/audit-fix/STATUS.md ("needs <file>: <what>") and continue.
 Every fix ships with a test that fails on the old code. Never weaken a test; if a test pins the
 bug (csp.test.ts:54, test_api_auth.py:579) rewrite it to the spec.
 A doc that disagrees with code: `git log -S` first; a decision beats a doc; fix the doc in one line.
@@ -42,14 +42,14 @@ Data lives on the AWS box only. Measure with `tools/deploy/box-sql.sh "<select>"
 The only local DB is the throwaway test Postgres (`make up`, BASKFY_TEST_DATABASE_URL,
 `make test-db`) with synthetic fixtures. Never pass a secret through box.sh.
 Run only the tests for files you touched. Commit per item: `AF<lane>: <one line>`. Update your
-rows in docs/audit-fix/STATUS.md (item · commit · state) and stop. No report.
+rows in docs/audit/audit-fix/STATUS.md (item · commit · state) and stop. No report.
 ```
 
 ## Procedure
 
 1. `aws sts get-caller-identity` (if dead: `aws sso login --sso-session baskfy` — you, not
    Maulik) and `bash tools/deploy/verify-stack.sh`. Record the box's tag from
-   `tools/deploy/verify-pc-deploy.sh` at the top of `docs/audit-fix/STATUS.md` as the rollback
+   `tools/deploy/verify-pc-deploy.sh` at the top of `docs/audit/audit-fix/STATUS.md` as the rollback
    tag. Seed STATUS.md with the item table (ids below). Commit `AF0: seeded`.
 2. Wave 1 — spawn all seven lanes at once, each in `git worktree add ../baskfy-<lane> -b af/<lane> developer`:
    **A B C D E F G**. Wait for all.
@@ -61,7 +61,7 @@ rows in docs/audit-fix/STATUS.md (item · commit · state) and stop. No report.
 4. `bash ops/af/smoke.sh` (lane B writes it) against staging. All lines must pass before wave 2.
 5. Wave 2 — spawn in parallel: **H I** (code) and **D2** (the box job, same subagent as D,
    resumed). Wait, merge H→I, run the suites once, ship, smoke.
-6. Fill the last column of STATUS.md, append `## Status (AF run)` to `AUDIT-2026-09-12.md` as
+6. Fill the last column of STATUS.md, append `## Status (AF run)` to `docs/audit/AUDIT-2026-09-12.md` as
    one line per §0 item, commit `AF: done`. Stop.
 
 ## Lanes and item ids
@@ -208,7 +208,7 @@ undifferentiated modules; user-menu operator groups behind `is_staff`; mobile le
 
 ### I — Small features (wave 2)
 Owns: new files only, plus additive routes in `services/api/src/baskfy_api/routers/{curated_versions,explore,watchlist}.py`,
-`apps/web/src/app/(app)/basket/[slug]/versions/**` (new), `docs/audit-fix/BACKLOG.md` (new, ≤ 15 lines).
+`apps/web/src/app/(app)/basket/[slug]/versions/**` (new), `docs/audit/audit-fix/BACKLOG.md` (new, ≤ 15 lines).
 Build: basket versions tab with diff between any two versions; instrument watchlist (save from
 factsheet + screen table, "Stocks" section on Watchlist); Discover basket search (client-side);
 first-login onboarding page (connect → import → pick a basket) with goal-composer choices saved

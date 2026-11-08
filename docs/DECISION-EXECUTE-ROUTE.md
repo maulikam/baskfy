@@ -70,7 +70,7 @@ that three of the multi-tenant safety pieces (P4.2, P4.10, P4.11) are not built.
 > (⚠ UNREVIEWED). RA/empanelment filings remain counsel C1–C3. **Paid** multi-tenant launch
 > still waits on C3; P4.1/P4.3 engineering started 24 Aug 2026. D7 pricing amounts, D10
 > market-data display licensing remain human-track. Track B flags stay false. **The web app
-> never gains an execute route.** `MERGE-PROMPTS.md` still documents the Phase-3 stop as
+> never gains an execute route.** `docs/history/MERGE-PROMPTS.md` still documents the Phase-3 stop as
 > history; D3 is no longer the engineering blocker.
 
 **What it guarantees today.** That sentence is unconditional in its own text and sits in the

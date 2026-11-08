@@ -65,7 +65,7 @@ exception. Specifically:
 
 Stop only for the charter's stop conditions. When OC12 is green — or when a
 hard blocker ends the run — write OC-FINAL-REPORT.md at the repo root in the
-style of SW-FINAL-REPORT.md: what was built, what was decided, what is NOT
+style of docs/history/SW-FINAL-REPORT.md: what was built, what was decided, what is NOT
 done, what needs Maulik, the exact steps for the first paper expiry morning,
 and the six-expiry checklist from docs/condor/02 §3.2. Then ask Maulik to
 review.

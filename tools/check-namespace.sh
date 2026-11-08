@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The namespace check for the Baskfy rename (MERGE-PROMPTS.md M2; settled in
+# The namespace check for the Baskfy rename (docs/history/MERGE-PROMPTS.md M2; settled in
 # docs/DECISIONS-MERGE.md M2.1).
 #
 # M2's acceptance was written as "zero occurrences of decile_, DECILE_ or @decile/ outside
@@ -26,17 +26,17 @@ cd "$(git rev-parse --show-toplevel)" || exit 2
 EXCLUDES=(
   ':!docs/*'
   ':!*/docs/*'
-  ':!MERGE-PROMPTS.md'
+  ':!docs/history/MERGE-PROMPTS.md'
   ':!decile-blueprint/PROMPTS.md'
   ':!tools/check-namespace.sh'
   # A *FINAL-REPORT.md is a run's historical record. It has to be able to say what was renamed,
   # and rewording "`SITE_NAME` was \"Decile\"" to satisfy a checker would be the checker editing
   # history -- the same argument that allowlists CLAUDE.md D1's sentence below. Still deliberately
-  # narrow: RUN-AND-TEST.md and NEEDS-MAULIK.md are live operator documents and stay in scope,
+  # narrow: docs/history/RUN-AND-TEST.md and NEEDS-MAULIK.md are live operator documents and stay in scope,
   # because if either of them ever says the old name, that IS a bug.
   #
   # The glob was the exact filename `FINAL-REPORT.md` until 12 Sep 2026, and two more records of
-  # the same kind arrived after it: SW-FINAL-REPORT.md (SW12) and VB-FINAL-REPORT.md (VB10), each
+  # the same kind arrived after it: docs/history/SW-FINAL-REPORT.md (SW12) and docs/history/VB-FINAL-REPORT.md (VB10), each
   # naming the "Decile suite" in the table of what it measured and how. The gate has been red ever
   # since, for a reason the original exclusion had already settled -- the decision was "a run's
   # historical record may name what was renamed", and only its spelling was too narrow to cover
@@ -116,7 +116,7 @@ fi
 #                                     "rank the universe by market cap, apply filters only
 #                                     within D1-D6". CLAUDE.md D1 keeps this vocabulary, and
 #                                     lower-cased `decile bucketing` has never been a hit. Two
-#                                     occurrences, NEEDS-MAULIK.md and PITCH-SOURCE.md. Added
+#                                     occurrences, NEEDS-MAULIK.md and docs/history/PITCH-SOURCE.md. Added
 #                                     12 Sep 2026; docs/DECISIONS-MERGE.md M2.1.
 BRAND_ALLOWED="(what-a-decile-actually-measures|WhatADecileMeasures|Decile's product vocabulary|Decile bucketing)"
 

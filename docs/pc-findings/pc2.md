@@ -235,7 +235,7 @@ question. The consolidation is a real piece of work, not a merge.
 2. **Fixtures that `exactOptionalPropertyTypes` correctly rejected.** `{ benchmark: undefined }`
    is not the same type as a payload with no `benchmark` key, and the API sends the latter. A
    `stripped()` helper deletes the key instead. Four `tsc` errors, no cast used to silence any.
-3. **Banned vocabulary.** `src/lib/__tests__/no-jargon.test.ts` enforces `PORTFOLIO_REDESIGN.md`
+3. **Banned vocabulary.** `src/lib/__tests__/no-jargon.test.ts` enforces `docs/history/PORTFOLIO_REDESIGN.md`
    §8, and "Book" is on its left column. All three PC2 files used it freely in visible strings —
    nine occurrences — and all nine are gone. This rule is not mentioned in
    `docs/PORTFOLIO-COMMAND-CENTER.md` §6.2 and probably should be: four of the five parallel

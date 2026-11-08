@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """The swing book's DRY_RUN morning drill (SW10): one full paper session, end to end, 0 orders.
 
-`docs/swing/06` SW10: "The DRY_RUN morning drill in `RUN-AND-TEST.md` §Swing: premarket →
+`docs/swing/06` SW10: "The DRY_RUN morning drill in `docs/history/RUN-AND-TEST.md` §Swing: premarket →
 replayed morning → confirm two lines → EOD → next morning's plan, end to end, **0 orders
 reaching a broker**." `docs/swing/02` §3.1 makes the same drill the first condition of the
 real-money gate. This script is that drill, and the Friday drill (`make friday-drill`) is its

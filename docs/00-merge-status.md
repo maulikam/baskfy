@@ -1,6 +1,6 @@
 # 00 — Merge status
 
-The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at the end of every
+The live status page for the Baskfy merge run (`docs/history/MERGE-PROMPTS.md`). Updated at the end of every
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
@@ -90,7 +90,7 @@ Kite directly and it serves nothing earlier. A further **231 instruments are abs
 instrument master entirely** and cannot be reached at any depth (`NEEDS-MAULIK.md` item 11).
 
 Start here: [`FINAL-REPORT.md`](../FINAL-REPORT.md) — what is green, what is queued, and the 58
-decisions I made without asking. Then [`RUN-AND-TEST.md`](../RUN-AND-TEST.md) to run it, and
+decisions I made without asking. Then [`docs/history/RUN-AND-TEST.md`](docs/history/RUN-AND-TEST.md) to run it, and
 [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) for the seven items only you can do.
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
@@ -125,7 +125,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M18 | Database migration | ✅ **green** | 22 Aug 2026 | 19 tables / 42,285 rows, all assertions green, idempotent. **Cutover completed at M19**; forever archive taken, rehearsal copy superseded |
 | M19 | Schedules → Celery, desk on merged backend | ✅ **green** | 22 Aug 2026 | Beat tasks + timer-retirement protocol. **Cutover done**: 10/11 pages byte-identical, 11th differs only in journal mode + file size. Four dialect defects fixed (M19.1–.6) |
 | M20 | Observability + runbook 6 | ✅ **green** | 22 Aug 2026 | Spans/metrics/Sentry over plan→execute→GTT, all optional and unable to raise into the order path. 4 alert rules, runbook 6 committed (M20.1–.4) |
-| M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
+| M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `docs/history/RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
 | M23 | The Kite path, on first contact | ✅ **green** | 22 Aug 2026 | Token bridge writes both stores; instrument upsert batched (10,222 tokens, was 40); a stale token no longer falls through to **fixture prices for real symbols** (M23.1–.5) |
 | M24 | Corporate actions, recovered from the ratio | 🟡 **method proven, not built** | 22 Aug 2026 | Kite's bars are adjusted — docs/09 said otherwise. **85 actions over 65 symbols**, 83 confirmed. Dividend half queued as item 8 (M24.1–.4) |
 | M34 | Sleeves — a portfolio run as several screens | ✅ **green** | 22 Aug 2026 | Capital split across screens plus a slice run by hand. **Amounts and weights, never unit counts** — structural, since the allocator receives no quote. Stance stated, cap opt-in (M34.1–.6) |
@@ -492,7 +492,7 @@ carries a username and password, even a local one (tree 5 G8).
 4. `frozen/` does not exist yet; the strangle subsystem is still in `app/strategies/`. M6 moves it.
 5. **M0 produced no root commit** — there was no git repository at `baskfy/` yet. Its two
    deliverables (`docs/00-merge-status.md`, `docs/DECISIONS-MERGE.md`) are committed as part of
-   M1's initial root commit, which is what `MERGE-PROMPTS.md` M1 step 2 specifies.
+   M1's initial root commit, which is what `docs/history/MERGE-PROMPTS.md` M1 step 2 specifies.
 6. `decile-blueprint` HEAD moved from `eef67d1` to **`ea5dd0f`** during M0. The subtree in M1
    carries the later commit.
 7. **`../_baskfy_subtree_tmp/` is the rollback** and must survive until M21. It holds both
@@ -722,7 +722,7 @@ whether a migration or cleanup removed 126 rows.
 
 ## Tree 7 — Investment completion (24 Aug 2026)
 
-Plan: `TREE7-PLAN.md`. Sequence: metrics → investment contract → manager/costs → notify.
+Plan: `docs/history/TREE7-PLAN.md`. Sequence: metrics → investment contract → manager/costs → notify.
 
 | Leaf | State | Evidence |
 |---|---|---|
@@ -801,7 +801,7 @@ this change. That baseline: **16 failed / 27 passed** over the same specs.
 
 Ten leaves, one migration: `0019_portfolio_graph` on top of `0018_trading_path_tenancy`. Decisions
 in `docs/DECISIONS-MERGE.md` §PM1–PM12; the plan and its full driver-verified status log are
-`TREE-PORTFOLIO-PLAN.md`. Branch `developer`.
+`docs/history/TREE-PORTFOLIO-PLAN.md`. Branch `developer`.
 
 ### What is now true that was not
 
@@ -957,7 +957,7 @@ alongside the change.
 
 ## M46 — catalog search: ⌘K now covers stocks, indices, baskets and screens (25 Aug 2026)
 
-`baskfynavrefactorreport.md` §F11's open item — "full ⌘K search deferred", item 5 on that report's
+`docs/history/baskfynavrefactorreport.md` §F11's open item — "full ⌘K search deferred", item 5 on that report's
 own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M46–M46.7, all ⚠ UNREVIEWED. Gates:
 `gates/tree3-catalog-search.md` — 26 of 26 met, ledger in the file, one ABANDON line for the half
 of `pnpm run lint` this sitting does not own.
@@ -1103,7 +1103,7 @@ repeated-baskets problem is a six-basket catalogue, not a rendering bug.
 
 ## The landing flow diagram was rebuilt in normal flow, and lost its cost box (27 Aug 2026)
 
-**Maulik's instruction, not an agent judgement** — written down in `FLOW-REFINE-PROMPT.md` at the
+**Maulik's instruction, not an agent judgement** — written down in `docs/history/FLOW-REFINE-PROMPT.md` at the
 repo root, gated by `gates/marketing-flow-responsive.md`, recorded as **MKT3** in
 `docs/DECISIONS-MERGE.md`. It **reverses G1 of `gates/marketing-flow-refresh.md`**, which is why
 that file now carries a superseded banner instead of quietly disagreeing with the code.

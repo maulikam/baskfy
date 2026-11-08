@@ -205,7 +205,7 @@ an admin gate, and they should follow P1–P6 rather than interleave with them.
 | Route | Port note | Effort |
 |---|---|---|
 | `POST /ops/run` | The natural completion of P1. Keep the allowlist verbatim — the browser sends an operation **name**, never a command — and keep `writes=False` visible per operation | 2 d |
-| `POST /tradebook` (CSV import) | No Baskfy equivalent exists. Overlaps the CAS-import work in `PORTFOLIO_REDESIGN.md` §B4; decide there whether these are one importer or two before building | 3 d |
+| `POST /tradebook` (CSV import) | No Baskfy equivalent exists. Overlaps the CAS-import work in `docs/history/PORTFOLIO_REDESIGN.md` §B4; decide there whether these are one importer or two before building | 3 d |
 | `POST /tradebook/corporate-action` | Baskfy reads corporate actions (`routers/instruments.py`) but has no write surface. Lots are derived, so recording and rebuilding is the whole operation | 2 d |
 | `POST /tradebook/corporate-action/delete` | Same surface, same rebuild path | 0.5 d |
 

@@ -1785,7 +1785,7 @@ Nothing here is *new* — §2.2's three commands have carried `[NOT YET REAL —
 wrote them. What was absent is the addition: three individually honest markers, and no line
 anywhere saying that together they mean the sleeve cannot be funded.
 
-**Taken.** Record it in three places (`NEEDS-MAULIK.md` T3, `TW-FINAL-REPORT.md` *Not done*, and
+**Taken.** Record it in three places (`NEEDS-MAULIK.md` T3, `docs/history/TW-FINAL-REPORT.md` *Not done*, and
 this entry) with the two ways to close it, and **build neither**.
 
 **Why not build it.** The smaller option — `set_twt_sleeve` beside `set_swing_sleeve` plus a
@@ -1976,7 +1976,7 @@ explicitly, which is the rule the rest of the pack already followed.
 
 ## TW12.1 — TWT had no scan-run table, and gets `tw_scan_run` rather than reusing a row · ⚠ UNREVIEWED
 
-**Context.** `PLAN-SCAN-SYNC.md` asks for "Scan now" on the TWT page, in the shape SW15 built for
+**Context.** `docs/history/PLAN-SCAN-SYNC.md` asks for "Scan now" on the TWT page, in the shape SW15 built for
 the swing book: `POST /twt/scan` answering **202** queued / **409** in flight / **429** rate
 limited, and `GET /twt/scan/{run_id}` for the poll. Both older sleeves have a table behind that
 button — the swing book's `sw_scan_run` (`0033_swing_scan_now`) and VBT-1's `vb_scan_run`
@@ -2077,7 +2077,7 @@ the third week", and `04` does not have one.
 change no money."* Track C §4 says *"`apps/web` gets no route under `/twt` that can reach the
 gateway."* Those are two different sentences and only the second is absolute.
 
-`PLAN-SCAN-SYNC.md`'s contract says the web action "posts to the desk through the same path
+`docs/history/PLAN-SCAN-SYNC.md`'s contract says the web action "posts to the desk through the same path
 `swing/actions.ts::scanNow` uses" — and that path is `swingWrite` → `${API}/api/v1/swing/scan`, the
 **API**, not the desk console. So Leaf 5's button needs `POST /api/v1/twt/scan` to exist. Before
 this leaf there was no `/twt` router in the API at all: `apps/web/src/lib/twt/fetch.ts` asks for
@@ -2178,7 +2178,7 @@ this file is a reason to.
 
 ### TW11 — `/twt` gains one server action, "Scan now", and the read-only test becomes a census · ⚠ UNREVIEWED
 
-**Context.** `PLAN-SCAN-SYNC.md` leaf 5: Maulik asked for the swing hub's "Scan now" button on the
+**Context.** `docs/history/PLAN-SCAN-SYNC.md` leaf 5: Maulik asked for the swing hub's "Scan now" button on the
 three-weeks-tight and volume-breakout pages. Until 12 Sep 2026 this tree had **no server action at
 all**, and `__tests__/read-only.test.tsx` asserted exactly that — `05` §1 permits two money-free
 writes here (a note and a dismissal), TW8.7 declined both because `03` has no table to put a note
@@ -2220,7 +2220,7 @@ wording is true again unchanged.
 
 ## TW12.5 — The Chartink scorer is a neighbour of the goldens harness, not a sixth module of it · ⚠ UNREVIEWED
 
-**Context.** `PLAN-SCAN-SYNC.md` leaf 6 added `tools/twt/twt_chartink_gap.py`, and
+**Context.** `docs/history/PLAN-SCAN-SYNC.md` leaf 6 added `tools/twt/twt_chartink_gap.py`, and
 `test_twt_goldens.py::TestTheHarnessIsWhereItSaysItIs::test_the_five_modules_are_on_disk` went
 red — the same red TW7.1 saw when `sweep.py` and `backtest.py` moved in. Two answers were open:
 grow `HARNESS_MODULES` to six, or move the scorer out of `tools/twt/` so the harness's five stay
@@ -2241,7 +2241,7 @@ derived from `HARNESS_MODULES`, so widening it also quietly widens what the writ
 `twt_recall` with a different question asked of them, and it reaches them by a bare
 `sys.path.insert(parent)` — a subdirectory buys a longer import for no separation. It would also
 rewrite ten CHECK lines in a 16/16 gate, `tools/twt/twt-chartink-pull.sh`'s closing instruction,
-`PLAN-SCAN-SYNC.md` §leaf 6 and the module's own usage block: a green gate made stale to keep a
+`docs/history/PLAN-SCAN-SYNC.md` §leaf 6 and the module's own usage block: a green gate made stale to keep a
 test green is TW7.1's rejected (b) again, and the runbook loses the same way.
 
 **The property that had to survive, and does.** The assertion is still an **exact** set over the

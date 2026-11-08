@@ -3,7 +3,7 @@
 This folder commissions the next autonomous run after the merge: building the
 **smallcase-shaped product layer** on top of Baskfy. The source of truth for what smallcase
 actually is — every screen, rule, fee and flow, observed live on 22 Aug 2026 — is
-[`../../smallcase-product-documentation.md`](../../smallcase-product-documentation.md) at the
+[`../docs/history/smallcase-product-documentation.md`](../docs/history/smallcase-product-documentation.md) at the
 repo root. This folder translates that document into Baskfy modules with acceptance criteria,
 the same way `docs/01–08` translated the merge.
 

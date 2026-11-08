@@ -193,7 +193,7 @@ cap. The mode is therefore a chip beside the tier and a sentence under the stanc
 
 ---
 
-## 4. Vocabulary: `PORTFOLIO_REDESIGN.md` §8 bans "book"
+## 4. Vocabulary: `docs/history/PORTFOLIO_REDESIGN.md` §8 bans "book"
 
 `src/lib/__tests__/no-jargon.test.ts` bans "book" in user-visible strings (→ "Portfolio group").
 The desk's momentum portfolio genuinely is a *book*, and renaming it "portfolio group" would be

@@ -161,7 +161,7 @@ exits all happen.
 
 - Alerts: plan issued, exit done, hard exit tomorrow, `LATE_EXIT`, a missing bhavcopy. Deploy
   per the deploy memory rule, outside market hours and the nightly window, with every money flag
-  still false. Then write `FO-FINAL-REPORT.md` at the root: what was built, what was decided, what
+  still false. Then write `docs/history/FO-FINAL-REPORT.md` at the root: what was built, what was decided, what
   is NOT done, what needs Maulik, and the first paper entry day step by step.
 
 ## F3 — the directional index credit spread (Maulik, M.5, 28 Sep 2026; `F3-PLAN.md`)

@@ -42,7 +42,7 @@ Section tabs: **Today | Book | Backtest**.
 > one to carry a control nobody has asked for would have been a migration in service of this
 > paragraph. The hub therefore has **no server actions at all** — a stronger safety property than
 > the one this section described, and `__tests__/read-only.test.tsx` asserts it that way. The tab
-> reads **Positions** rather than "Book": `PORTFOLIO_REDESIGN.md` §8 retires that word from
+> reads **Positions** rather than "Book": `docs/history/PORTFOLIO_REDESIGN.md` §8 retires that word from
 > reader-facing copy and the swing hub already calls its equivalent tab Positions. The route keeps
 > its `/vbt/book` path. DECISIONS-VB VB8.4 and VB8.5.
 

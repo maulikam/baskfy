@@ -15,7 +15,7 @@ which line refused it.
 **It is a scorer, not a scanner.** Every number here comes from ``tools/twt/twt_scan.py`` —
 :func:`twt_scan.tight_state_parts`, :func:`twt_scan.stock_days`,
 :func:`twt_scan.chartink_stock_days` — and from ``twt_recall.score``. Nothing in this file
-re-implements a line of the scan, and nothing in it may tune one (``PLAN-SCAN-SYNC.md``, leaf 6:
+re-implements a line of the scan, and nothing in it may tune one (``docs/history/PLAN-SCAN-SYNC.md``, leaf 6:
 *"may not change core scan logic"*).
 
 **Why the panel needs topping up.** ``research/volume-breakout/data/panel.pkl`` is the study's own

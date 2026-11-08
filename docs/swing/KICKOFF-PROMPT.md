@@ -55,7 +55,7 @@ exception. Specifically:
   never current behaviour.
 
 Stop only for the charter's stop conditions. When SW12 is green — or when a
-hard blocker ends the run — write SW-FINAL-REPORT.md at the repo root in the
+hard blocker ends the run — write docs/history/SW-FINAL-REPORT.md at the repo root in the
 style of FINAL-REPORT.md: what was built, what was decided, what is NOT done,
 what needs Maulik, and the exact steps for the first DRY_RUN morning. Then ask
 Maulik to review.

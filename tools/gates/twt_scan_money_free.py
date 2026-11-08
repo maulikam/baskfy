@@ -9,7 +9,7 @@ version — it drives `POST /twt/scan` against a real `OrderGateway` with `DRY_R
 the gateway was never called *at all* — and this is the cheap static half that re-runs in a second.
 
 **CAPITAL-AND-FLAG (G8).** Nothing TW12 added writes `tw_config.sleeve_capital_inr` or touches
-`BASKFY_TWT_EXECUTION_ENABLED`. `PLAN-SCAN-SYNC.md` names that rail twice and `docs/twt/02` §3 says
+`BASKFY_TWT_EXECUTION_ENABLED`. `docs/history/PLAN-SCAN-SYNC.md` names that rail twice and `docs/twt/02` §3 says
 the run "never sets ... in any circumstance". This is the assertion, not the assurance.
 
 WHY IT STRIPS PROSE FIRST, AND WHY THAT IS NOT A LOOPHOLE
@@ -85,7 +85,7 @@ BROKER: Final[tuple[str, ...]] = (
     "kiteconnect",
 )
 
-#: The two things `PLAN-SCAN-SYNC.md` rule 2 forbids by name.
+#: The two things `docs/history/PLAN-SCAN-SYNC.md` rule 2 forbids by name.
 CAPITAL_AND_FLAG: Final = re.compile(r"sleeve_capital_inr|TWT_EXECUTION_ENABLED")
 
 _DOCSTRING: Final = re.compile(r"(\"\"\"|''')(?:.|\n)*?\1")

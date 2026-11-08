@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # G1 — Caddy sends /api/v1/* to FastAPI and leaves Next's own /api/* routes to Next.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
-B="${BASKFY_PUBLIC_URL:-https://staging.baskfy.com}"; PW="$(cat "$ROOT/ops/baskfy-staging-gate-password.txt")"
+B="${BASKFY_PUBLIC_URL:-https://staging.baskfy.com}"; PW="$(cat "/Volumes/T7-Work/baskfy-local/baskfy-staging-gate-password.txt")"
 code() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 -u "baskfy:$PW" "$@"; }
 
 # The bug: `handle /api/*` handed all three of Next's routes to FastAPI, which answered 404. A

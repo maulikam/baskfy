@@ -13,7 +13,7 @@ cd "$WEB" || exit 1
 
 LOG="${TMPDIR:-/tmp}/baskfy-flow-build.log"
 
-# `.next-build`, never `.next` — RUN-AND-TEST.md: a build into `.next` while a dev server owns it
+# `.next-build`, never `.next` — docs/history/RUN-AND-TEST.md: a build into `.next` while a dev server owns it
 # leaves a mixed tree and the dev server serving chunks that no longer exist.
 DIST=.next-build
 

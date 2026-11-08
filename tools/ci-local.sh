@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run .github/workflows/ci.yml's steps on this machine (MERGE-PROMPTS.md M5 step 2:
+# Run .github/workflows/ci.yml's steps on this machine (docs/history/MERGE-PROMPTS.md M5 step 2:
 # "Run each workflow step locally exactly as CI would, and record the results").
 #
 # Steps that need GitHub's service containers -- a Postgres seeded as baskfy_test, a Redis --

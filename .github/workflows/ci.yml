@@ -1,4 +1,4 @@
-# CI — one green check for a pull request touching either tree (MERGE-PROMPTS.md M5).
+# CI — one green check for a pull request touching either tree (docs/history/MERGE-PROMPTS.md M5).
 #
 # GitHub reads workflows from the REPOSITORY ROOT only, so this is the file that runs.
 # `decile-blueprint/.github/workflows/ci.yml` still exists — it is the screener's own history

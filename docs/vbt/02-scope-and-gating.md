@@ -75,7 +75,7 @@ bad week. Changing one is a code change with a `DECISIONS-VB.md` entry.
 ## §3 — The real-money gate
 
 `BASKFY_VBT_EXECUTION_ENABLED=true` may be set only when **all** of the following are true, each
-with its evidence in `VB-FINAL-REPORT.md`.
+with its evidence in `docs/history/VB-FINAL-REPORT.md`.
 
 > ### The paper gate was withdrawn on 11 Sep 2026, by Maulik
 >

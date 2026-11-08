@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ROOT — PORTFOLIO_REDESIGN.md §11's eight acceptance criteria, proven end to end.
+# ROOT — docs/history/PORTFOLIO_REDESIGN.md §11's eight acceptance criteria, proven end to end.
 #
 # Leaves prove their own units. This proves the PRODUCT: the criteria are about what is true of
 # the whole system, and a criterion that only passes in a unit test has not been met.

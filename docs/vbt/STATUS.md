@@ -4,7 +4,7 @@ The status page for the volume-breakout run. Updated at the end of every module,
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
 **Run state: DEPLOYED — `bd78529` is live on the Phase A box, execution flag false, and the strategy has produced its first real signal.** Started 10 Sep 2026 on branch
-`developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
+`developer`. The report will be `../docs/history/VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
 ## Module ledger
@@ -37,7 +37,7 @@ Everything below was **measured on this machine on 10 Sep 2026**, not recalled.
 |---|---|
 | Branch | `developer`, HEAD `c68c57f` ("PF1: green — the allocation ledger learns to split a holding across portfolios") |
 | Trees | `decile-blueprint/` (screener + API + worker + web), `kite-momentum-rebalancer/` (the desk), `frozen/strangle/` (untouched) |
-| **Another session's staged files** | Nineteen paths of a portfolio-redesign change were **staged but not committed** before this run started (`PORTFOLIO_REDESIGN.md`, the portfolio web components, `0035_split_allocation.py`, `broker_holdings_sync.py`, …). **They are not this run's and are not committed under any VB module.** Every VB commit names its own paths explicitly (`git commit -- <paths>`), which leaves that index untouched |
+| **Another session's staged files** | Nineteen paths of a portfolio-redesign change were **staged but not committed** before this run started (`docs/history/PORTFOLIO_REDESIGN.md`, the portfolio web components, `0035_split_allocation.py`, `broker_holdings_sync.py`, …). **They are not this run's and are not committed under any VB module.** Every VB commit names its own paths explicitly (`git commit -- <paths>`), which leaves that index untouched |
 | Alembic head | `0035_split_allocation` — so **`0036` is the next free number** (VB3 re-checks) |
 | Core suite at baseline | `uv run pytest packages/core/tests` — **exit 0**, green before anything was written |
 | Research tree | `research/volume-breakout/` was untracked; VB0 commits it minus `aws/` and the pickles (DECISIONS-VB **VB0.1**) |
@@ -601,7 +601,7 @@ nothing provisional to show.
 | Tests | `tests/test_vbt_rescan_desk.py` **34 passed** (20 at VB12), `services/worker/tests/test_vbt_rescan.py` **19 passed** |
 | Migration | `0040_vbt_scan_run`, verified against the model by Alembic's own comparison — 0 differences |
 
-**VB15 (12 Sep 2026) gave it the contract's shape and put it on the API.** `PLAN-SCAN-SYNC.md`
+**VB15 (12 Sep 2026) gave it the contract's shape and put it on the API.** `docs/history/PLAN-SCAN-SYNC.md`
 fixed one "Scan now" shape across the three sleeves, so the desk gained `POST /vbt/scan` (**202**)
 and `GET /vbt/scan/{run_id}` beside the older `/vbt/rescan` — two names, one request, one store
 method (`PgVbtStore.request_scan`, which now raises `ScanRefused` and owns both refusals).

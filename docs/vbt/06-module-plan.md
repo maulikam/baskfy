@@ -299,6 +299,6 @@ confirms it.
   the third session's expiry sweep — printing the `vb_session` counters and **0 orders reaching a
   broker**.
 
-- **AC:** every test above green; the drill exits 0 and prints its counters; `VB-FINAL-REPORT.md`
-  written at the repo root in the style of `SW-FINAL-REPORT.md`; `NEEDS-MAULIK.md` § VBT reduced
+- **AC:** every test above green; the drill exits 0 and prints its counters; `docs/history/VB-FINAL-REPORT.md`
+  written at the repo root in the style of `docs/history/SW-FINAL-REPORT.md`; `NEEDS-MAULIK.md` § VBT reduced
   to what only his hands can supply; `STATUS.md` all-green or saying exactly what is not.

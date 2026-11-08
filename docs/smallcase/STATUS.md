@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green — see `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`. Tree 4 backlog closed — see `TREE4-BACKLOG-REPORT.md`. Tree 5 RSC perf + Tree 6 nav IA closed — see `TREE6-NAV-PERF-REPORT.md`.** Started 23 Aug 2026.
+**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green — see `docs/history/SC-FINAL-REPORT.md`, `docs/history/SC-AC-REPORT.md`, `docs/history/D3-UNLOCK-REPORT.md`. Tree 4 backlog closed — see `docs/history/TREE4-BACKLOG-REPORT.md`. Tree 5 RSC perf + Tree 6 nav IA closed — see `docs/history/TREE6-NAV-PERF-REPORT.md`.** Started 23 Aug 2026.
 
 **Independently audited after that, and found not green** — see "Independent verification" below. Each report above was written by the run it grades; that section is the part they could not contain.
 
@@ -23,7 +23,7 @@ about what is NOT done. A fresh session resumes from the first module not marked
 | SC9 — Engagement | ✅ | `/cb/pending-actions` + `/cb/updates` + dismiss/resolve; `/cb/trending` (9 lists, floors, withheld reasons); `/home` renders all four modules; trending EOD snapshot still open |
 | SC10 — Gating and Track-B dark machinery | ✅ | Track B flags default false; paywall/signup/fee-collect 404; Free Access helper |
 | SC11 — Hardening and safety proof | ✅ | No-order, tenant, N+1/p95, METRICS_BASKET_CHUNK=50, fee/XIRR accuracy |
-| SC12 — Verification and final report | ✅ | `SC-FINAL-REPORT.md`; 119 core + 39 API curated collected; Track C held |
+| SC12 — Verification and final report | ✅ | `docs/history/SC-FINAL-REPORT.md`; 119 core + 39 API curated collected; Track C held |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked.
 
@@ -290,7 +290,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 ## Tree 2 AC-closure (23 Aug 2026)
 
-See `SC-AC-REPORT.md` + `D3-UNLOCK-REPORT.md`. SIP Beat, create API, dividends Beat, chart, OAuth callback/holdings. Tree 4 closes remaining backlog leaves.
+See `docs/history/SC-AC-REPORT.md` + `docs/history/D3-UNLOCK-REPORT.md`. SIP Beat, create API, dividends Beat, chart, OAuth callback/holdings. Tree 4 closes remaining backlog leaves.
 
 
 ## Tree 3 / D3 unlock (23 Aug 2026)
@@ -302,7 +302,7 @@ See `SC-AC-REPORT.md` + `D3-UNLOCK-REPORT.md`. SIP Beat, create API, dividends B
 
 ## Tree 4 backlog (23 Aug 2026)
 
-Closed — see `TREE4-BACKLOG-REPORT.md`. Live Zerodha holdings, peer authorize URLs, e2e harden, chart wire, SC3 loop test, customize, Friday runbook; human D7/D10/counsel recorded without flipping product flags.
+Closed — see `docs/history/TREE4-BACKLOG-REPORT.md`. Live Zerodha holdings, peer authorize URLs, e2e harden, chart wire, SC3 loop test, customize, Friday runbook; human D7/D10/counsel recorded without flipping product flags.
 
 ## Tree 5 RSC performance (23 Aug 2026)
 
@@ -325,9 +325,9 @@ Closed — see `TREE4-BACKLOG-REPORT.md`. Live Zerodha holdings, peer authorize 
 - Canonical routes under `/market/*`, `/baskets/*`, `/build/*`, `/me/*`; 13 permanent legacy redirects
 - Shared `BasketCard` / `BasketDetail`; screen results default to basket view; `materializeBasket` (equal-weight + 5% cash)
 - Single AppShell disclaimer; jargon-ban vitest; `e2e/nav.spec.ts` (19 passed on production build)
-- Gates `node-6.md` + five `leaf-6.*` files — **37/37 closed**; report `TREE6-NAV-PERF-REPORT.md`
+- Gates `node-6.md` + five `leaf-6.*` files — **37/37 closed**; report `docs/history/TREE6-NAV-PERF-REPORT.md`
 
-**NOT done (deferred from `baskfynavrefactorreport.md`)**
+**NOT done (deferred from `docs/history/baskfynavrefactorreport.md`)**
 
 - Full ⌘K search over baskets/screens/indices (instruments + nav only today)
 - Watchlist star toggle on catalog cards

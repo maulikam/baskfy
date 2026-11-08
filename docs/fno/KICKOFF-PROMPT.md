@@ -52,7 +52,7 @@ Then execute FO0 through FO12 in order, under the Autonomy charter in CLAUDE.md.
 - Update docs/fno/STATUS.md at the end of every module, loud about what is NOT
   done. Tests assert docs/fno/04, never current behaviour.
 
-When FO12 is green, or a hard blocker ends the run, write FO-FINAL-REPORT.md at
+When FO12 is green, or a hard blocker ends the run, write docs/history/FO-FINAL-REPORT.md at
 the repo root: what was built, what was decided, what is NOT done, what needs
 Maulik, and the first paper entry day step by step. Then ask Maulik to review.
 ```

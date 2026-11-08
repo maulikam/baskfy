@@ -61,8 +61,8 @@ run long, decide-record-continue, questions to Maulik are the exception.
   current behaviour.
 
 Stop only for the charter's stop conditions. When OP15 is green — or a hard
-blocker ends the run — write OP-FINAL-REPORT.md at the repo root in the style of
-SW-FINAL-REPORT.md: what was built, what was decided, what is NOT done, what
+blocker ends the run — write docs/history/OP-FINAL-REPORT.md at the repo root in the style of
+docs/history/SW-FINAL-REPORT.md: what was built, what was decided, what is NOT done, what
 needs Maulik, the first paper morning step by step, and the per-sleeve paper
 checklist of docs/options/02 §3.2. Then ask Maulik to review.
 ```

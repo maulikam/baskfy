@@ -3,8 +3,8 @@
 This folder is the umbrella for **Baskfy**: the merge of `decile-blueprint` (momentum
 screener/data plant, never run on real data) and `kite-momentum-rebalancer` (live momentum
 execution desk) into one product. The full record is in `docs/01–08`; the execution script for
-agents is `MERGE-PROMPTS.md`. **Read order for any agent session: this file → `docs/README.md`
-→ `MERGE-PROMPTS.md` (and the docs it cites as you reach them).**
+agents is `docs/history/MERGE-PROMPTS.md`. **Read order for any agent session: this file → `docs/README.md`
+→ `docs/history/MERGE-PROMPTS.md` (and the docs it cites as you reach them).**
 
 **Absorbed at M3.** This file now governs: it carries the desk's seven non-negotiables and the
 screener's nine house rules, and a contributor who reads only this file cannot break either
@@ -30,7 +30,7 @@ D3 regulatory posture: **written 23 Aug 2026 as B** in `docs/DECISIONS-MERGE.md`
 (⚠ UNREVIEWED). RA/empanelment filings remain counsel C1–C3. **Paid** multi-tenant launch
 still waits on C3; P4.1/P4.3 engineering started 24 Aug 2026. D7 pricing amounts, D10
 market-data display licensing remain human-track. Track B flags stay false. The web app
-never gains an execute route. `MERGE-PROMPTS.md` still documents the Phase-3 stop as
+never gains an execute route. `docs/history/MERGE-PROMPTS.md` still documents the Phase-3 stop as
 history; D3 is no longer the engineering blocker.
 
 ## The two laws (from docs/04 §2 — enforced by tests, both trees)

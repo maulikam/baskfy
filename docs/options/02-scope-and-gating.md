@@ -121,7 +121,7 @@ widens the weekly desk's gateway (OP0.6). OP2 tightens (2); OP13's test covers (
 
 `BASKFY_OPTIONS_<SLEEVE>_EXECUTION_ENABLED=true` (with `OPTIONS_ENABLED`, `INTRADAY_ENABLED`,
 `DRY_RUN=false`) may be set only when **all** of these hold for that sleeve, each with its evidence
-in `OP-FINAL-REPORT.md` or a later dated addendum:
+in `docs/history/OP-FINAL-REPORT.md` or a later dated addendum:
 
 1. **OP13 green**, including the `OPTIONS_ENABLED` side-door test above.
 2. **The paper period on the live chain**, through the deployed desk, `DRY_RUN=true`, zero rule

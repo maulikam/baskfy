@@ -339,8 +339,8 @@ down before it happens.
 
 ## After TW10
 
-`TW-FINAL-REPORT.md` at the repo root, in the style of `SW-FINAL-REPORT.md` and
-`VB-FINAL-REPORT.md`: what was built, what was decided, **what is NOT done**, what needs Maulik,
+`docs/history/TW-FINAL-REPORT.md` at the repo root, in the style of `docs/history/SW-FINAL-REPORT.md` and
+`docs/history/VB-FINAL-REPORT.md`: what was built, what was decided, **what is NOT done**, what needs Maulik,
 and the first-live-morning runbook verbatim. Then ask Maulik to review.
 
 This run deploys nothing.

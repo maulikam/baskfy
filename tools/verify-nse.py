@@ -1,4 +1,4 @@
-"""Exercise every NSE provider capability against the live site (MERGE-PROMPTS.md M8).
+"""Exercise every NSE provider capability against the live site (docs/history/MERGE-PROMPTS.md M8).
 
 `decile-blueprint` was built with the test suite network-blocked, so every NSE URL shape,
 header and column name in `baskfy_providers.nse` was written from documented file layouts and

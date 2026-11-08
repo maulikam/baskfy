@@ -1,7 +1,7 @@
 # NEEDS-MAULIK
 
 Things only Maulik's hands can supply, queued by the autonomous run (CLAUDE.md §Autonomy charter,
-`MERGE-PROMPTS.md` rule 6). **The run does not wait on these** — it continues with every module
+`docs/history/MERGE-PROMPTS.md` rule 6). **The run does not wait on these** — it continues with every module
 that does not depend on them (rule 11) and returns the moment a dependency clears.
 
 Nothing here is urgent unless marked so. Each entry says what is needed, why, what it blocks, and
@@ -51,7 +51,7 @@ timeouts). Maulik approved an EC2 reboot at 01:37; it was back at 01:41, `verify
 written. Fixed in `f52df2c`: loads are now bounded per name (`DECISIONS-MERGE.md` 2C.5). The
 nightly shared the same bug, so tonight's 18:40 nightly would otherwise have taken the box down
 too. **New rule:** backfills on the box always run under `docker update --memory 3500m`
-(`RUN-AND-TEST.md` §3e).
+(`docs/history/RUN-AND-TEST.md` §3e).
 
 **Backfill.** Measured 682 s/day. Round 1 was stopped after 8 dates (a `--force` rerun supersedes
 it). Round 2 — `backfill-ranking --force 2026-07-27..2026-09-11` — started 03:54 IST under the
@@ -149,7 +149,7 @@ blocker in the project.
 
 ## 32. Transactions cannot be synced from Kite — the API does not have them
 
-**Raised 12 Sep 2026** (leaf 2 of `PLAN-SCAN-SYNC.md`). · **Status:** open, and it is one download.
+**Raised 12 Sep 2026** (leaf 2 of `docs/history/PLAN-SCAN-SYNC.md`). · **Status:** open, and it is one download.
 · **Full evidence:** `gates/kite-sync.md`, 14/14.
 
 ### What is needed
@@ -233,7 +233,7 @@ aws sso login --sso-session baskfy
 ```
 
 Then the deploy is reachable again. The Docker daemon **is** running now, so the blocker
-`REMAINING.md` §3 named ("the Docker daemon has not been running on this machine") is cleared;
+`docs/history/REMAINING.md` §3 named ("the Docker daemon has not been running on this machine") is cleared;
 this token is what replaced it.
 
 ### Before you run it, one decision that is not mine
@@ -243,7 +243,7 @@ The box serves `dd9cc73`. HEAD is `3ce77de` — **24 commits**, and they are not
 | | |
 |---|---|
 | Ready | The corporate-action fix (CA1), the fees cost model, the backfill guard, the Portfolio Command Center, the risk-ceiling lock, and TWT through TW11 |
-| ⚠ **Not ready** | **The UI polish tree.** `gates/node-7.1.md`, `node-7.2.md`, `node-7.3.md` and `leaf-7.5.1-verify.md` are **4 incomplete gate files** — `REMAINING.md` §4 says that tree still needs a dev server and Playwright in its own session. Commit `3ce77de` carries 175 lines of it because two lint errors inside those lines had `make lint` red repo-wide |
+| ⚠ **Not ready** | **The UI polish tree.** `gates/node-7.1.md`, `node-7.2.md`, `node-7.3.md` and `leaf-7.5.1-verify.md` are **4 incomplete gate files** — `docs/history/REMAINING.md` §4 says that tree still needs a dev server and Playwright in its own session. Commit `3ce77de` carries 175 lines of it because two lint errors inside those lines had `make lint` red repo-wide |
 | ⚠ New behaviour on a **live auto-execute host** | TW11 adds `twt-evening` 21:20 and `twt-morning` 09:05 to Beat. Both are plan-only (`tasks/twt_evening.py`: *"Nothing here places an order"*) and the flag is false, so nothing can trade — but they are two new jobs that will start firing on the box the moment it restarts |
 
 **So the question is whether to ship the UI tree half-finished**, not whether the rest is ready.
@@ -507,7 +507,7 @@ Not the merge's parity gates.
 **Status:** open, zero urgency · **Raised:** M21, 22 Aug 2026
 
 The scratch copy the `git subtree add` worked from. **No agent will ever delete it** — that rule is
-in `MERGE-PROMPTS.md` §M21.4, and it exists because an agent cannot know what a rollback copy is
+in `docs/history/MERGE-PROMPTS.md` §M21.4, and it exists because an agent cannot know what a rollback copy is
 worth to the person who might need it.
 
 **Safe to `rm -rf` once you have skimmed `docs/00-merge-status.md` and are content with it.** Both
@@ -605,7 +605,7 @@ WHERE ca.raw->>'shape' = 'irregular_probably_demerger'
 ORDER BY i.symbol;
 ```
 
-**To undo any or all of it**, one predicate and a reprocess — see `RUN-AND-TEST.md` §3b. Nothing
+**To undo any or all of it**, one predicate and a reprocess — see `docs/history/RUN-AND-TEST.md` §3b. Nothing
 here touched `close_raw`, so the reversal is total.
 
 **The real fix, when it is worth paying for:** a corporate-actions vendor feed with real event
@@ -808,7 +808,7 @@ and the nightly path can now hit it. See §17 for the symptom, why the timeouts 
 fix worth making.
 
 **Commands:** `make fundamentals DATE=2026-08-18` then `make refactors DATE=2026-08-18`, or
-`bash tools/tree3/drive-fill.sh 2026-08-18` to supervise it. `RUN-AND-TEST.md` §2 has the detail;
+`bash tools/tree3/drive-fill.sh 2026-08-18` to supervise it. `docs/history/RUN-AND-TEST.md` §2 has the detail;
 `docs/DECISIONS-MERGE.md` §T3F.1–T3F.6 has the reasoning.
 
 ---
@@ -1683,15 +1683,15 @@ It prints a receipt with the Kite user id and a sha256 prefix, never a token.
 ## Swing
 
 Only what needs your hands (SW12, 3 Sep 2026). Everything else the run decided and recorded in
-`docs/swing/DECISIONS-SW.md`; the report is `SW-FINAL-REPORT.md`.
+`docs/swing/DECISIONS-SW.md`; the report is `docs/history/SW-FINAL-REPORT.md`.
 
 | # | What | Why | What it blocks |
 |---|---|---|---|
-| SW-1 | **`aws sso login --profile baskfy-poc`**, then the deploy commands in `SW-FINAL-REPORT.md` §"Deploy" — **per deploy, and the login only**. Done for deploy #9 (`ed382e8`, 3 Sep 2026, SW21): you logged in, the run pushed the three images from a clean worktree and deployed from the main tree, `verify-swing.sh` green. **S4 is closed** | The box has no session an agent can open; SSO needs a browser | Nothing today — the box is on this commit. Each future deploy waits on the same one-line login |
+| SW-1 | **`aws sso login --profile baskfy-poc`**, then the deploy commands in `docs/history/SW-FINAL-REPORT.md` §"Deploy" — **per deploy, and the login only**. Done for deploy #9 (`ed382e8`, 3 Sep 2026, SW21): you logged in, the run pushed the three images from a clean worktree and deployed from the main tree, `verify-swing.sh` green. **S4 is closed** | The box has no session an agent can open; SSO needs a browser | Nothing today — the box is on this commit. Each future deploy waits on the same one-line login |
 | SW-2 | **Confirm the sleeve.** The box's `sw_config` is seeded at ₹25,00,000 / 0.5 % (MD1/MD2, SW13-run: `sw_config_sleeve: 1`); change it on `/me/swing` (SW14, once deployed) or `PATCH /swing/config` — both audited and bounded | A sleeve of ₹0 plans nothing; a wrong one sizes every line wrong | The first plan |
 | SW-3 | ✅ **Done 14 Sep 2026 (Maulik: merge orphans, stop the old desk first).** Old desk on 65.0.226.77 stopped and disabled; final verified backup `~/baskfy-safety/desk-migration-2026-09-14/` (sha256 `508a991d…`); `box-plus-orphans` rehearsed, dry-applied and committed into the box `desk` schema — 43,506 rows, every row count and checksum matched. See DECISIONS-MERGE "D8 run". ~~**The desk-history migration — yes or no.** `tools/migrate-desk` (README there; `--fork-policy` required) moves store A (43,411 rows on 65.0.226.77) into the box's `desk` schema; it needs SSH to the old box, which agents do not have. Until it runs the desk service starts on an empty `desk` schema | D8: the file is evidence; the swing book does not need it, the weekly book's pages do | The weekly book's history on the new desk; nothing swing |
 | SW-4 | **The S2 probe morning.** One weekday: Kite login before 09:00, `BASKFY_SWING_TIMING_PROBE=true` in `.env.staging` for the worker (one line, revert after), read `docs/swing/status/S2-kite-timing.md` the same evening | Two Kite timing facts (pre-open `volume`, the forming 09:20 candle) were never observed; the 09:16 scan and the tick-built range are correct either way | Nothing — at most one Beat time moves back to 09:09 |
-| SW-5 ⚠ **WAIVED by Maulik, 5 Sep 2026** (he chose "go live fully" over rehearsing first; DECISIONS-SW SW23). Left here as the record of what was skipped, not as a blocker | ~~**The DRY_RUN drill morning**~~ — `SW-FINAL-REPORT.md` §"The DRY_RUN drill morning", `02` §3.2 | The gate you rewrote (A11) asks for one real session under `DRY_RUN=true` before the flag | SW-7 |
+| SW-5 ⚠ **WAIVED by Maulik, 5 Sep 2026** (he chose "go live fully" over rehearsing first; DECISIONS-SW SW23). Left here as the record of what was skipped, not as a blocker | ~~**The DRY_RUN drill morning**~~ — `docs/history/SW-FINAL-REPORT.md` §"The DRY_RUN drill morning", `02` §3.2 | The gate you rewrote (A11) asks for one real session under `DRY_RUN=true` before the flag | SW-7 |
 | SW-6 | **Telegram** (optional): create the bot, put `BASKFY_SWING_TELEGRAM_BOT_TOKEN` and `BASKFY_SWING_TELEGRAM_CHAT_ID` in the box's `.env.staging` (never as a `box.sh` argument), restart `desk` + `swing-monitor`. Email needs only the desk's `DESK_SMTP_*` / `DESK_NOTIFY_*` lines in `.env.staging` (`.env.example` §desk, system-only) | The 09:31 focus push; one-way, never a confirm path (MD3) | Nothing — email carries the same line |
 | SW-7 ✅ **DELEGATED 5 Sep 2026 — no longer yours.** You told the run to flip it and to stop handing it back (`02` §3.5, DECISIONS-SW SW23). Kept here for the exact values, not as a blocker. | ~~**The flag flip**, by your hand only~~ — the flip itself, after `02` §3.1–3.4 hold and your risk decision is written: `BASKFY_SWING_EXECUTION_ENABLED=true` + `BASKFY_SWING_MONITOR_ENABLED=true` + **`BASKFY_DESK_DRY_RUN=false`** in `/opt/baskfy/.env.staging.compose` (desk, swing-monitor — the desk's own variable since SW13-run; the api's `BASKFY_DRY_RUN` is already `false` and does not reach the desk) **and** `BASKFY_SWING_EXECUTION_ENABLED=true` + `BASKFY_SWING_EP_PREMARKET_ENABLED=true` in `.env.staging` (worker, beat) — two files, compose.prod.yml says why — then `up -d worker beat desk swing-monitor`. A swing order is real only with **both** the desk's `DRY_RUN` off and the flag on (`swing_gates()`); `BASKFY_DESK_DRY_RUN=false` also takes the **weekly book** out of dry-run on this box (its `/execute` still needs your confirm) | Non-negotiable 1; Track B | Real orders |
 | SW-9 | **Turn on the morning login link (SW18).** In `/opt/baskfy/.env.staging.compose` (worker + beat): `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` and `BASKFY_KITE_LOGIN_NUDGE_TO=<your address>`. Also confirm `BASKFY_BROKER_OAUTH_STATE_PATH` points at a file on the `baskfy-state` volume that **both** the api and the worker mount — without it the worker refuses to send, because the state it mints could not be read back by the callback. Then `up -d worker beat` | An address and a flag; no agent may pick either | The 08:45 / 09:05 login link. Nothing else — the /brokers page still logs in by hand |
@@ -1837,7 +1837,7 @@ shows. This is now a standing instruction rather than an open question.
 ### V3a — The execution flag (blocks real orders, nothing else)
 
 `BASKFY_VBT_EXECUTION_ENABLED=true`, by your hand, after `docs/vbt/02` §3's five conditions hold
-and their evidence is in `VB-FINAL-REPORT.md`: twenty DRY_RUN sessions, VB10 green, the backtest
+and their evidence is in `docs/history/VB-FINAL-REPORT.md`: twenty DRY_RUN sessions, VB10 green, the backtest
 on the page, your written risk decision (V1), and half risk for the first five live sessions.
 
 **The swing sleeve's delegation does not extend here.** `docs/swing/02` §3.5 (5 Sep 2026) lets an
@@ -1934,7 +1934,7 @@ not exist yet so nothing in it is a surprise at 09:15.
 ### T1 — The daily Kite login (blocks every live morning, nothing before one)
 
 Kite's access tokens die around **06:00 IST** every day, so the desk cannot place an order, arm a
-GTT or ratchet a stop on a morning nobody has logged in for. `RUN-AND-TEST.md` carries the
+GTT or ratchet a stop on a morning nobody has logged in for. `docs/history/RUN-AND-TEST.md` carries the
 sequence and it is unchanged by this run.
 
 This sleeve makes the login matter slightly more than the other two do. TWT-1's exit **is** a
@@ -2062,7 +2062,7 @@ TWT ledger **emptied the whole local dev database**. `gates/twt-3.md` G2 ran
 `make migrate && make downgrade && make migrate`, `make downgrade` is `alembic downgrade base`, and
 `BASKFY_DATABASE_URL` defaults to `localhost:5433/baskfy`. The gate is repaired — it round-trips a
 throwaway database now — but **it had been like that since TW3**, so any earlier ledger run did the
-same thing. `REMAINING.md` §2 carries the full account.
+same thing. `docs/history/REMAINING.md` §2 carries the full account.
 
 **Nothing here can see the box**, so this is a question rather than a finding about it. Before
 step 3.5, run the read-back in `docs/twt/FIRST-LIVE-MORNING.md` §3.5 — it now asks for the audit
@@ -2163,9 +2163,9 @@ sleeve does not touch them.
 **The measurement.** `docker inspect baskfy-staging-web-1` on the box reports
 `…/baskfy-web:bd78529`. `bd78529` is VB13.5, 10 Sep — the commit *before* PC1. So the Portfolios
 screen a person sees at `staging.baskfy.com/portfolio/portfolios` today is the pre-redesign one.
-`GATES.md` G17 read 307 and was correct: the box is serving. It is serving the previous build.
+`docs/history/GATES.md` G17 read 307 and was correct: the box is serving. It is serving the previous build.
 
-**What it blocks:** `GATES.md` G18 and `gates/pc-integration.md` I12, and nothing else. Every gate
+**What it blocks:** `docs/history/GATES.md` G18 and `gates/pc-integration.md` I12, and nothing else. Every gate
 that is about the code is green against this working tree.
 
 **What was done meanwhile:** the G18 check was repaired. It named a container called `baskfy-web`,
@@ -2316,7 +2316,7 @@ Runbook: `decile-blueprint/docs/runbooks/12-options-health.md`. Blocks nothing.
 
 ## F&O — the FO run is built and deployed; paper only (25 Sep 2026)
 
-`FO-FINAL-REPORT.md` has the full account. Deployed `7c1124b`, `verify-fno.sh` **FNO OK**; the
+`docs/history/FO-FINAL-REPORT.md` has the full account. Deployed `7c1124b`, `verify-fno.sh` **FNO OK**; the
 scan and the monitor are on (M.4), every FO money flag false, and the FO gateway is locked to dry
 run in code (FO7.1). **Yours, when you want them:**
 1. **The real-money gate is not met by either sleeve** (Tier 2E: F1 −0.010R in 2022 with the loss

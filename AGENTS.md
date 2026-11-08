@@ -8,7 +8,7 @@ summarizes and points, it does not replace. **Where this file and `CLAUDE.md` di
 `CLAUDE.md` wins — and this file should be fixed.**
 
 **Read order for any agent session:** this file → `CLAUDE.md` → `docs/README.md` →
-`MERGE-PROMPTS.md`, and the docs they cite as you reach them. `RUN-AND-TEST.md` is the
+`docs/history/MERGE-PROMPTS.md`, and the docs they cite as you reach them. `docs/history/RUN-AND-TEST.md` is the
 from-scratch guide to running and testing everything. Each sub-tree's own `CLAUDE.md`
 (`decile-blueprint/CLAUDE.md`, `kite-momentum-rebalancer/CLAUDE.md`) remains authoritative for
 that tree's internals.

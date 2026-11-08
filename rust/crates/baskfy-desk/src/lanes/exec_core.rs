@@ -46,6 +46,7 @@ pub mod exec_kite;
 pub mod exit_rules;
 pub mod gtt;
 pub mod guards;
+pub mod intent;
 pub mod journal;
 pub mod kite_client;
 pub mod kite_limits;

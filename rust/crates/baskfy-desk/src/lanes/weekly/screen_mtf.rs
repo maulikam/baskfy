@@ -25,6 +25,9 @@ const MARKET_PROTECTION: f64 = -1.0;
 #[derive(Deserialize)]
 struct ExecuteIn {
     confirm: bool,
+    /// A stable id makes a retry idempotent; the browser's multi-buy has none and mints one.
+    #[serde(default)]
+    plan_id: Option<String>,
     lines: Vec<LineIn>,
 }
 
@@ -187,11 +190,16 @@ async fn execute(
             json!({"detail": "MTF orders are sent only with confirm true"}),
         );
     }
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let plan_id = format!("s{millis:x}");
+    let plan_id = match parsed.plan_id.as_deref().map(str::trim) {
+        Some(id) if !id.is_empty() => id.to_owned(),
+        _ => {
+            let millis = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            format!("s{millis:x}")
+        }
+    };
     let mut orders = Vec::new();
     for line in &parsed.lines {
         let symbol = line.symbol.trim().to_ascii_uppercase();
@@ -212,7 +220,7 @@ async fn execute(
                 exchange: "NSE".to_owned(),
                 client_id: Some(format!("{plan_id}:{symbol}")),
                 gross_exposure: Some(gross),
-                series: Some("EQ".to_owned()),
+                series: Some(series_of(&symbol).to_owned()),
                 market_protection: Some(MARKET_PROTECTION),
                 reference_price: Some(line.price),
                 screen_mtf: mtf,
@@ -221,10 +229,11 @@ async fn execute(
             .await;
         let (status, order_id, error, stop) = match placed {
             Ok(res) => {
-                let status = text(&res, "status");
-                let order_id = text(&res, "order_id");
+                let unknown = outcome_unknown(&res);
+                let status = if unknown { "UNKNOWN".to_owned() } else { text(&res, "status") };
+                let order_id = if unknown { String::new() } else { text(&res, "order_id") };
                 let error = text(&res, "error");
-                let stop = if status == "PLACED" || status == "DRY_RUN" {
+                let stop = if matches!(status.as_str(), "PLACED" | "DRY_RUN" | "DUPLICATE") {
                     arm_stop(&state, &plan_id, &symbol, line.qty, line.price).await
                 } else {
                     String::new()
@@ -239,7 +248,7 @@ async fn execute(
             "status": status,
             "order_id": if order_id.is_empty() { serde_json::Value::Null } else { json!(order_id) },
             "stop": if stop.is_empty() { serde_json::Value::Null } else { json!(stop) },
-            "error": if error.is_empty() || !failed && status != "ERROR" {
+            "error": if error.is_empty() || !failed && status != "UNKNOWN" {
                 serde_json::Value::Null
             } else {
                 json!(error)
@@ -247,6 +256,24 @@ async fn execute(
         }));
     }
     json_response(StatusCode::OK, json!({"plan_id": plan_id, "orders": orders}))
+}
+
+/// The broker may or may not hold this order: an unanswered send, or a reservation still open.
+fn outcome_unknown(res: &crate::wire::PyDict) -> bool {
+    let status = text(res, "status");
+    (status == "ERROR" && res.get("reached_exchange") == Some(&PyValue::None))
+        || (status == "DUPLICATE" && text(res, "order_id").starts_with("PENDING-"))
+}
+
+/// The series in a Kite symbol such as `ABC-BE`. Only a two-letter suffix is one: `BAJAJ-AUTO`
+/// is a name.
+fn series_of(symbol: &str) -> &str {
+    match symbol.rsplit_once('-') {
+        Some((_, suffix)) if suffix.len() == 2 && suffix.bytes().all(|b| b.is_ascii_alphabetic()) => {
+            suffix
+        }
+        _ => "EQ",
+    }
 }
 
 async fn arm_stop(state: &AppState, plan_id: &str, symbol: &str, qty: i64, price: f64) -> String {

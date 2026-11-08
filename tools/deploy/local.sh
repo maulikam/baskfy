@@ -179,6 +179,12 @@ switch() {
   echo "on Rust: $(tr '\n' ' ' < "$HOME_DIR/rust.services")"
 }
 
+# New submissions only; cancels, GTT changes and reconciliation carry on.
+desk_post() {
+  compose exec -T desk curl -sS --fail-with-body -m 10 -X POST -H 'Origin: http://desk' \
+    -H 'Content-Type: application/json' -d "$2" "http://desk:8420$1"; echo
+}
+
 # Each Rust service's health through the compose network (its own DNS name), or its run state.
 rust_check() {
   local bad=0 s id url st
@@ -306,5 +312,8 @@ rowcounts) rowcounts ;;
 rust)    shift; switch rust "$@" ;;
 python)  shift; switch python "$@" ;;
 rust-check) rust_check ;;
-*) echo "usage: $0 restore|up|down|verify|live|dry|pipeline [tag]|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
+ready)   compose exec -T desk curl -sS -m 10 http://desk:8420/execution/ready; echo ;;
+pause)   desk_post /execution/pause "{\"reason\":\"${2:-operator}\"}" ;;
+resume)  desk_post /execution/resume '{}' ;;
+*) echo "usage: $0 restore|up|down|verify|live|dry|pipeline [tag]|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check|ready|pause [reason]|resume" >&2; exit 64 ;;
 esac

@@ -1206,7 +1206,9 @@ fn allocation_changed(approved: &SizedBook, fresh: &SizedBook) -> bool {
 
 fn accepted_qty(order: &ScreenOrderOut, planned: i64) -> Option<i64> {
     match order.status.as_str() {
-        "REJECTED" | "CANCELLED" | "ERROR" | "BLOCKED" | "NOT_SENT" => None,
+        "REJECTED" | "CANCELLED" | "ERROR" | "BLOCKED" | "RISK_BLOCKED" | "NOT_SENT" | "UNKNOWN" => {
+            None
+        }
         _ => {
             let filled = order.filled_quantity.unwrap_or(0);
             if filled > 0 {
@@ -1355,28 +1357,26 @@ fn order_attempted(orders: &[ScreenOrderOut]) -> bool {
                     | "REJECTED"
                     | "CANCELLED"
                     | "BLOCKED"
+                    | "RISK_BLOCKED"
+                    | "UNKNOWN"
+                    | "DUPLICATE"
                     | "PARTIAL"
             )
     })
 }
 
-fn order_fields(row: &ScreenInvestHoldingOut, plan_id: &str) -> Vec<(String, String)> {
-    let qty = row.quantity.unwrap_or(0);
-    let tag: String = plan_id.chars().take(20).collect();
-    vec![
-        ("exchange".to_owned(), "NSE".to_owned()),
-        ("tradingsymbol".to_owned(), row.tradingsymbol.clone()),
-        ("transaction_type".to_owned(), "BUY".to_owned()),
-        ("order_type".to_owned(), "MARKET".to_owned()),
-        ("quantity".to_owned(), qty.to_string()),
-        (
-            "product".to_owned(),
-            if row.product == "MTF" { "MTF" } else { "CNC" }.to_owned(),
-        ),
-        ("validity".to_owned(), "DAY".to_owned()),
-        ("market_protection".to_owned(), "-1".to_owned()),
-        ("tag".to_owned(), tag),
-    ]
+fn desk_line(row: &ScreenInvestHoldingOut) -> serde_json::Value {
+    let price = row
+        .price
+        .as_ref()
+        .and_then(|px| px.to_sci_string().parse::<f64>().ok())
+        .unwrap_or(0.0);
+    serde_json::json!({
+        "symbol": row.tradingsymbol,
+        "qty": row.quantity.unwrap_or(0),
+        "price": price,
+        "product": if row.product == "MTF" { "MTF" } else { "CNC" },
+    })
 }
 
 fn order_result(
@@ -1637,10 +1637,14 @@ pub async fn invest_from_screen(
                 if !any {
                     let mut out = out_of(filled, as_of, None);
                     out.orders = orders;
-                    out.empty_reason = Some(
+                    let unconfirmed = out.orders.iter().any(|row| row.status == "UNKNOWN");
+                    out.empty_reason = Some(if unconfirmed {
+                        "No portfolio was created. The desk did not confirm these orders, so check the order book. This plan will not be sent again."
+                            .to_owned()
+                    } else {
                         "No portfolio was created. Every buy was rejected, and this plan will not be sent again."
-                            .to_owned(),
-                    );
+                            .to_owned()
+                    });
                     return Ok(wire::json_status(StatusCode::CONFLICT, &out));
                 }
                 (Some((as_of, filled)), orders, Some(plan_id))
@@ -1708,10 +1712,49 @@ pub async fn invest_from_screen(
     Ok(wire::json_status(StatusCode::CREATED, &out))
 }
 
+#[derive(serde::Deserialize)]
+struct DeskReply {
+    orders: Vec<DeskOrder>,
+}
+
+#[derive(serde::Deserialize)]
+struct DeskOrder {
+    symbol: String,
+    status: String,
+    order_id: Option<String>,
+    stop: Option<String>,
+    error: Option<String>,
+}
+
+/// Every row with one status: the desk answered nothing row-by-row.
+fn all_rows(
+    planned: &[&ScreenInvestHoldingOut],
+    status: &str,
+    error: &str,
+) -> Vec<ScreenOrderOut> {
+    planned
+        .iter()
+        .map(|row| {
+            order_result(
+                &row.symbol,
+                status,
+                None,
+                None,
+                Some(error.to_owned()),
+                None,
+            )
+        })
+        .collect()
+}
+
+/// The desk owns every broker write (Law 2): it runs the guards, risk, limits, the durable intent
+/// and the stop, and `DRY_RUN` is its call. `plan_id` makes a retry idempotent row by row.
 async fn send_screen_mtf(
     holdings: &[ScreenInvestHoldingOut],
     plan_id: &str,
 ) -> Vec<ScreenOrderOut> {
+    const UNKNOWN_OUTCOME: &str =
+        "The desk did not confirm this order. Check the order book before trying again.";
     let planned: Vec<&ScreenInvestHoldingOut> = holdings
         .iter()
         .filter(|row| row.quantity.unwrap_or(0) > 0)
@@ -1726,130 +1769,72 @@ async fn send_screen_mtf(
             None,
         )];
     }
-    if crate::live_prices::dry_run_enabled() {
-        return planned
-            .iter()
-            .map(|row| order_result(&row.symbol, "DRY_RUN", None, None, None, row.quantity))
-            .collect();
-    }
-    let client = match kite_for_margins() {
+    let base = std::env::var("BASKFY_DESK_INTERNAL_URL")
+        .unwrap_or_else(|_| "http://desk:8420".to_owned());
+    let lines: Vec<serde_json::Value> = planned.iter().map(|row| desk_line(row)).collect();
+    let wait = 30 + 10 * u64::try_from(lines.len()).unwrap_or(u64::MAX / 20);
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(wait))
+        .build()
+    {
         Ok(client) => client,
-        Err(error) => {
-            return vec![order_result(
-                "",
-                "ERROR",
-                None,
-                None,
-                Some(error.detail.clone()),
-                None,
-            )];
-        }
+        Err(error) => return all_rows(&planned, "NOT_SENT", &error.to_string()),
     };
-    let mut orders = Vec::new();
-    for row in planned {
-        let Some(qty) = row.quantity else {
-            continue;
-        };
-        let price = row
-            .price
-            .as_ref()
-            .and_then(|px| px.to_sci_string().parse::<f64>().ok())
-            .unwrap_or(0.0);
-        let fields = order_fields(row, plan_id);
-        match client.post_form("/orders/regular", &fields).await {
-            Ok(reply) => {
-                let order_id = kite_text(&reply, "order_id");
-                if order_id.is_empty() {
-                    orders.push(order_result(
-                        &row.symbol,
-                        "ERROR",
-                        None,
-                        None,
-                        Some("Kite did not confirm an order id.".to_owned()),
-                        None,
-                    ));
-                    continue;
-                }
-                let product = if row.product == "MTF" { "MTF" } else { "CNC" };
-                let stop = place_stop(&client, &row.tradingsymbol, qty, price, product).await;
-                orders.push(order_result(
-                    &row.symbol,
-                    "PLACED",
-                    Some(order_id),
-                    Some(stop),
-                    None,
-                    None,
-                ));
-            }
-            Err(error) => {
-                orders.push(order_result(
-                    &row.symbol,
-                    "ERROR",
-                    None,
-                    None,
-                    Some(error.to_string()),
-                    None,
-                ));
-            }
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+    let mut request = client
+        .post(format!("{}/screen-invest/execute", base.trim_end_matches('/')))
+        .header("Origin", "http://desk")
+        .json(&serde_json::json!({"confirm": true, "plan_id": plan_id, "lines": lines}));
+    if let Ok(password) = std::env::var("DESK_PASSWORD")
+        && !password.is_empty()
+    {
+        request = request.basic_auth("desk", Some(password));
     }
-    orders
+    let response = match request.send().await {
+        Ok(response) => response,
+        // A refused connection never reached the desk; anything later may have.
+        Err(error) if error.is_connect() => {
+            return all_rows(&planned, "NOT_SENT", &error.to_string());
+        }
+        Err(_) => return all_rows(&planned, "UNKNOWN", UNKNOWN_OUTCOME),
+    };
+    let status = response.status();
+    if status.is_client_error() {
+        let detail = response.text().await.unwrap_or_default();
+        return all_rows(&planned, "NOT_SENT", &detail);
+    }
+    if !status.is_success() {
+        return all_rows(&planned, "UNKNOWN", UNKNOWN_OUTCOME);
+    }
+    let Ok(reply) = response.json::<DeskReply>().await else {
+        return all_rows(&planned, "UNKNOWN", UNKNOWN_OUTCOME);
+    };
+    planned
+        .iter()
+        .map(|row| {
+            let wanted = row.tradingsymbol.trim().to_ascii_uppercase();
+            let Some(order) = reply.orders.iter().find(|o| o.symbol == wanted) else {
+                return order_result(
+                    &row.symbol,
+                    "NOT_SENT",
+                    None,
+                    None,
+                    Some("The desk did not accept this line.".to_owned()),
+                    None,
+                );
+            };
+            let filled = (order.status == "DRY_RUN").then_some(row.quantity).flatten();
+            order_result(
+                &row.symbol,
+                &order.status,
+                order.order_id.clone(),
+                order.stop.clone(),
+                order.error.clone(),
+                filled,
+            )
+        })
+        .collect()
 }
 
-async fn place_stop(
-    client: &baskfy_providers::kite::KiteConnect,
-    symbol: &str,
-    qty: i64,
-    price: f64,
-    product: &str,
-) -> String {
-    let trigger = (price * 0.92 * 10.0).round() / 10.0;
-    let limit = (trigger * 0.99 * 10.0).round() / 10.0;
-    let condition = serde_json::json!({
-        "exchange": "NSE",
-        "tradingsymbol": symbol,
-        "trigger_values": [trigger],
-        "last_price": price,
-    });
-    let legs = serde_json::json!([{
-        "exchange": "NSE",
-        "tradingsymbol": symbol,
-        "transaction_type": "SELL",
-        "quantity": qty,
-        "order_type": "LIMIT",
-        "product": product,
-        "price": limit,
-    }]);
-    let fields = vec![
-        ("type".to_owned(), "single".to_owned()),
-        ("condition".to_owned(), condition.to_string()),
-        ("orders".to_owned(), legs.to_string()),
-    ];
-    match client.post_form("/gtt/triggers", &fields).await {
-        Ok(reply) => {
-            let id = kite_text(&reply, "trigger_id");
-            if id.is_empty() {
-                "ARMED".to_owned()
-            } else {
-                format!("ARMED {id}")
-            }
-        }
-        Err(error) => format!("STOP {}", error),
-    }
-}
-
-fn kite_text(value: &baskfy_providers::kite::KiteValue, key: &str) -> String {
-    use baskfy_providers::kite::KiteValue;
-    let KiteValue::Map(map) = value else {
-        return String::new();
-    };
-    match map.get(key) {
-        Some(KiteValue::Str(text)) => text.clone(),
-        Some(KiteValue::Int(n)) => n.to_string(),
-        _ => String::new(),
-    }
-}
 async fn linked_screen(
     conn: &mut PgConnection,
     portfolio_id: i64,
@@ -2238,19 +2223,10 @@ mod tests {
 
     #[test]
     fn order_quantity_is_not_multiplied_by_leverage() {
-        let holding = named("C", 400, 4, "MTF");
-        let fields = order_fields(&holding, "plan-123");
-        let qty = fields.iter().find(|(key, _)| key == "quantity").unwrap();
-        let product = fields.iter().find(|(key, _)| key == "product").unwrap();
-        assert_eq!(qty.1, "400");
-        assert_ne!(qty.1, "1600");
-        assert_eq!(product.1, "MTF");
-        let cash = named("A", 400, 1, "CNC");
-        let fields = order_fields(&cash, "plan-123");
-        assert_eq!(
-            fields.iter().find(|(key, _)| key == "product").unwrap().1,
-            "CNC"
-        );
+        let line = desk_line(&named("C", 400, 4, "MTF"));
+        assert_eq!(line["qty"], 400);
+        assert_eq!(line["product"], "MTF");
+        assert_eq!(desk_line(&named("A", 400, 1, "CNC"))["product"], "CNC");
     }
 
     #[test]

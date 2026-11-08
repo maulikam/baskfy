@@ -46,6 +46,7 @@ use crate::lanes::analytics::web::{self, MultiDict, json, redirect_307};
 use crate::wire::{PyValue, dict};
 
 pub mod boot;
+pub mod execution;
 pub mod home;
 pub mod reconcile;
 pub mod routing;
@@ -68,6 +69,7 @@ pub fn routes() -> Router<AppState> {
         // The mount's bare path: axum's catch-all never matches it, so the app-wide slash
         // redirect (`routing`) cannot see its twin.
         .route("/static", any(routing::toggle))
+        .merge(execution::routes())
         .merge(home::routes())
         .merge(reconcile::routes())
         .merge(tradebook::routes())

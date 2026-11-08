@@ -8667,3 +8667,13 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 * **Rust.** JSON answers only under `Accept: application/json` on `/`, `/stops`, `/stops/arm`, `/settings*`, `/ops*`, `/regime/backtest`, `/tradebook*`, `/lifecycle/adopt`; HTML/redirect paths unchanged. Needs a desk image rebuild.
 * **Desk pages retired (same day).** `BASKFY_DESK_WEB_UI=true` (set by `local.sh` for the desk; code default off, so the templates and their tests stay) 303s every browser page GET to its web route (`web_ui.rs`); JSON reads and POSTs untouched. `/build/desk` redirects to `/rebalance`. `/performance` reads live holdings from new `GET /desk/performance/holdings`, falling back to the EOD snapshot.
 * **Reverse.** Delete the new routes and repoint `DESK_MENU` to `/desk/*`.
+
+## ORDER-PATH (8 Nov 2026) ⚠ UNREVIEWED
+
+- Screen Invest no longer writes to Kite from the API. `send_screen_mtf` posts to the desk's `/screen-invest/execute` with the stable `plan_id`, so guards, risk, limits and the journal apply. Tests: `baskfy-api/tests/law_two.rs`.
+- The stop policy is unchanged: `stop_from_vol(price, 0.0)` is the 8% floor. Passing a real volatility is a separate decision.
+- `order_intent` is committed before every Kite POST, with a primary key shared by all desk processes and a 20-character Kite `tag`. A match in the order book settles an open intent. No match never frees it; only `POST /execution/intents/resolve` does. Tests: `exec_gateway_intent.rs`.
+- The tables are `CREATE IF NOT EXISTS` in `intent.rs`, not a numbered migration, because `MIGRATIONS` is pinned verbatim to the Python desk. An older binary ignores them, so rollback is safe.
+- `GET /execution/ready`, `POST /execution/pause` and `/resume` added. A pause stops new `place()` only and survives restarts.
+- Not done: GTT intents, session lock held across the POST, push order updates and quotes.
+- Reverse: drop `.with_intents` in `desk.rs`.

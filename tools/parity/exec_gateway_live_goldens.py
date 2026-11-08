@@ -12,7 +12,7 @@ what it saw:
 * every journal line (``ts`` dropped: it is ``time.time()``),
 * the replay Kite's call log, line for line (the format ``desk_diff.py`` compares).
 
-``rust/crates/baskfy-desk/tests/exec_gateway_live.rs`` replays the same operations through the
+``apps/desk/tests/exec_gateway_live.rs`` replays the same operations through the
 Rust gateway over ``fake_kite.rs`` and requires all three to be equal. No network: the replay
 Kite never opens a socket, and no credential exists here.
 
@@ -39,7 +39,7 @@ from baskfy_execution.gtt import StopBand
 from baskfy_execution.guards import FoPlanRef
 
 HERE = Path(__file__).resolve().parent
-OUT = HERE.parents[1] / "rust" / "crates" / "baskfy-desk" / "fixtures" / "exec_gateway" / "live_goldens.json"
+OUT = HERE.parents[1] / "apps" / "desk" / "fixtures" / "exec_gateway" / "live_goldens.json"
 
 HEADER = (
     "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,"

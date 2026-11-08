@@ -6,7 +6,7 @@
 (the repository's root; plain ``python3`` — the sides run in their own interpreters.)
 
 Each **side** is one implementation of the worker: ``py`` (``nightly_py.py``: the production
-Python with the replay provider injected) or ``rs`` (``rust/target/<profile>/baskfy-worker``
+Python with the replay provider injected) or ``rs`` (``target/<profile>/baskfy-worker``
 with ``--replay-bundle``). ``--sides py,py`` grades the harness itself (determinism and masks);
 ``py,rs`` grades the port. The two sides run **one after the other** on their own database, Redis
 index and mail stream, against identical inputs: both clones come from one template, and both
@@ -66,7 +66,7 @@ Refusals and the machine
 ------------------------
 Only ``127.0.0.1:55432`` (container ``baskfy-rs-pg``); only databases named ``rsn_*``; never
 ``baskfy`` (a clone source only); never Redis index 0. A machine-wide ``fcntl`` lock on
-``rust/target/nightly_diff.lock`` serialises heavy runs across lanes. At most ``--max-dbs`` (5)
+``target/nightly_diff.lock`` serialises heavy runs across lanes. At most ``--max-dbs`` (5)
 databases other than ``baskfy`` may exist: before creating one the harness evicts its own cached
 ``rsn_tpl_*``/``rsn_primed_*`` templates (least recently used first) and otherwise waits. Every
 database created for the run is dropped on exit — error and SIGINT included; the cached templates
@@ -701,7 +701,7 @@ def build_rust(profile: str) -> None:
     if profile == "release":
         cmd.append("--release")
     log("building baskfy-worker ...")
-    subprocess.run(cmd, cwd=REPO / "rust", env=env, check=True)
+    subprocess.run(cmd, cwd=REPO, env=env, check=True)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -8,7 +8,7 @@ cd decile-blueprint && .venv/bin/python -m tools.parity.dump_L1     # or: PYTHON
 cd kite-momentum-rebalancer && .venv/bin/python ../tools/parity/dump_L4.py
 ```
 
-Goldens land in `rust/testdata/golden/L<n>/…` and are committed. Dumpers import Python; they never
+Goldens land in `testdata/golden/L<n>/…` and are committed. Dumpers import Python; they never
 modify it, never use the network, never open the desk's live database or `portfolio.db`.
 
 ## The desk: `desk_diff.py` (wave D, DECISIONS-RS R8.3–R8.6)
@@ -67,7 +67,7 @@ python3 tools/parity/nightly_diff.py --chain --scenario rerun --sides py,py
 Celery task's own body) with the **replay provider** injected at process start — it swaps
 `baskfy_worker.providers.build_provider_stack` for `replay_provider.replay_stack(bundle)`, turns
 `kite_session_cli.refresh_quietly` into a no-op, and arms a socket guard that refuses anything but
-loopback. Production Python is not changed. `rs` runs `rust/target/<profile>/baskfy-worker` with
+loopback. Production Python is not changed. `rs` runs `target/<profile>/baskfy-worker` with
 `--replay-bundle`, which puts the Rust replay adapter behind the production `CompositeProvider` and
 arms the network block. Step mode runs `step NAME --run-id N --context ctx.json` on both; the
 Python half mirrors `_run_chain` block by block, pinned to the orchestrator's source by
@@ -83,7 +83,7 @@ mask lives in `TABLE_MASKS` with its reason, and the report prints it.
 
 **Refusals.** Only `127.0.0.1:55432` (`baskfy-rs-pg`); only databases named `rsn_*`; never
 `baskfy` (a clone source only, read for templates and bundles); never Redis index 0. One heavy run
-at a time machine-wide (`fcntl` on `rust/target/nightly_diff.lock`); at most five databases
+at a time machine-wide (`fcntl` on `target/nightly_diff.lock`); at most five databases
 besides `baskfy` (the harness evicts its own cached templates first, then waits). The run's clones
 are dropped on exit, error and SIGINT included; cached templates (`rsn_tpl_<kind>_<date>`, and
 `rsn_primed_<step>_<hash>` keyed by the bundle and every Python source the prime ran) persist and
@@ -92,10 +92,10 @@ are reused.
 ### The replay provider and its bundle
 
 `replay_build.py --date D` derives the day's bundles from the bed (read-only) into
-`rust/target/replay/<D>/<variant>/` (untracked): `base`, `gate-refuse` (two symbols in five, so the
+`target/replay/<D>/<variant>/` (untracked): `base`, `gate-refuse` (two symbols in five, so the
 gate's bar count fails), `provider-failure-midway` (`index_snapshots(on=D)` refused). The format
 (`manifest.json` plus one JSON file per call under `calls/`) and what each call is rebuilt from
-are in `replay_build.py`'s docstring and `rust/crates/baskfy-providers/src/replay.rs`. A call the
+are in `replay_build.py`'s docstring and `crates/providers/src/replay.rs`. A call the
 bundle cannot answer is `ProviderUnavailable("no recorded answer for <call>")` in both adapters;
 the manifest's `refuse` list raises any provider error class for a matching call.
 
@@ -176,7 +176,7 @@ upstream requests; write verbs at the upstream (law 2); the raw archive's new fi
 `replay_build.py --date D --variant session` writes `base`'s calls plus `upstream/`
 (`replay_build_session.py`): `archive/nse/fo-bhavcopy/*.zip` and `fo-ban-list/*.csv` (real raw
 files, the last five on or before D, from the AWS-exit archive tarball, extracted once into
-`rust/target/replay/sources/`), `kite/instruments/NFO.csv` (the bed's `op_contract` options plus
+`target/replay/sources/`), `kite/instruments/NFO.csv` (the bed's `op_contract` options plus
 futures rebuilt from the newest F&O bhavcopy), `kite/quote/{0935,1315,1529}.json` (the recorded
 chain and index minutes; equities synthesized from the day's bar), `kite/historical/<token>/minute.json`
 (the recorded index minutes), `kite/holdings.json` (the bed's broker-linked holdings),
@@ -186,7 +186,7 @@ serves `kite/` and `http/` on a loopback port and refuses every write verb; each
 recorded file without a request. Anything not recorded answers 404.
 
 `task_registry.py` (run from `decile-blueprint` with the usual `PYTHONPATH`) rewrites
-`rust/crates/baskfy-worker/tests/fixtures/python_task_registry.json` from the live `celery_app`;
+`apps/worker/tests/fixtures/python_task_registry.json` from the live `celery_app`;
 `tests/task_registry.rs` holds the Rust registry and Beat table to it.
 
 ### The TWT backtest: `twt_backtest_diff.py` (lane `sleeve_backtests`, R8.sb1)
@@ -194,7 +194,7 @@ recorded file without a request. Anything not recorded answers 404.
 `baskfy_worker.tasks.twt_backtest.run_twt_backtest` has no Celery task — `tools/runs/twt/backtest.py`
 (`make twt-backtest`) is its caller — so `task_diff` cannot name it. `twt_backtest_diff.py` is
 `task_diff` with one seam replaced: a side runs the script's `_run` body (`py`, this file's `side`
-subcommand under `task_py`'s clock) or `rust/crates/baskfy-worker/examples/twt_backtest.rs`
+subcommand under `task_py`'s clock) or `apps/worker/examples/twt_backtest.rs`
 (`rs`); clones, lock, budget, ports and every comparison are `task_diff`'s own code. Cases:
 `task_cases/sleeve_backtests_twt.json` (`args`: `start`, `end`, `sleeve`, `skip_etf_denominator`).
 `TWT_BACKTEST_DIFF_KEEP=DIR` keeps each side's full stdout (the payload is printed truncated).

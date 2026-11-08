@@ -2,7 +2,7 @@
 
     cd /Volumes/T7-Work/Dev/projects/baskfy/decile-blueprint
     PYTHONPATH=..:packages/core/src:packages/providers/src:services/api/src:services/worker/src \\
-        .venv/bin/python ../tools/parity/replay_selfcheck.py rust/target/replay/2026-10-29/base
+        .venv/bin/python ../tools/parity/replay_selfcheck.py target/replay/2026-10-29/base
 
 Runs a fixed list of calls — every method, answered and refused, plus the edges (a token with no
 bar that day, an unknown token, a window outside the bundle, a path-traversal slug, duplicate and
@@ -140,7 +140,7 @@ def main(argv: list[str]) -> int:
         out = subprocess.run(
             ["nice", "-n", "10", str(CARGO), "run", "-q", "-p", "baskfy-providers", "--example",
              "replay_probe", "--", str(bundle), str(calls_file)],
-            cwd=ROOT / "rust", env=env, capture_output=True, text=True, check=False,
+            cwd=ROOT, env=env, capture_output=True, text=True, check=False,
         )
     if out.returncode != 0:
         print(out.stderr)

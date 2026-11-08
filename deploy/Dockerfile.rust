@@ -5,15 +5,20 @@ ARG RUST_IMAGE=rust:1.99.1-slim-bookworm
 ARG DEBIAN_IMAGE=debian:bookworm-slim
 
 FROM ${RUST_IMAGE} AS chef
-WORKDIR /src/rust
-# Beats rust/.cargo/config.toml's host path.
-ENV CARGO_TARGET_DIR=/src/rust/target
-COPY rust/rust-toolchain.toml ./
+WORKDIR /src
+# Beats .cargo/config.toml's host path.
+ENV CARGO_TARGET_DIR=/src/target
+COPY rust-toolchain.toml ./
 RUN rustup toolchain install && rustup show active-toolchain
 RUN cargo install cargo-chef --locked --version 0.1.78
 
 FROM chef AS planner
-COPY rust/ ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml deny.toml ./
+COPY .cargo .cargo
+COPY apps/api apps/api
+COPY apps/desk apps/desk
+COPY apps/worker apps/worker
+COPY crates crates
 RUN cargo chef prepare --recipe-path /recipe.json
 
 FROM chef AS build
@@ -22,7 +27,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     cargo chef cook --release --locked --recipe-path /recipe.json \
       -p baskfy-api -p baskfy-worker -p baskfy-desk --bins
-COPY rust/ ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml deny.toml ./
+COPY .cargo .cargo
+COPY apps/api apps/api
+COPY apps/desk apps/desk
+COPY apps/worker apps/worker
+COPY crates crates
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     cargo build --release --locked -p baskfy-api -p baskfy-worker -p baskfy-desk --bins \
@@ -69,7 +79,7 @@ EOF
 RUN chmod 0755 /usr/local/bin/baskfy-rs-healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["baskfy-rs-healthcheck"]
 # Last on purpose: a SQL-only change reuses every layer above.
-COPY rust/migrations /usr/share/baskfy/migrations
+COPY db/migrations /usr/share/baskfy/migrations
 WORKDIR /desk
 USER baskfy
 EXPOSE 8000 8420

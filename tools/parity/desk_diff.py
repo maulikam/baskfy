@@ -11,7 +11,7 @@ Each side runs from its own empty run directory (``app`` symlinked to the worktr
 its own database: on ``--backend postgres`` (the deployment's) a bed clone ``rsd_<run>_{py,rs}``
 cloned ``rsd_tpl_desk`` → py, template dropped, py → rs (so at most two ``rsd_*`` exist while
 the desks run); on ``sqlite`` a file in the run directory. Redis indices 8–15 only; ports
-18500–18799 only; the machine-wide lock ``<main>/rust/target/nightly_diff.lock`` is held for the
+18500–18799 only; the machine-wide lock ``<main>/target/nightly_diff.lock`` is held for the
 whole run, and a clone waits while six non-``baskfy`` databases already exist.
 
 Compared, per case (in file order, each sent to Python then Rust): status; ``content-type``,
@@ -73,7 +73,7 @@ DESK = REPO / "kite-momentum-rebalancer"
 UPLOADS = MAIN / "kite-momentum-rebalancer" / "data" / "uploads"
 DESK_PY = MAIN / "kite-momentum-rebalancer" / ".venv" / "bin" / "python"
 LOCK = Path("/Volumes/T7-Work/baskfy-cargo-target") / "nightly_diff.lock"
-RUST = REPO / "rust"
+RUST = REPO
 RS_BIN = Path("/Volumes/T7-Work/baskfy-cargo-target") / "debug" / "baskfy-desk"
 BED = "postgresql://baskfy:rs-test-only@127.0.0.1:55432/{db}"
 REDIS = "redis://127.0.0.1:56379"

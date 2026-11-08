@@ -7,7 +7,7 @@ Import from a lane's dumper, run with the tree's own venv:
          inputs={"frame": df, "asof": date(2026, 8, 22)}, output=score_frame(df, asof),
          known_bug=None, tolerance={"float": 1e-9})
 
-Writes rust/testdata/golden/<case>.json. Never modifies Python, never touches the network.
+Writes testdata/golden/<case>.json. Never modifies Python, never touches the network.
 Encoding rules (mirrored by go/internal/testkit/golden.go):
   Decimal -> string ("12.34")        date/datetime -> ISO 8601 (datetimes carry the offset
                                      when they have one; a naive datetime is exchange-local)
@@ -25,7 +25,7 @@ Key order is sorted; floats are written with repr precision so 1e-9 comparisons 
 Lanes that live in this file
 ----------------------------
 ``swing`` (SW12, docs/swing/STANDING-ANSWERS.md B11): ``python golden.py swing`` dumps the six
-pure swing functions over a fixed fixture set into ``rust/testdata/golden/L1/swing/``. Those
+pure swing functions over a fixed fixture set into ``testdata/golden/L1/swing/``. Those
 goldens are written with ``stable=True`` — no timestamp, interpreter or cwd in ``meta`` — so
 two runs are byte-identical and ``packages/core/tests/test_swing_goldens.py`` can recompute
 each one from its stored inputs and compare the file byte for byte.
@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-GOLDEN_DIR = ROOT / "rust" / "testdata" / "golden"
+GOLDEN_DIR = ROOT / "testdata" / "golden"
 JSON_KWARGS: dict[str, Any] = {"indent": 1, "sort_keys": True, "ensure_ascii": False}
 
 
@@ -1057,7 +1057,7 @@ def _swing_cases() -> Iterator[SwingCase]:  # noqa: PLR0915 - one block per func
 
 
 def dump_swing() -> list[Path]:
-    """The ``swing`` lane: every case, byte-stable, into ``rust/testdata/golden/L1/swing/``."""
+    """The ``swing`` lane: every case, byte-stable, into ``testdata/golden/L1/swing/``."""
     written: list[Path] = []
     for case in _swing_cases():
         decode, call = SWING_FUNCTIONS[case.fn]

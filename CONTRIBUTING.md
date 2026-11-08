@@ -13,12 +13,12 @@ Use a worktree only for a parallel run. Remove it and run `git worktree prune` t
 
 ## Builds
 
-`rust/.cargo/config.toml` sends every build to `/Volumes/T7-Work/baskfy-cargo-target`, so a worktree
+`.cargo/config.toml` sends every build to `/Volumes/T7-Work/baskfy-cargo-target`, so a worktree
 does not cost a fresh 100 GB target. Do not override it locally.
 
 ## Schema changes
 
-Add the next numbered file to `rust/migrations/`. Never edit an applied one. Alembic is frozen at
+Add the next numbered file to `db/migrations/`. Never edit an applied one. Alembic is frozen at
 `0063_mtf_leverage` and only records where the baseline came from.
 
 ## Commits

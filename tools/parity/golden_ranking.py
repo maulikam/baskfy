@@ -5,7 +5,7 @@ builder and the ranking engine (Rust rewrite, 29 Oct 2026).
     .venv/bin/python ../tools/parity/golden_ranking.py      # or: uv run python ../tools/parity/golden_ranking.py
 
 Dumps the public functions of four ``baskfy_core`` modules into
-``rust/testdata/golden/L1/ranking/<module>.<function>.case_NNN.json``, written ``stable=True`` by
+``testdata/golden/L1/ranking/<module>.<function>.case_NNN.json``, written ``stable=True`` by
 ``tools/parity/golden.py``'s own encoder, so two runs are byte-identical:
 
 * ``factors.compute_factors`` / ``compute_factors_unrounded`` — docs/05 over seeded synthetic bars:
@@ -1447,4 +1447,4 @@ def dump_ranking() -> list[Path]:
 
 if __name__ == "__main__":
     paths = dump_ranking()
-    print(f"{len(paths)} ranking goldens written under rust/testdata/golden/{LANE}/")
+    print(f"{len(paths)} ranking goldens written under testdata/golden/{LANE}/")

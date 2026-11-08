@@ -173,7 +173,7 @@ def build_rust(profile: str) -> None:
     if profile == "release":
         cmd.append("--release")
     log("building baskfy-worker ...")
-    subprocess.run(cmd, cwd=REPO / "rust", env=env, check=True)
+    subprocess.run(cmd, cwd=REPO, env=env, check=True)
 
 
 # ---------------------------------------------------------------------------------------------

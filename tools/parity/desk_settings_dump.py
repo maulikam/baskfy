@@ -1,13 +1,13 @@
 """Dump every environment variable the desk reads, with its default and parse behaviour.
 
-The answer key for ``rust/crates/baskfy-desk/src/settings.rs`` (DECISIONS-RS R8.1). Run with the
+The answer key for ``apps/desk/src/settings.rs`` (DECISIONS-RS R8.1). Run with the
 desk's venv and the worktree on ``PYTHONPATH``; it never reads ``.env`` (``load_dotenv`` is
 replaced by a no-op before ``app.config`` is imported), never connects anywhere, and writes one
 JSON file::
 
     PYTHONPATH=<wt>/kite-momentum-rebalancer:<wt>/decile-blueprint/packages/core/src:... \\
         <main>/kite-momentum-rebalancer/.venv/bin/python tools/parity/desk_settings_dump.py \\
-        --out rust/crates/baskfy-desk/fixtures/settings_defaults.json
+        --out apps/desk/fixtures/settings_defaults.json
 
 What it records, per variable:
 

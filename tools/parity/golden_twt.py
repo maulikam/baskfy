@@ -6,7 +6,7 @@ rewrite wave 3, 29 Oct 2026).
         .venv/bin/python ../tools/parity/golden_twt.py
 
 Dumps every public pure function of the sleeve's eleven modules into
-``rust/testdata/golden/L1/twt/<module>.<function>.case_NNN.json``, written ``stable=True`` by
+``testdata/golden/L1/twt/<module>.<function>.case_NNN.json``, written ``stable=True`` by
 ``tools/parity/golden.py``'s own encoder, so two runs are byte-identical:
 
 * ``calendar`` — ``session_counts``, ``thin_sessions``, ``build_calendar``, ``drop_thin_sessions``,
@@ -2288,4 +2288,4 @@ def dump_twt() -> list[Path]:
 
 if __name__ == "__main__":
     paths = dump_twt()
-    print(f"{len(paths)} twt goldens written under rust/testdata/golden/{LANE}/")
+    print(f"{len(paths)} twt goldens written under testdata/golden/{LANE}/")

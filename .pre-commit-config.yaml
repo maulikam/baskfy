@@ -4,9 +4,9 @@ repos:
     hooks:
       - id: cargo-fmt
         name: cargo fmt
-        entry: bash -c 'cd rust && cargo fmt --check'
+        entry: bash -c 'cargo fmt --check'
         language: system
-        files: ^rust/.*\.rs$
+        files: ^(apps/(api|desk|worker)|crates)/.*\.rs$
         pass_filenames: false
       - id: forbidden-files
         name: forbid archives, stale locks and env files

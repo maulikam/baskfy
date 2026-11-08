@@ -50,7 +50,7 @@ graphify-out/
 **/__pycache__/
 **/.next/
 **/node_modules/
-rust/target/
+target/
 *.tgz
 *.lock-*
 coverage.json

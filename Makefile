@@ -7,10 +7,10 @@ help: ## List these targets
 	@grep -E '^[a-z -]+:.*##' $(MAKEFILE_LIST) | sed -E 's/:.*## /\t/' | expand -t 24
 
 dev: ## Debug build of the three binaries
-	cd rust && cargo build -p baskfy-api -p baskfy-worker -p baskfy-desk --bins
+	cargo build -p baskfy-api -p baskfy-worker -p baskfy-desk --bins
 
 test: ## Rust tests, always dry
-	cd rust && cargo nextest run --workspace
+	cargo nextest run --workspace
 
 test-py: ## Python oracle suites
 	cd decile-blueprint && uv run pytest -p no:randomly -q --no-cov
@@ -20,7 +20,7 @@ test-web: ## Web lint and unit tests
 	cd decile-blueprint && pnpm --filter @baskfy/web run lint && pnpm --filter @baskfy/web run test
 
 lint: ## fmt, clippy, namespace
-	cd rust && cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
+	cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
 	bash tools/check-namespace.sh
 
 image: ## docker build baskfy-rs:TAG
@@ -33,5 +33,5 @@ pipeline: ## Redeploy worker, ingest-worker, beat at TAG
 	bash tools/deploy/local.sh pipeline $(TAG)
 
 clean: ## Remove build output
-	cd rust && cargo clean
+	cargo clean
 	find . -type d \( -name node_modules -o -name .next -o -name __pycache__ \) -prune -not -path './frozen/*' -exec rm -rf {} +

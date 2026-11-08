@@ -6,7 +6,7 @@ the Rust rewrite's answer key (29 Oct 2026).
         .venv/bin/python ../tools/parity/golden_vbt.py
 
 Dumps the public pure functions of ``baskfy_core.vbt`` into
-``rust/testdata/golden/L1/vbt/<module>.<function>.case_NNN.json``, written ``stable=True`` by
+``testdata/golden/L1/vbt/<module>.<function>.case_NNN.json``, written ``stable=True`` by
 ``tools/parity/golden.py``'s own encoder, so two runs are byte-identical:
 
 * ``config`` — ``DataConfig.min_samples`` (Python's half-even ``round``), ``VbtConfig.bars_required``,
@@ -2259,4 +2259,4 @@ def dump_vbt() -> list[Path]:
 
 if __name__ == "__main__":
     paths = dump_vbt()
-    print(f"{len(paths)} vbt goldens written under rust/testdata/golden/{LANE}/")
+    print(f"{len(paths)} vbt goldens written under testdata/golden/{LANE}/")

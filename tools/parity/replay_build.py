@@ -4,7 +4,7 @@
     PYTHONPATH=..:packages/core/src:packages/providers/src:services/api/src:services/worker/src \\
         .venv/bin/python ../tools/parity/replay_build.py --date 2026-10-29
 
-writes ``rust/target/replay/<date>/<variant>/`` for every variant (``base``, ``gate-refuse``,
+writes ``target/replay/<date>/<variant>/`` for every variant (``base``, ``gate-refuse``,
 ``provider-failure-midway``) and prints each bundle's hash.
 
 What the providers *would have returned* that day, reconstructed from the bed's own tables — read

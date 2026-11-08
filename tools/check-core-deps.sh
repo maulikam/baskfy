@@ -3,7 +3,7 @@
 set -euo pipefail
 ALLOWED="chrono polars rust_decimal serde thiserror"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cargo metadata --no-deps --format-version 1 --manifest-path "$ROOT/rust/Cargo.toml" \
+cargo metadata --no-deps --format-version 1 --manifest-path "$ROOT/Cargo.toml" \
   | python3 -c '
 import json, sys
 allowed = set(sys.argv[1].split())

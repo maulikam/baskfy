@@ -25,7 +25,7 @@ and only ever stops the processes it started.
 
 Safety (root CLAUDE.md): the database URL must be the bed's (127.0.0.1:55432) unless
 ``--allow-db-url`` says otherwise; never the live stack (port 5432/8480). The JWT secret is a
-test secret kept in an untracked file (``rust/target/parity-jwt-secret``, generated on first use)
+test secret kept in an untracked file (``target/parity-jwt-secret``, generated on first use)
 and is never printed. No case may place an order: there is no such route in either API.
 
 Usage (from the repo root)::
@@ -82,7 +82,7 @@ import api_writes as writes_mod  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 BLUEPRINT = REPO / "decile-blueprint"
-RUST = REPO / "rust"
+RUST = REPO
 DEFAULT_SECRET_FILE = Path("/Volumes/T7-Work/baskfy-cargo-target") / "parity-jwt-secret"
 DEFAULT_RS_BIN = Path("/Volumes/T7-Work/baskfy-cargo-target") / "debug" / "baskfy-api"
 

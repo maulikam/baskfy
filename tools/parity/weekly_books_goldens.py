@@ -9,7 +9,7 @@ gate for them in place of a `desk_diff.py` scenario. Synthetic inputs only — n
 Run (TZ matters: the desk's naive local time is IST, as in `desk_diff.py`):
     TZ=Asia/Kolkata PYTHONPATH=<wt>/kite-momentum-rebalancer:<wt>/decile-blueprint/packages/execution/src \
       <main>/kite-momentum-rebalancer/.venv/bin/python tools/parity/weekly_books_goldens.py \
-      rust/crates/baskfy-desk/fixtures/weekly_books/goldens.json
+      apps/desk/fixtures/weekly_books/goldens.json
 """
 from __future__ import annotations
 

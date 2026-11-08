@@ -1,6 +1,6 @@
 """Answer keys for the desk foundation's engines (DECISIONS-RS R8.4), from the live Python.
 
-Writes three fixtures under ``rust/crates/baskfy-desk/fixtures/``:
+Writes three fixtures under ``apps/desk/fixtures/``:
 
 * ``pyfmt_probes.json`` — Python's ``fmt % args`` and ``format(value, spec)`` /
   ``template.format(*args)`` over every spec the desk's templates use and the edges around them
@@ -16,7 +16,7 @@ Run with the desk venv, the worktree on ``PYTHONPATH``, from the desk directory 
 ``Jinja2Templates(directory="app/templates")`` resolves); no network, no database::
 
     cd kite-momentum-rebalancer && <venv>/bin/python ../tools/parity/desk_probes.py \\
-        --out ../rust/crates/baskfy-desk/fixtures
+        --out ../apps/desk/fixtures
 """
 
 from __future__ import annotations

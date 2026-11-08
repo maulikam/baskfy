@@ -187,7 +187,7 @@ hit; add vocabulary to the script's `ALLOWED` list with a reason, and record it 
 - **`DRY_RUN`'s code default is `false` — Maulik's decision, 1 Nov 2026 ("I want DRY_RUN off from
   entire system, i want to take real trades"; `docs/DECISIONS-MERGE.md` DRY-LIVE).** Every test
   harness pins `DRY_RUN=true` (`tests/conftest.py`, `decile-blueprint/conftest.py`,
-  `rust/.cargo/config.toml`, `Settings::dry_defaults()`); a new harness must too. An agent still
+  `.cargo/config.toml`, `Settings::dry_defaults()`); a new harness must too. An agent still
   never places a live order, never calls `/execute`/order/GTT endpoints, and never runs execution
   tests against live credentials. AWS stays pinned dry by `deploy-swing.sh`.
 - **`kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence** (trades, fills,

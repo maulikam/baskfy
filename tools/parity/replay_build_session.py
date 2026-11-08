@@ -7,7 +7,7 @@ Called by ``replay_build.py --variant session`` (or ``all``). Writes, under the 
     read (never modified) from the AWS-exit archive tarball
     (``/Volumes/T7-Work/baskfy-aws-exit-20261029/bundle/vol-baskfy-staging_baskfy-archive.tgz``,
     whose ``nse/`` tree is exactly the box's raw archive) and extracted once into a dedicated
-    directory, ``rust/target/replay/sources/aws-exit-20261029/``. The tarball holds F&O files up
+    directory, ``target/replay/sources/aws-exit-20261029/``. The tarball holds F&O files up
     to 28 Oct; a day after that has no F&O file of its own (a task for it misses the archive, asks
     the upstream, gets 404 — the "not published" path).
 ``upstream/kite/instruments/NFO.csv``

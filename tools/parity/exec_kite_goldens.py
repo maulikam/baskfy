@@ -15,7 +15,7 @@ Run:
     PYTHONPATH=<wt>/kite-momentum-rebalancer:<wt>/decile-blueprint/packages/execution/src:\
 <wt>/decile-blueprint/packages/providers/src:<wt>/decile-blueprint/packages/core/src \
       <main>/kite-momentum-rebalancer/.venv/bin/python tools/parity/exec_kite_goldens.py \
-      rust/crates/baskfy-desk/fixtures/exec_kite/goldens.json
+      apps/desk/fixtures/exec_kite/goldens.json
 """
 from __future__ import annotations
 

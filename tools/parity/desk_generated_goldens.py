@@ -6,7 +6,7 @@ lane weekly_plan; DECISIONS-RS R8.WP1).
     <wt>/decile-blueprint/packages/execution/src \\
     <main>/kite-momentum-rebalancer/.venv/bin/python ../tools/parity/desk_generated_goldens.py
 
-Writes ``rust/crates/baskfy-desk/fixtures/weekly/generated.json``: the two synthetic bar fixtures
+Writes ``apps/desk/fixtures/weekly/generated.json``: the two synthetic bar fixtures
 the Python suites use (``_scan_fixture`` for ``test_generated_scan.py``, ``_desk_score_fixture``
 for ``test_desk_score_parity.py`` / ``test_desk_config_parity.py``) and variants of them, each run
 through the desk's real path — ``scan_source.generate`` with its database read replaced by the
@@ -26,7 +26,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-OUT = REPO / "rust" / "crates" / "baskfy-desk" / "fixtures" / "weekly"
+OUT = REPO / "apps" / "desk" / "fixtures" / "weekly"
 
 for key in list(os.environ):
     if key not in ("PATH", "HOME", "PYTHONPATH", "LANG", "TZ") and not key.startswith("LC_"):

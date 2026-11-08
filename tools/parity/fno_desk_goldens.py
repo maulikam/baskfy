@@ -4,7 +4,7 @@ desk's DB-backed tests seed exactly what Python raises and compare what they wri
 Python wrote.
 
     <desk venv>/python tools/parity/fno_desk_goldens.py --db rsd_<name> \\
-        [--out rust/crates/baskfy-desk/fixtures/fno/goldens.json]
+        [--out apps/desk/fixtures/fno/goldens.json]
     python3 tools/parity/fno_desk_goldens.py --emit-cases   # desk_diff's cases, from the goldens
 
 ``--db`` must be a bed clone named ``rsd_*`` (never ``baskfy``); every row written hangs off a
@@ -300,7 +300,7 @@ def _apply(text: str, renames: list[tuple[str, str]]) -> str:
 def main() -> int:  # noqa: C901, PLR0915 - one scenario after another, in order
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db")
-    parser.add_argument("--out", default=str(REPO / "rust/crates/baskfy-desk/fixtures/fno/goldens.json"))
+    parser.add_argument("--out", default=str(REPO / "apps/desk/fixtures/fno/goldens.json"))
     parser.add_argument("--emit-cases", action="store_true",
                         help="build desk_cases/fno_world.json, plans_fno.json and "
                              "desk_fixtures/fno_world from --out (no database)")  # fmt: skip

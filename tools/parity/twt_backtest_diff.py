@@ -11,7 +11,7 @@ seam changed — what a side runs:
 * ``py`` — this file's ``side`` subcommand: the script's ``_run`` body (one ``session.begin()``,
   ``run_twt_backtest`` with the case's start / end / sleeve / ETF flag, the report dict printed as
   ``json.dumps(..., default=str)``), with ``task_py``'s injected clock in the production modules;
-* ``rs`` — ``target/debug/examples/twt_backtest`` (``rust/crates/baskfy-worker/examples``), the
+* ``rs`` — ``target/debug/examples/twt_backtest`` (``apps/worker/examples``), the
   same body over ``baskfy_worker::tasks::sleeve_backtests::run_twt_backtest``.
 
 Everything else — the clones, the database budget, the lock, the ports, and the comparison (the
@@ -124,7 +124,7 @@ def main(argv: list[str]) -> int:
         cmd = ["nice", "-n", "10", str(nd.CARGO), "build", "-p", "baskfy-worker", "--example", "twt_backtest"]
         if profile == "release":
             cmd.append("--release")
-        subprocess.run(cmd, cwd=nd.REPO / "rust", env=env, check=True)
+        subprocess.run(cmd, cwd=nd.REPO, env=env, check=True)
         rest.append("--no-build")
     return td.main(rest)
 

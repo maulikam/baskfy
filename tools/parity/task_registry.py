@@ -4,7 +4,7 @@
 packages/execution/src:services/api/src:services/worker/src .venv/bin/python \
 ../tools/parity/task_registry.py [--out PATH]
 
-The answer key for ``rust/crates/baskfy-worker/tests/task_registry.rs`` (wave 6; DECISIONS-RS
+The answer key for ``apps/worker/tests/task_registry.rs`` (wave 6; DECISIONS-RS
 R8.1): the Rust registry (``baskfy_worker::tasks::registry``) and Beat table
 (``baskfy_worker::tasks::beat``) are held equal to what this prints, so a task added, renamed,
 re-routed or re-scheduled in Python fails the Rust build until the port follows.
@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_OUT = REPO / "rust/crates/baskfy-worker/tests/fixtures/python_task_registry.json"
+DEFAULT_OUT = REPO / "apps/worker/tests/fixtures/python_task_registry.json"
 
 
 def _default(value: Any) -> Any:

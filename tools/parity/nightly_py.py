@@ -19,7 +19,7 @@ when the chain raised, after the task recorded the failure). It is the productio
 
 ``step`` and ``prime`` need the chain one block at a time, which Python's ``_run_chain`` cannot
 do, so :func:`run_block` **mirrors** it block by block, calling the same task functions in the same
-order (``rust/crates/baskfy-worker/src/orchestrator.rs`` has the same split). A mirror can drift:
+order (``apps/worker/src/orchestrator.rs`` has the same split). A mirror can drift:
 :data:`ORCHESTRATOR_SHA256` pins the source of ``_run_chain`` and the step wrappers it was written
 against, and both modes refuse to run when that source changes — re-read the orchestrator, update
 the mirror, then the hash.

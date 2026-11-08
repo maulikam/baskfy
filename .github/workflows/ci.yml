@@ -243,11 +243,11 @@ jobs:
     # The binaries we deploy. Postgres bed tests skip without BASKFY_RS_TEST_DATABASE_URL.
     runs-on: ubuntu-latest
     env:
-      # Beats rust/.cargo/config.toml's host path.
-      CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
+      # Beats .cargo/config.toml's host path.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
     defaults:
       run:
-        working-directory: rust
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.99.1
@@ -255,15 +255,15 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust
+          workspaces: .
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - name: Law 1 dependency list
-        run: ../tools/check-core-deps.sh
+        run: tools/check-core-deps.sh
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          manifest-path: rust/Cargo.toml
+          manifest-path: Cargo.toml
           command: check
 
   namespace:

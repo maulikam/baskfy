@@ -6,7 +6,7 @@
 
 Run from the worktree's ``kite-momentum-rebalancer`` (``app.config`` reads the environment at
 import, so the environment is cleared of every desk variable first). Writes
-``rust/crates/baskfy-desk/fixtures/weekly/*.json``:
+``apps/desk/fixtures/weekly/*.json``:
 
 * ``primitives.json`` — numpy's quicksort argsort, pandas' ``rank(pct=True)``,
   ``Series.quantile`` (linear), numpy ``round(1)`` and Python ``round(x, n)`` over seeded arrays.
@@ -51,7 +51,7 @@ import pandas as pd  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-OUT = REPO / "rust" / "crates" / "baskfy-desk" / "fixtures" / "weekly"
+OUT = REPO / "apps" / "desk" / "fixtures" / "weekly"
 CORPUS = Path("/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads")
 FIXTURE = HERE / "desk_fixtures" / "default" / "kite.json"
 

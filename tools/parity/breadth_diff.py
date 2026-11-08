@@ -112,13 +112,13 @@ def grade(names: dict[str, str]) -> int:
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(expected, f)
         path = f.name
-    env = {**os.environ, "RSD_BREADTH_CASES": path, "CARGO_TARGET_DIR": str(WT / "rust" / "target"),
+    env = {**os.environ, "RSD_BREADTH_CASES": path, "CARGO_TARGET_DIR": str(WT / "target"),
            "CARGO_BUILD_JOBS": "4"}
     r = subprocess.run(  # noqa: S603
         ["nice", "-n", "10", str(Path.home() / ".cargo/bin/cargo"), "test", "-p", "baskfy-desk",
          "--lib", "--", "--ignored", "--exact",
          "lanes::swing::breadth::tests::pipeline_parity_on_the_bed", "--nocapture"],
-        cwd=os.environ.get("RSD_BREADTH_RUST_DIR", str(WT / "rust")), env=env, check=False)
+        cwd=os.environ.get("RSD_BREADTH_RUST_DIR", str(WT)), env=env, check=False)
     os.unlink(path)
     for c in expected:
         print(f"  {c['on']} {c['symbols']} -> {c['python']['source']}: {c['python']['reason']}")

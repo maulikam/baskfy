@@ -6,7 +6,7 @@ exactly as kiteconnect 5.2.1 does, but the request never leaves the process. It 
 a recorded fixture and **recorded** in a call log. The desk's own code is not touched;
 ``desk_harness.py`` swaps the class in before the desk imports it.
 
-Its twin is ``rust/crates/baskfy-desk/src/fake_kite.rs``; the fixture format, the answering rules
+Its twin is ``apps/desk/src/fake_kite.rs``; the fixture format, the answering rules
 and the log line are documented there and must stay identical (``desk_diff.py`` compares the two
 desks' logs). In short:
 

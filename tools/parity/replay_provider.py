@@ -1,6 +1,6 @@
 """The replay provider, Python half: one recorded trading day served from a bundle, no network.
 
-The twin of ``rust/crates/baskfy-providers/src/replay.rs`` (DECISIONS-RS R7.3). Both read the
+The twin of ``crates/providers/src/replay.rs`` (DECISIONS-RS R7.3). Both read the
 same bundle (format 1, documented in that file's module docs and in ``tools/parity/README.md``)
 and must answer every call identically — the same records, the same frames, the same refusal
 messages — so that a difference in what the Python and Rust nightlies write is a difference in

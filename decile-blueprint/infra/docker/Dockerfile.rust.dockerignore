@@ -3,6 +3,7 @@
 !kite-momentum-rebalancer/app/templates
 !kite-momentum-rebalancer/app/static
 rust/target
+rust/testdata
 **/.env
 **/.env.*
 **/*.pem

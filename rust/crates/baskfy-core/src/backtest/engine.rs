@@ -2,7 +2,7 @@
 //!
 //! Ported from `decile-blueprint/packages/core/src/baskfy_core/backtest.py` (docs/10
 //! §"Execution model", steps 1-8, in order) and graded by `tests/golden_backtest_engine.rs`
-//! against `go/testdata/golden/L1/backtest/run_{backtest,fragility}.*`.
+//! against `rust/testdata/golden/L1/backtest/run_{backtest,fragility}.*`.
 //!
 //! The schedules, weights, costs, price panel and the look-ahead guard are
 //! [`super::helpers`]; this file is the day walk that uses them. Every read of dated data goes

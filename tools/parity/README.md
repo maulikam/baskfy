@@ -8,7 +8,7 @@ cd decile-blueprint && .venv/bin/python -m tools.parity.dump_L1     # or: PYTHON
 cd kite-momentum-rebalancer && .venv/bin/python ../tools/parity/dump_L4.py
 ```
 
-Goldens land in `go/testdata/golden/L<n>/…` and are committed. Dumpers import Python; they never
+Goldens land in `rust/testdata/golden/L<n>/…` and are committed. Dumpers import Python; they never
 modify it, never use the network, never open the desk's live database or `portfolio.db`.
 
 ## The desk: `desk_diff.py` (wave D, DECISIONS-RS R8.3–R8.6)

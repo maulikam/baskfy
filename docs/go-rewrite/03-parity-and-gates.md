@@ -12,8 +12,8 @@ matches Python. It runs a test that diffs against what Python produced.
 ```
 tools/parity/
   golden.py            # canonical JSON dumper (Decimal→"12.34", date→"2026-08-30", DataFrame→{columns,rows}, NaN→null, sets→sorted lists)
-  dump_L1.py …         # per lane: import the Python function, run it on fixtures/corpus, write go/testdata/golden/L<n>/<module>/<case>.json
-go/testdata/golden/L<n>/<module>/<case>.json
+  dump_L1.py …         # per lane: import the Python function, run it on fixtures/corpus, write rust/testdata/golden/L<n>/<module>/<case>.json
+rust/testdata/golden/L<n>/<module>/<case>.json
   { "fn": "baskfy_core.score.score_frame", "inputs": {...}, "output": {...}, "meta": {"dumped_at": ..., "known_bug": null | "DECISIONS.md §21.9", "tolerance": {"float": 1e-9} } }
 go/internal/testkit/golden.go
   LoadGolden(t, "L1/score/case_001.json") → inputs + expected; Diff(expected, got, tol)

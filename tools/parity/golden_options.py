@@ -4,7 +4,7 @@
     uv run python ../tools/parity/golden_options.py
 
 Dumps six pure functions of ``baskfy_core.options`` into
-``go/testdata/golden/L1/options/<function>.case_NNN.json``, written ``stable=True`` by
+``rust/testdata/golden/L1/options/<function>.case_NNN.json``, written ``stable=True`` by
 ``tools/parity/golden.py``'s own encoder, so two runs are byte-identical:
 
 * ``gating.options_gates``: the four-flag AND, every combination for O2 plus each sleeve all-on;
@@ -1093,4 +1093,4 @@ def dump_options() -> list[Path]:
 
 if __name__ == "__main__":
     paths = dump_options()
-    print(f"{len(paths)} options goldens written under go/testdata/golden/{LANE}/")
+    print(f"{len(paths)} options goldens written under rust/testdata/golden/{LANE}/")

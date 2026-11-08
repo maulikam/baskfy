@@ -1,5 +1,5 @@
 //! Grades the backtest, its suite, the replay day and the executor against every golden in
-//! `go/testdata/golden/L1/options`, each called from its stored inputs as `golden_options.py` does.
+//! `rust/testdata/golden/L1/options`, each called from its stored inputs as `golden_options.py` does.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::collections::BTreeMap;

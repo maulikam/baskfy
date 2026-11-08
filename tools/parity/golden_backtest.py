@@ -4,7 +4,7 @@
     .venv/bin/python ../tools/parity/golden_backtest.py
 
 Dumps the public surface of ``baskfy_core.backtest`` (the point-in-time engine, docs/10) and
-``baskfy_core.backtest_metrics`` into ``go/testdata/golden/L1/backtest/<function>.case_NNN.json``,
+``baskfy_core.backtest_metrics`` into ``rust/testdata/golden/L1/backtest/<function>.case_NNN.json``,
 written ``stable=True`` by ``tools/parity/golden.py``'s own encoder, so two runs are byte-identical.
 
 Like the options lane, every case's inputs are stored as JSON first and each function is called
@@ -1388,4 +1388,4 @@ def dump_backtest() -> list[Path]:
 
 if __name__ == "__main__":
     paths = dump_backtest()
-    print(f"{len(paths)} backtest goldens written under go/testdata/golden/{LANE}/")
+    print(f"{len(paths)} backtest goldens written under rust/testdata/golden/{LANE}/")

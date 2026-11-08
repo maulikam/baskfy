@@ -2,7 +2,7 @@
 
 **What this is.** The instruction pack for rewriting Baskfy's Python backend in **Go**, run by
 **eight Claude Code terminals working as separate developers in parallel**, integrated by
-Maulik (+ the Cowork session acting as CI/reviewer). Same convention as `MERGE-PROMPTS.md`
+Maulik (+ the Cowork session acting as CI/reviewer). Same convention as `docs/history/MERGE-PROMPTS.md`
 and `docs/smallcase/`: ordered lanes, acceptance criteria, a live status page, decisions
 recorded rather than asked.
 
@@ -68,7 +68,7 @@ evening with the same prompts (every prompt is resumable). The order of value is
 
 | When | What | Gate |
 |---|---|---|
-| T+0:00 → 0:45 | **Wave 0.** L0 builds the foundation (`go/` skeleton, `internal/domain`, config, db+sqlc baseline from a live schema dump, obs, testkit, CI). L1–L8 do *not* idle: they read their Python scope, write `docs/go-rewrite/status/L<n>.md` (function inventory), and **dump goldens with Python** into `go/testdata/golden/L<n>/`. | **G0** at T+0:45: `go build ./...` and `go test ./internal/domain/...` green on `go/main`; every lane rebased. |
+| T+0:00 → 0:45 | **Wave 0.** L0 builds the foundation (`go/` skeleton, `internal/domain`, config, db+sqlc baseline from a live schema dump, obs, testkit, CI). L1–L8 do *not* idle: they read their Python scope, write `docs/go-rewrite/status/L<n>.md` (function inventory), and **dump goldens with Python** into `rust/testdata/golden/L<n>/`. | **G0** at T+0:45: `go build ./...` and `go test ./internal/domain/...` green on `go/main`; every lane rebased. |
 | T+0:45 → 2:30 | **Wave 1.** Port the *must* scope against goldens. | **G1** at T+2:30: each lane's must-scope compiles, its golden tests pass, the lane is merged into `go/main`. |
 | T+2:30 → 4:30 | **Wave 2.** *Should* scope; API lanes wire to core; L8 runs the pipeline end-to-end; L4 starts the desk console. | **G2** at T+4:30: `cmd/api` serves the web app's must-routes on :8001 and the Playwright subset (`screens`, `portfolios`, `market`, `nav`) is green against it; `cmd/worker` completes `pipeline.nightly` in DRY_RUN against a DB copy. |
 | T+4:30 → 6:00 | **Wave 3.** *Could* scope; desk DRY_RUN parity; docs; status. | **G3** at T+6:00: `scripts/friday_drill.py`-equivalent produces the same plan from the Go desk as from Python (DRY_RUN); `docs/go-rewrite/STATUS.md` is honest and complete. |

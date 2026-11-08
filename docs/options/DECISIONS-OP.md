@@ -1588,7 +1588,7 @@ session from 10:20. They are first guesses, to be tuned on the box.
 
 ## OP15.1 — The Go goldens cover six small pure functions, not the scans or the plan builders · ⚠ UNREVIEWED
 
-`06` OP15 asks for goldens in `go/testdata/golden/L1/options/`. **Choice.** Six functions, 47
+`06` OP15 asks for goldens in `rust/testdata/golden/L1/options/`. **Choice.** Six functions, 47
 cases, in a dumper of their own (`tools/parity/golden_options.py`, reusing `golden.py`'s encoder):
 `gating.options_gates` (all 16 flag rows for O2, plus each sleeve all-on), `costs.charges`,
 `execution.simulate_fill`, `execution.never_naked`, `condor.exit_decision` (including OP13.2's
@@ -1613,7 +1613,7 @@ pinned `"false"`, so every sleeve is PAPER whatever the execution flags say. The
 again after a crash inside the session. With the monitor flag false it idles.
 `tests/test_options_monitor_loop.py` pins the clock and the compose shape. **Not flipped:** the
 monitor flag stays false on the box. It is operational (PACK.11), but it starts the paper periods,
-and that is Maulik's call; `OP-FINAL-REPORT.md` asks for it. **Reversal.** Remove the service and
+and that is Maulik's call; `docs/history/OP-FINAL-REPORT.md` asks for it. **Reversal.** Remove the service and
 the five lines.
 
 ## OP15.3 — `verify-options.sh` has a dev-stack mode · ⚠ UNREVIEWED

@@ -5,7 +5,7 @@
 //! values in, frames and values out. No database, no network, no disk, no clock, no
 //! environment. `tests/law_one.rs` enforces it by scanning this crate's source and manifest.
 //!
-//! Every function is graded against the language-neutral goldens in `go/testdata/golden`
+//! Every function is graded against the language-neutral goldens in `rust/testdata/golden`
 //! through `baskfy-testkit`; see `docs/rust-rewrite/README.md`.
 //!
 //! Module layout mirrors the Python package one-to-one (`baskfy_core.swing.stops` is

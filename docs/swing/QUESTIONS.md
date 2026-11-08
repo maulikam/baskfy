@@ -15,7 +15,7 @@ later leaf if the restart is forgotten twice.
 
 ## Q-SW12-1 (3 Sep 2026) — the plan sizes on the unsnapped levels and shows the snapped ones
 
-Found by the golden lane (`go/testdata/golden/L1/swing/build_entries.case_016.json`): a watch
+Found by the golden lane (`rust/testdata/golden/L1/swing/build_entries.case_016.json`): a watch
 item at trigger 123.37 / stop 118.11 is sized on that 5.26 distance (950 shares, `risk_inr`
 4997.00, "stop 4.26% below"), then `_entry_line` snaps the levels to the tick — trigger
 **123.35**, stop 118.10 — so the line the desk sends risks 950 × 5.25 = 4987.50, not the number

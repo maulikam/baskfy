@@ -1,6 +1,6 @@
 //! Parity goldens for the Rust rewrite: load a case, decode its inputs, grade an output.
 //!
-//! The answer key is `go/testdata/golden/**.json`, written by `tools/parity/golden.py` from the
+//! The answer key is `rust/testdata/golden/**.json`, written by `tools/parity/golden.py` from the
 //! live Python. Encoding (golden.py's docstring is authoritative):
 //!
 //! | Python | golden JSON | decode with |

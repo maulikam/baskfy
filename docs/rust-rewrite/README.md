@@ -39,7 +39,7 @@ binary will be reached; a Rust service cuts over by moving one Caddy route at a 
 
 ## Grading: the goldens are the answer key
 
-`go/testdata/golden/**.json` — language-neutral, written by `tools/parity/golden.py` from the
+`rust/testdata/golden/**.json` — language-neutral, written by `tools/parity/golden.py` from the
 live Python (the directory name is historical; it is shared by every port). Format:
 `{"fn", "inputs", "output", "meta": {"known_bug", "tolerance", "notes", "stable"}}`.
 

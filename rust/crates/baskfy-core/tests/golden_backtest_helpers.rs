@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! The backtest helpers against the goldens (`go/testdata/golden/L1/backtest`): `month_key`,
+//! The backtest helpers against the goldens (`rust/testdata/golden/L1/backtest`): `month_key`,
 //! `month_end`, `year_fraction`, `rebalance_dates`, `shift_schedule`, `raw_weights`,
 //! `apply_position_limits`, `CostSpec.charge`, `PricePanel`, `PointInTimeReader` and
 //! `AdjustmentCoverage.caveats` — 71 cases.

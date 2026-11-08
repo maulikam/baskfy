@@ -286,12 +286,12 @@ that make it honest.
 **Goal:** the run ends with the box able to run six paper expiries and Maulik holding one
 document that says what is true.
 
-- Goldens for L1 in `go/testdata/golden/L1/condor/` guarded by `test_condor_goldens.py`; a line
+- Goldens for L1 in `rust/testdata/golden/L1/condor/` guarded by `test_condor_goldens.py`; a line
   in `docs/go-rewrite/REQUESTS.md`.
 - The mutation report re-run; `tools/deploy` and compose gain the condor process and the four
   flags (false); `verify-condor.sh` on the box's side (`DRY_RUN=true`, three product/execution
   flags false, the monitor and collector flags as set, the next expiry date, the token state).
-- `OC-FINAL-REPORT.md` at the repo root in the style of `SW-FINAL-REPORT.md`: what was built,
+- `OC-FINAL-REPORT.md` at the repo root in the style of `docs/history/SW-FINAL-REPORT.md`: what was built,
   what was decided, what is NOT done, what needs Maulik, the exact steps for the first paper
   expiry morning, and the six-expiry checklist of `02` §3.2.
 - NEEDS-MAULIK § Condor reduced to hands-only items.

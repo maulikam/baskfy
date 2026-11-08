@@ -203,7 +203,7 @@ published bars, and the numbers on them are exchange prices.
   adapter (spy over the gateway); every `sw_` write carries `BASKFY_SOLE_USER_ID`; a SELL never
   exceeds what the sleeve owns; a stop never falls (property test over `apply`); the monitor's
   strategy has no `place` call (source scan, `services/api/tests/test_sleeves_are_not_orders.py` style).
-- The **DRY_RUN morning drill** in `RUN-AND-TEST.md` §Swing: premarket → replayed morning →
+- The **DRY_RUN morning drill** in `docs/history/RUN-AND-TEST.md` §Swing: premarket → replayed morning →
   confirm two lines → EOD → next morning's plan, end to end, **0 orders reaching a broker**.
 - **AC:** every test above green; the drill script exits 0 and prints the counters that
   `sw_session` recorded.
@@ -226,9 +226,9 @@ published bars, and the numbers on them are exchange prices.
 **Goal:** a fresh session, or the Go lane, can pick this up.
 
 - `tools/parity/golden.py` learns `swing`: dump `detect_setups`, `size_position`, `manage`,
-  `exposure_tier` outputs for the fixture set into `go/testdata/golden/L1/swing/`; a line in
+  `exposure_tier` outputs for the fixture set into `rust/testdata/golden/L1/swing/`; a line in
   `docs/go-rewrite/REQUESTS.md`.
-- `SW-FINAL-REPORT.md` at the root: what was built, what was decided, what is NOT done, what
+- `docs/history/SW-FINAL-REPORT.md` at the root: what was built, what was decided, what is NOT done, what
   needs Maulik (the `02` §3 checklist, verbatim, with the current evidence per item), and the
   exact steps for the first DRY_RUN morning.
 - `NEEDS-MAULIK.md` gains a **Swing** heading with: sleeve capital, the risk he starts with, the

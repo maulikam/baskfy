@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! TWT lane A against the goldens (`go/testdata/golden/L1/twt`): `config` (through every
+//! TWT lane A against the goldens (`rust/testdata/golden/L1/twt`): `config` (through every
 //! case's config input), `indicators`, `calendar`, `breadth`, `signals`, `sizing`, `sleeve`,
 //! `drift` and `published`.
 //!
@@ -127,7 +127,7 @@ fn run(fn_name: &str) {
 }
 
 /// Differential fuzz against the live Python: `TWT_FUZZ_DIR` holds golden-shaped cases written
-/// by a generator that calls the dumper's own `CALLS` (never into `go/testdata`). Ignored by
+/// by a generator that calls the dumper's own `CALLS` (never into `rust/testdata`). Ignored by
 /// default; run with `TWT_FUZZ_DIR=... cargo test --test golden_twt_a -- --ignored`.
 #[test]
 #[ignore = "needs TWT_FUZZ_DIR from the differential generator"]

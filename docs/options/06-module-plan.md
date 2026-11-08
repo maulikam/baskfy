@@ -36,7 +36,7 @@ Nothing flips a money flag. **Data-blocked** modules are marked ⛁ and say what
 | OC9 backtest | OP12 | per sleeve; Tier 3 ⛁ |
 | OC10 gating proof | OP13 | + `OPTIONS_ENABLED` side door, + no auto-execute scan |
 | OC11 hardening | OP14 | |
-| OC12 verification + report | OP15 | `OP-FINAL-REPORT.md` |
+| OC12 verification + report | OP15 | `docs/history/OP-FINAL-REPORT.md` |
 
 ---
 
@@ -311,10 +311,10 @@ reaching a broker**.
 **Goal:** the box can run every sleeve's paper period, and Maulik holds one document that says
 what is true.
 
-- Goldens for the Go rewrite in `go/testdata/golden/L1/options/` + a line in
+- Goldens for the Go rewrite in `rust/testdata/golden/L1/options/` + a line in
   `docs/go-rewrite/REQUESTS.md`; mutation report re-run; compose and `tools/deploy` gain the monitor
   and the flags (money flags false); `verify-options.sh` (flags, next expiry, token state).
-- `OP-FINAL-REPORT.md` at the repo root (style of `SW-FINAL-REPORT.md`): built, decided, NOT done,
+- `docs/history/OP-FINAL-REPORT.md` at the repo root (style of `docs/history/SW-FINAL-REPORT.md`): built, decided, NOT done,
   needs Maulik, the first paper morning step by step, and `02` §3.2's paper checklist per sleeve.
 - **AC:** goldens byte-stable; both suites green; `verify-options.sh` green against the dev stack;
   STATUS all ✅ except what the report names.

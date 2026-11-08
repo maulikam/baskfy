@@ -13,11 +13,11 @@ use crate::error::TestkitError;
 use crate::frame::{decode_frame, encode_frame};
 use crate::scalar;
 
-/// `<repo>/go/testdata/golden`, resolved from this crate's manifest directory — never from
+/// `<repo>/rust/testdata/golden`, resolved from this crate's manifest directory — never from
 /// the current working directory — so it is right under `cargo test` from anywhere.
 pub fn golden_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../go/testdata/golden")
+        .join("../../testdata/golden")
         .components()
         .collect()
 }

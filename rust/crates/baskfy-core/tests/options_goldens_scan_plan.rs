@@ -1,5 +1,5 @@
 //! Grades the options scan and the three plan builders against every golden in
-//! `go/testdata/golden/L1/options`: `scan.scan_all`, `plan.decide_o1` (+ `finalize_o1`),
+//! `rust/testdata/golden/L1/options`: `scan.scan_all`, `plan.decide_o1` (+ `finalize_o1`),
 //! `plan_o2.decide_o2` (+ `finalize_o2`) and `plan_o3.decide_o3` (+ `finalize_o3`). Each case is
 //! called from its stored inputs exactly as `tools/parity/golden_options.py` calls Python.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

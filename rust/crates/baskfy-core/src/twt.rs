@@ -1,6 +1,6 @@
 //! The three-weeks-tight sleeve — port of `baskfy_core.twt` (docs/twt).
 //!
-//! Goldens: `go/testdata/golden/L1/twt/<module>.<function>.case_NNN.json`.
+//! Goldens: `rust/testdata/golden/L1/twt/<module>.<function>.case_NNN.json`.
 
 pub mod backtest;
 pub mod breadth;

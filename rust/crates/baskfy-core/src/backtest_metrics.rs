@@ -1,7 +1,7 @@
 //! Port of `baskfy_core.backtest_metrics`.
 //!
 //! Metrics over a backtest's curve and trades (docs/10 §Outputs). Goldens:
-//! `go/testdata/golden/L1/backtest/{compute_metrics,downsample_curve,drawdown_series,
+//! `rust/testdata/golden/L1/backtest/{compute_metrics,downsample_curve,drawdown_series,
 //! metrics_hash,monthly_returns,rolling_distribution,round_trips}.case_NNN.json`.
 //!
 //! Money stays [`Decimal`]; statistics are `f64`, exactly where the Python uses `Decimal` and

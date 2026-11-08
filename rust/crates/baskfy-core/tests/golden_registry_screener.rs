@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! `baskfy_core.factor_registry` and `baskfy_core.screener` against the goldens
-//! (`go/testdata/golden/L1/ranking/{factor_registry,screener}.*.case_NNN.json`).
+//! (`rust/testdata/golden/L1/ranking/{factor_registry,screener}.*.case_NNN.json`).
 //!
 //! Every case for each function is loaded and graded strictly by the testkit, and each
 //! function's case count is asserted so a dropped golden fails loudly. A Python raise is graded

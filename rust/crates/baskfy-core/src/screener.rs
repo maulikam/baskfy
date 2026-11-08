@@ -1,7 +1,7 @@
 //! Port of `baskfy_core.screener`.
 //!
 //! The pure screener query builder (docs/06-screener-semantics.md). Goldens:
-//! `go/testdata/golden/L1/ranking/screener.*`.
+//! `rust/testdata/golden/L1/ranking/screener.*`.
 //!
 //! A validated [`ScreenDefinition`] plus an as-of date becomes **one** parameterised SQL
 //! statement, following docs/06 §"Reference SQL skeleton" step for step. Nothing here opens a

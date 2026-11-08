@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! TWT lane B against the goldens (`go/testdata/golden/L1/twt`): `exits`, `plan` and
+//! TWT lane B against the goldens (`rust/testdata/golden/L1/twt`): `exits`, `plan` and
 //! `backtest`.
 //!
 //! Each case is decoded exactly as `tools/parity/golden_twt.py`'s `call_*` decodes it, the Rust
@@ -110,7 +110,7 @@ fn run(fn_name: &str) {
 }
 
 /// Differential fuzz against the live Python: `TWT_B_FUZZ_DIR` holds golden-shaped cases
-/// written by a generator that calls the dumper's own `CALLS` (never into `go/testdata`).
+/// written by a generator that calls the dumper's own `CALLS` (never into `rust/testdata`).
 /// Ignored by default; run with `TWT_B_FUZZ_DIR=... cargo test --test golden_twt_b --
 /// --ignored`.
 #[test]

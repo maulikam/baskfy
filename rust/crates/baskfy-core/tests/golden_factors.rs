@@ -1,5 +1,5 @@
 //! The factor engine against the goldens: `compute_factors` and `compute_factors_unrounded`
-//! (`go/testdata/golden/L1/ranking/factors.compute_factors{,_unrounded}.case_NNN.json`).
+//! (`rust/testdata/golden/L1/ranking/factors.compute_factors{,_unrounded}.case_NNN.json`).
 //!
 //! Every case is loaded and graded strictly by the testkit; none is filtered. A case whose
 //! Python raised stores `{"raises": {"type": "ValueError", "message": …}}`, which the port

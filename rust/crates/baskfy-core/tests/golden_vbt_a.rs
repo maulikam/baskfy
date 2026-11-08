@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! VBT lane A against the goldens: `baskfy_core.vbt.{config, calendar, indicators, signals,
 //! breadth, sizing, sleeve, drift, published, orders}`
-//! (`go/testdata/golden/L1/vbt/<module>.<function>.case_NNN.json`).
+//! (`rust/testdata/golden/L1/vbt/<module>.<function>.case_NNN.json`).
 //!
 //! Every case of every function is loaded and graded strictly by the testkit; the case count
 //! per function is asserted so a new or vanished golden is noticed. Inputs are decoded the way

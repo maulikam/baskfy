@@ -1,6 +1,6 @@
 //! Port of `baskfy_core.factors` — the factor engine (`compute_factors`).
 //!
-//! Goldens: `go/testdata/golden/L1/ranking/factors.compute_factors{,_unrounded}.case_NNN`.
+//! Goldens: `rust/testdata/golden/L1/ranking/factors.compute_factors{,_unrounded}.case_NNN`.
 //!
 //! docs/05 is the numerical contract and the Python module follows it section by section; this
 //! port follows the Python, line for line, including the modules it calls and that have no Rust

@@ -45,8 +45,8 @@ data; anything touching the weekly momentum book or the R1–R4 overlay; a Track
 - B10 Kite limits are hard constraints: quote 1 req/s and ≤ 500 instruments/call; historical 3 req/s; orders 10/s, 400/min. The monitor polls quotes at most once per 5 s; anything faster is a bug.
 
 **Verification and hand-off (SW12)**
-- B11 Goldens for `detect_setups`, `size_position`, `manage`, `exposure_tier`, `build_entries`, `evaluate_trigger` into `go/testdata/golden/L1/swing/`; byte-stable across two runs; a line in `docs/go-rewrite/REQUESTS.md`.
-- B12 `SW-FINAL-REPORT.md` includes, verbatim, the rewritten `02` §3 checklist with evidence per item, the exact steps for the **one DRY_RUN drill morning**, and then the exact steps for the **first live morning** (login before 09:00, sleeve capital set, flag flip, what the 09:09 / 09:16 / 09:20 / 10:45 / 15:15 / 21:05 jobs will do, what to watch on the desk page). `NEEDS-MAULIK.md` gets a Swing heading listing only what needs his hands: sleeve capital, the flag flip, the Telegram token, the S2 probe morning.
+- B11 Goldens for `detect_setups`, `size_position`, `manage`, `exposure_tier`, `build_entries`, `evaluate_trigger` into `rust/testdata/golden/L1/swing/`; byte-stable across two runs; a line in `docs/go-rewrite/REQUESTS.md`.
+- B12 `docs/history/SW-FINAL-REPORT.md` includes, verbatim, the rewritten `02` §3 checklist with evidence per item, the exact steps for the **one DRY_RUN drill morning**, and then the exact steps for the **first live morning** (login before 09:00, sleeve capital set, flag flip, what the 09:09 / 09:16 / 09:20 / 10:45 / 15:15 / 21:05 jobs will do, what to watch on the desk page). `NEEDS-MAULIK.md` gets a Swing heading listing only what needs his hands: sleeve capital, the flag flip, the Telegram token, the S2 probe morning.
 
 **General**
 - B13 Every threshold is a `baskfy_core.swing.config` field or an `sw_config` column; a literal in a task, router or page is a defect.

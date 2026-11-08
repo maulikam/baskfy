@@ -1,4 +1,4 @@
-"""Parity goldens for baskfy_core.exposure (regime + allocation). Writes go/testdata/golden/L1/exposure.
+"""Parity goldens for baskfy_core.exposure (regime + allocation). Writes rust/testdata/golden/L1/exposure.
 
     cd decile-blueprint
     PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py

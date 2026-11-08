@@ -5,7 +5,7 @@
         .venv/bin/python ../tools/parity/golden_fno.py
 
 Dumps the public pure functions of every ``baskfy_core.fno`` module into
-``go/testdata/golden/L1/fno/<module>.<function>.case_NNN.json``, written ``stable=True`` by
+``rust/testdata/golden/L1/fno/<module>.<function>.case_NNN.json``, written ``stable=True`` by
 ``tools/parity/golden.py``'s own encoder, so two runs are byte-identical. The money paths are
 covered hardest — ``gating`` (every flag combination), ``exits`` (every exit reason and its
 boundary), ``costs``, ``sizing``, ``ledger`` / ``journal`` (every pause) — then the calendar, the
@@ -3781,4 +3781,4 @@ def dump_fno() -> list[Path]:
 
 if __name__ == "__main__":
     paths = dump_fno()
-    print(f"{len(paths)} fno goldens written under go/testdata/golden/{LANE}/")
+    print(f"{len(paths)} fno goldens written under rust/testdata/golden/{LANE}/")

@@ -1,4 +1,4 @@
-//! The harness proof: every golden under go/testdata/golden loads, and its inputs and output
+//! The harness proof: every golden under rust/testdata/golden loads, and its inputs and output
 //! decode structurally (frames into polars, dates/decimals parsed) without error. A frame also
 //! survives decode -> encode unchanged, which is what grading a port's frame relies on.
 #![allow(

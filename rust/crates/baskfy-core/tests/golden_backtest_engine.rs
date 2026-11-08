@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! `run_backtest` and `run_fragility` against the goldens (`go/testdata/golden/L1/backtest`):
+//! `run_backtest` and `run_fragility` against the goldens (`rust/testdata/golden/L1/backtest`):
 //! 22 + 3 cases.
 //!
 //! Each case is decoded exactly as `tools/parity/golden_backtest.py`'s `call_run_backtest` /

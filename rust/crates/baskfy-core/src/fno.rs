@@ -1,6 +1,6 @@
 //! The F&O overnight sleeve — port of `baskfy_core.fno` (docs/fno).
 //!
-//! Goldens: `go/testdata/golden/L1/fno/<module>.<function>.case_NNN.json`.
+//! Goldens: `rust/testdata/golden/L1/fno/<module>.<function>.case_NNN.json`.
 
 pub mod calendar;
 pub mod checklist;

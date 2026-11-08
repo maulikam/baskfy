@@ -1,6 +1,6 @@
 //! Port of `baskfy_core.ranking_engine`.
 //!
-//! ranking, explanation and target scores. Goldens: go/testdata/golden/L1/ranking.
+//! ranking, explanation and target scores. Goldens: rust/testdata/golden/L1/ranking.
 //!
 //! The ranking engine — docs/ranking/PLAN.md contract C4. Input is one frame: the selected
 //! universe for `as_of` **after** the `apply_filters_on` bucket and **before** any filter,

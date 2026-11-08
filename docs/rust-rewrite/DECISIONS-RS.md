@@ -8,7 +8,7 @@ charter are tagged **⚠ UNREVIEWED** until Maulik reviews them.
 
 **Context.** `docs/go-rewrite/DECISIONS-GO.md` G0.1 (30 Aug 2026) chose Go for the backend
 rewrite and rejected Rust for compile times and borrow-checker churn in an agent loop. The Go
-sprint produced the language-neutral goldens (`go/testdata/golden`, 126 files) and the plan,
+sprint produced the language-neutral goldens (`rust/testdata/golden`, 126 files) and the plan,
 but no Go code is in the tree.
 
 **Choice.** Maulik, in session, 29 Oct 2026: *"also backend needs to rewrite complelty in

@@ -1,6 +1,6 @@
 """The options goldens (OP15) still say what the live code says, byte for byte.
 
-``go/testdata/golden/L1/options/*.json`` is the Go lane's answer key for six pure functions of
+``rust/testdata/golden/L1/options/*.json`` is the Go lane's answer key for six pure functions of
 ``baskfy_core.options``, dumped by ``tools/parity/golden_options.py`` from inputs written in full.
 This recomputes every file from its stored inputs through the live function and re-renders it with
 the dumper's own encoder; a rule change fails here first. It also checks that the dumper's case set
@@ -19,7 +19,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 DUMPER = ROOT / "tools" / "parity" / "golden_options.py"
-LANE_DIR = ROOT / "go" / "testdata" / "golden" / "L1" / "options"
+LANE_DIR = ROOT / "rust" / "testdata" / "golden" / "L1" / "options"
 CASES = sorted(LANE_DIR.glob("*.json")) if LANE_DIR.is_dir() else []
 
 

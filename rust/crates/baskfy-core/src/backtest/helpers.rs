@@ -3,7 +3,7 @@
 //! `PointInTimeReader`, `AdjustmentCoverage`.
 //!
 //! Ported from `decile-blueprint/packages/core/src/baskfy_core/backtest.py` and graded by
-//! `tests/golden_backtest_helpers.rs` against `go/testdata/golden/L1/backtest`.
+//! `tests/golden_backtest_helpers.rs` against `rust/testdata/golden/L1/backtest`.
 //!
 //! ## Python's decimal context ([`WideDecimal`])
 //!

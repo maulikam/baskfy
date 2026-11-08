@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Swing area B against the goldens: `detect_setups` and `build_entries`
-//! (`go/testdata/golden/L1/swing/{detect_setups,build_entries}.case_NNN.json`).
+//! (`rust/testdata/golden/L1/swing/{detect_setups,build_entries}.case_NNN.json`).
 //!
 //! Every case for each function is loaded and graded strictly by the testkit. The goldens
 //! were regenerated from the live Python on 29 Oct 2026, after LV10 (pyramiding), by

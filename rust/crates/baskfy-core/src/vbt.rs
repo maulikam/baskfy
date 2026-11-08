@@ -1,6 +1,6 @@
 //! The VBT sleeve — port of `baskfy_core.vbt` (docs/vbt).
 //!
-//! Goldens: `go/testdata/golden/L1/vbt/<module>.<function>.case_NNN.json`.
+//! Goldens: `rust/testdata/golden/L1/vbt/<module>.<function>.case_NNN.json`.
 
 pub mod backtest;
 pub mod breadth;

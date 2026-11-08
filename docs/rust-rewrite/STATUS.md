@@ -3,7 +3,7 @@
 Live status of the port (README.md for the plan, DECISIONS-RS.md for the calls). Updated by
 whoever changes a module's state; loud about what is **not** done.
 
-**States:** `not started` · `goldens exist (n)` — the answer key is in `go/testdata/golden`,
+**States:** `not started` · `goldens exist (n)` — the answer key is in `rust/testdata/golden`,
 no Rust yet · `declared` — the Rust module file exists (empty) · `ported` — Rust compiles and
 its golden tests run · `verified` — every golden for the module green, clippy clean, reviewed.
 
@@ -35,7 +35,7 @@ its golden tests run · `verified` — every golden for the module green, clippy
 
 ## Wave 1 (RS1, RS1.1 — 29 Oct 2026) — swing and options ported, 126 of 126
 
-Graded per function against `go/testdata/golden/L1/{swing,options}` by
+Graded per function against `rust/testdata/golden/L1/{swing,options}` by
 `rust/crates/baskfy-core/tests/golden_{swing_a,swing_b,options}.rs`. Each area was also checked
 by a differential fuzz against the live Python; the bugs it found are fixed (DECISIONS-RS R1.x).
 The stale swing keys were regenerated at RS1.1 (R1.1, resolved).

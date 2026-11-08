@@ -1,6 +1,6 @@
 """The swing goldens (SW12, STANDING-ANSWERS B11) still say what the live code says.
 
-``go/testdata/golden/L1/swing/*.json`` is the answer key the Go lane is graded against, dumped
+``rust/testdata/golden/L1/swing/*.json`` is the answer key the Go lane is graded against, dumped
 by ``tools/parity/golden.py swing`` from the fixture set in ``swing_fixtures`` and the swing
 test modules. Every case stores its inputs in full; this test feeds those inputs back through
 the live function and re-renders the whole file with the dumper's own encoder. A rule change in
@@ -21,7 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 GOLDEN_PY = ROOT / "tools" / "parity" / "golden.py"
-SWING_DIR = ROOT / "go" / "testdata" / "golden" / "L1" / "swing"
+SWING_DIR = ROOT / "rust" / "testdata" / "golden" / "L1" / "swing"
 
 #: B11 names these six. Each must have at least one case on disk.
 SIX_FUNCTIONS = (

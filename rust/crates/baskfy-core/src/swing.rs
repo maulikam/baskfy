@@ -1,6 +1,6 @@
 //! The swing sleeve — port of `baskfy_core.swing` (docs/swing/04-business-rules.md).
 //!
-//! Goldens: `go/testdata/golden/L1/swing/<function>.case_NNN.json`.
+//! Goldens: `rust/testdata/golden/L1/swing/<function>.case_NNN.json`.
 
 pub mod config;
 pub mod indicators;

@@ -1,7 +1,7 @@
 //! Port of `baskfy_core.factor_registry`.
 //!
 //! The factor catalogue and its SQL fragments (pure text). Goldens:
-//! `go/testdata/golden/L1/ranking/factor_registry.*`.
+//! `rust/testdata/golden/L1/ranking/factor_registry.*`.
 //!
 //! docs/06 §"The factor registry": one table carrying, per factor, `key`, `label`, `family`,
 //! `sql_expr`, `unit`, `higher_is_better` and `null_policy`. It is the single source of truth for

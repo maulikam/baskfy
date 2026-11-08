@@ -17,7 +17,7 @@ Rebase onto `go/main` at every gate: `git fetch . go/main && git rebase go/main`
 ## Ownership (the no-conflict rule)
 
 Write only under: your Go directories (01 §Layout), `go/internal/db/queries/L<n>_*.sql`,
-`go/testdata/golden/L<n>/`, `tools/parity/dump_L<n>*.py`, `docs/go-rewrite/status/L<n>.md`,
+`rust/testdata/golden/L<n>/`, `tools/parity/dump_L<n>*.py`, `docs/go-rewrite/status/L<n>.md`,
 your row in `STATUS.md`, your entries in `DECISIONS-GO.md` and `REQUESTS.md`, and a `## Go
 rewrite` section of `NEEDS-MAULIK.md`. Generated directories are regenerated, not edited.
 Everything else is someone else's — ask in `REQUESTS.md`.

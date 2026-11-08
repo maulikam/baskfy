@@ -1,4 +1,4 @@
-//! Grades the options ports against every golden in `go/testdata/golden/L1/options`:
+//! Grades the options ports against every golden in `rust/testdata/golden/L1/options`:
 //! `condor.exit_decision`, `costs.charges`, `execution.never_naked`, `execution.simulate_fill`,
 //! `gating.options_gates` and `ledger.journal_figures`. Each case is called from its stored
 //! inputs exactly as `tools/parity/golden_options.py` calls the Python function.

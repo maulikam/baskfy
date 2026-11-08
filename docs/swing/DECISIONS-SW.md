@@ -180,7 +180,7 @@ that depends on whatever the developer's database happens to contain is not a te
 exists, and it would still not make an acceptance criterion reproducible on another machine.
 
 **Reversal.** None needed; it is an observation. If a real-data check becomes necessary, the
-backfill command is in `RUN-AND-TEST.md` §2.
+backfill command is in `docs/history/RUN-AND-TEST.md` §2.
 
 
 ## SW1.1 — The pack's tests assert shapes; SW1 adds a second layer that asserts numbers · ⚠ UNREVIEWED
@@ -387,7 +387,7 @@ own code has been exercised once, and the result would still not be reproducible
 
 **What is still not proven.** Nothing has run the detectors over a real NSE day. The first time
 that happens is Maulik's first `make swing DATE=…` against a backfilled database, and it is in
-`SW-FINAL-REPORT.md`'s first-morning steps.
+`docs/history/SW-FINAL-REPORT.md`'s first-morning steps.
 
 
 ## SW4.1 — `PATCH /swing/config` is the one mutation on the hub, and it is whitelisted by path · ⚠ UNREVIEWED
@@ -2114,7 +2114,7 @@ benchmark` here cannot run them. `GET /swing/journal` `reads` is `REAL` always (
 
 ## SW12.1 — The swing goldens are flat, stable and self-describing; the mutation report is the harness's · Maulik, 2 Sep 2026 (STANDING-ANSWERS B11) · ⚠ UNREVIEWED on the layout
 
-**Context.** B11 asks for goldens of the six pure functions in `go/testdata/golden/L1/swing/`,
+**Context.** B11 asks for goldens of the six pure functions in `rust/testdata/golden/L1/swing/`,
 byte-stable across two runs, and a re-run of the mutation harness with every survivor named.
 `tools/parity/golden.py`'s `dump()` stamped every file with the wall clock, the interpreter
 and the cwd, so no golden it wrote could be byte-stable; and its polars branch went through
@@ -2198,7 +2198,7 @@ Recorded verbatim from the review session so the run and the report build on the
 
 | # | Decision | Where it lands |
 |---|---|---|
-| MD1 | **Sleeve capital ₹25,00,000.** `sw_config.sleeve_capital_inr` for the sole user; the seed keeps ₹0 (PACK) and the value is set through `PATCH /swing/config` in the first-morning steps | SW12 report, `RUN-AND-TEST.md` |
+| MD1 | **Sleeve capital ₹25,00,000.** `sw_config.sleeve_capital_inr` for the sole user; the seed keeps ₹0 (PACK) and the value is set through `PATCH /swing/config` in the first-morning steps | SW12 report, `docs/history/RUN-AND-TEST.md` |
 | MD2 | **Risk per trade 0.5 %** (the default; ceiling 1.0 % kept, PACK.9) | unchanged code |
 | MD3 | **Notification: email through the existing mailer, one-way**, plus a **Telegram sender scaffolded dark** behind `BASKFY_SWING_TELEGRAM_BOT_TOKEN` / `BASKFY_SWING_TELEGRAM_CHAT_ID` — **never a confirm path**; a notification can only tell, never act | SW11 (`PgSignalStore.raise_signal` → notifier) |
 | MD4 | **Catalyst feed: free NSE corporate announcements**, for watchlist and EP-candidate symbols only, through the existing NSE provider and its rate limiter; store headline + timestamp + filing URL; auto-fill `sw_watch.catalyst`; link out rather than reproduce the text; add an **earnings-date flag** from the results calendar; single-tenant own-use — recorded as a **Track C §7 amendment** (news is not redistributed; it is a link on one person's watchlist) | SW11B (new module before SW12) |

@@ -10,7 +10,7 @@ cd "$(dirname "$0")/../../.." || exit 2
 exec python3 - "$@" <<'PY'
 import pathlib, re, sys
 
-web = pathlib.Path("decile-blueprint/apps/web")
+web = pathlib.Path("apps/web")
 app = web / "src/app/(app)"
 
 # `{ source: "/screens/:id/columns", ... }` -> "/screens/[id]/columns", the page path it shadows.

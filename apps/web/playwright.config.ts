@@ -29,7 +29,7 @@ const REDIS = process.env.BASKFY_REDIS_URL ?? "redis://localhost:6380/0";
 
 /** Shared between the two servers: the API verifies what the web app mints (docs/07 §header). */
 const JWT_SECRET = "playwright-placeholder-secret-abcdefgh";
-const REPO_ROOT = new URL("../../", import.meta.url).pathname;
+const REPO_ROOT = new URL("../../legacy/python/decile-blueprint/", import.meta.url).pathname;
 
 export default defineConfig({
   testDir: "./e2e",

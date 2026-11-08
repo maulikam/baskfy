@@ -5,7 +5,7 @@
 # honest bar is the delta, not the absolute — plus a hard requirement that everything this tree
 # owns is clean on its own.
 set -uo pipefail
-cd "$(dirname "$0")/../../../decile-blueprint/apps/web" || exit 2
+cd "$(dirname "$0")/../../../apps/web" || exit 2
 BASELINE="${BASELINE:-22}"
 
 echo "tsc --noEmit:"

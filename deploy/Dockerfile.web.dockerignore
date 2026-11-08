@@ -1,0 +1,18 @@
+# Context is the repo root. Allowlist: only the pnpm workspace enters the image.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!apps/web
+!packages/api-client
+**/node_modules
+**/.next
+**/.next-*
+**/.turbo
+**/dist
+**/.mutants
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key

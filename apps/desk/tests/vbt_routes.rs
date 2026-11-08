@@ -746,7 +746,7 @@ fn sources() -> Vec<PathBuf> {
         desk_root().join("app"),
         monorepo().join("decile-blueprint/services"),
         monorepo().join("decile-blueprint/packages/core/src"),
-        monorepo().join("decile-blueprint/apps/web/src"),
+        monorepo().join("apps/web/src"),
         monorepo().join("apps/api"),
         monorepo().join("apps/desk"),
         monorepo().join("apps/worker"),

@@ -5,7 +5,7 @@
 # cannot be mistaken for reviewed text, and (3) the blocker is filed where the owner will see it.
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 2
-WEB=decile-blueprint/apps/web
+WEB=apps/web
 BASE="${BASE:-http://localhost:3000}"
 fail=0
 

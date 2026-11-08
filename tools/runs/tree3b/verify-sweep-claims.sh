@@ -7,7 +7,7 @@
 # re-run against today's source: the tests, and the source conditions they assert.
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 2
-WEB=decile-blueprint/apps/web
+WEB=apps/web
 fail=0
 
 echo "(a) duplicate CSP directive"

@@ -1,5 +1,5 @@
 packages:
-  - "apps/*"
+  - "apps/web"
   - "packages/api-client"
 
 # Packages whose postinstall must run. pnpm 11 blocks build scripts by default.

@@ -4,13 +4,13 @@
 # `output: 'standalone'` in a container. This is the deployment mode the Next team documents as
 # supporting everything; Amplify Hosting is explicitly avoided (SSE buffering, version lag)."
 #
-# BUILD CONTEXT IS `decile-blueprint/`, NOT `apps/web/`
-# ----------------------------------------------------
+# BUILD CONTEXT IS THE REPO ROOT, NOT `apps/web/`
+# ----------------------------------------------
 # `apps/web` is one member of a pnpm workspace and imports `@baskfy/api-client` from another.
 # A context rooted at `apps/web` cannot see it, and the build fails at module resolution rather
 # than anywhere informative. Build with:
 #
-#     docker build -f deploy/Dockerfile.web -t baskfy-web decile-blueprint
+#     docker build -f deploy/Dockerfile.web -t baskfy-web .
 #
 # TARGET ARCHITECTURE
 # -------------------

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # D6 / G5 — the wiring did not break the tree, and added no lint debt.
 set -uo pipefail
-cd "$(dirname "$0")/../../../decile-blueprint/apps/web" || exit 2
+cd "$(dirname "$0")/../../../apps/web" || exit 2
 BASELINE_ESLINT="${BASELINE_ESLINT:-22}"
 fail=0
 

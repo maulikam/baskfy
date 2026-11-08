@@ -8704,3 +8704,8 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 ## LOCAL-FLAGS-2026-11-08
 - Maulik, in session: "every auto-execute and execution flag false this should be true". Local deployment only, through `money.on` in the local home; six named flags. Code defaults, intraday and options stay false. Reverse: empty `money.on`, then `local.sh up`.
 - Sleeve gateways (`DeskGateway::sibling`) lacked the intent store, so they ignored the pause and had no durable intent. Fixed before the flags went on.
+
+## RF-LAYOUT-2026-11-08 ⚠ UNREVIEWED
+- Root Cargo and pnpm workspaces; `apps/`, `crates/`, `packages/`, `db/migrations`, `testdata`. All Python under `legacy/python/` (Maulik, in session), including `tools/parity` and `tools/runs`, which the brief had kept in place; `frozen/strangle` stays put.
+- Active: `deploy/monitoring` (dev compose, CI promtool), `deploy/backup`. Historical: `legacy/python/decile-blueprint/infra/terraform`, `legacy/python/kite-momentum-rebalancer/deploy`.
+- The seed service is out of compose; seeding is `python -m baskfy_api.seed` from the legacy project. Reverse: `git revert` RF1-RF4 and move local data back.

@@ -7,19 +7,19 @@ through Zerodha Kite. It runs as a Rust stack in Docker Compose on one machine.
 
 | Path | What |
 |---|---|
-| `rust/` | The three production binaries: `baskfy-api`, `baskfy-desk`, `baskfy-worker` |
+| `apps/` | Deployables: `api`, `desk`, `worker` (Rust) and `web` (Next.js) |
+| `crates/` | Shared Rust libraries: `core`, `db`, `providers`, `testkit` |
+| `packages/` | Shared TypeScript: `api-client` |
 | `testdata/golden/` | Golden cases the Rust port is graded against |
-| `legacy/python/decile-blueprint/` | Next.js web app and the Python oracle |
 | `db/migrations/` | Schema migrations, applied by `baskfy-worker migrate` |
 | `legacy/python/kite-momentum-rebalancer/` | Python desk oracle; its templates and static files ship in the image |
-| `deploy/` | Dockerfiles, compose files, Caddyfile |
+| `deploy/` | Dockerfiles, compose files, Caddyfile, `monitoring/`, `backup/` |
 | `tools/deploy/` | `local.sh` and verification scripts; AWS-era scripts are in `retired/` |
 | `legacy/python/tools/parity/` | Rust-against-Python diff harnesses |
 | `legacy/python/tools/runs/` | One-off run packs |
 | `docs/` | Design record and decisions; `history/`, `gates/` and `audit/` are the archive |
-| `research/` | Research notebooks and data notes |
 | `frozen/` | Frozen options lab, out of every gate |
-| `ops/` | Operational probes and backups |
+| `legacy/python/` | All Python: both oracles, parity harnesses, run packs, `research/`, `ops/` |
 
 ## Commands
 

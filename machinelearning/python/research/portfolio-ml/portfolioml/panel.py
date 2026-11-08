@@ -90,6 +90,16 @@ def load_shareholding(data: Path) -> pl.DataFrame:
     )
 
 
+def load_sector(data: Path) -> pl.DataFrame:
+    """instrument_sector export. Static across history: a known small leak (PM3.1)."""
+    return pl.read_csv(data / "instrument_sector.csv.gz").select("instrument_id", "sector")
+
+
+def load_fundamental_daily(data: Path) -> pl.DataFrame:
+    """fundamental_daily export; ``marketcap_cr`` is the check on ours, never a feature."""
+    return pl.read_csv(data / "fundamental_daily.csv.gz").with_columns(pl.col("date").str.to_date())
+
+
 def load_index_membership(data: Path) -> pl.DataFrame:
     """Point-in-time membership flags where the export has them (2021-08 →); null before."""
     members = pl.read_csv(data / "index_member_daily.csv.gz").with_columns(pl.col("date").str.to_date())

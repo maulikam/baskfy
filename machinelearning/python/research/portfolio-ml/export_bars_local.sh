@@ -25,5 +25,9 @@ fi
 if $PG -At -c "SELECT to_regclass('public.shareholding_pit')" | grep -q shareholding_pit; then
   copy shareholding_pit "SELECT instrument_id, period_end, filed_on, filed_at, available_on, is_revision, promoter_pct, promoter_pledged_pct, fii_pct, dii_pct, mf_pct, public_pct, n_shareholders, source FROM shareholding_pit"
 fi
+copy fundamental_daily "SELECT instrument_id, date, marketcap_cr FROM fundamental_daily"
+if $PG -At -c "SELECT to_regclass('public.instrument_sector')" | grep -q instrument_sector; then
+  copy instrument_sector "SELECT instrument_id, macro, sector, industry, basic_industry, as_of FROM instrument_sector"
+fi
 rm -f "$OUT/ohlcv_daily.parquet" "$OUT/dataset.parquet" "$OUT/features.parquet"
 echo "done: $(du -sh "$OUT" | cut -f1)"

@@ -119,6 +119,49 @@ struct FundamentalRow {
     shares_outstanding: Option<i64>,
 }
 
+/// PM3: one `instrument_sector` row per classified instrument. Nothing to do when no quote
+/// carried a classification.
+async fn store_industry_classes(
+    conn: &mut PgConnection,
+    on: NaiveDate,
+    records: &[EquityFundamental],
+    mapped: &HashMap<String, i64>,
+) -> Result<(), WorkerError> {
+    let (mut ids, mut macros, mut sectors, mut industries, mut basics) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for record in records {
+        if let (Some(class), Some(id)) = (
+            record.industry_class.as_ref(),
+            mapped.get(&record.symbol.to_uppercase()),
+        ) {
+            ids.push(*id);
+            macros.push(class.macro_sector.clone());
+            sectors.push(class.sector.clone());
+            industries.push(class.industry.clone());
+            basics.push(class.basic_industry.clone());
+        }
+    }
+    if ids.is_empty() {
+        return Ok(());
+    }
+    sqlx::query(
+        "INSERT INTO instrument_sector (instrument_id, macro, sector, industry, basic_industry, as_of) \
+         SELECT DISTINCT ON (t.id) t.id, t.m, t.s, t.i, t.b, $6 \
+         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[]) AS t(id, m, s, i, b) \
+         ON CONFLICT (instrument_id) DO UPDATE SET macro = EXCLUDED.macro, sector = EXCLUDED.sector, \
+         industry = EXCLUDED.industry, basic_industry = EXCLUDED.basic_industry, as_of = EXCLUDED.as_of",
+    )
+    .bind(&ids)
+    .bind(&macros)
+    .bind(&sectors)
+    .bind(&industries)
+    .bind(&basics)
+    .bind(on)
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// `store_fundamentals(session, on, records)`.
 pub(crate) async fn store_fundamentals(
     conn: &mut PgConnection,
@@ -149,6 +192,7 @@ pub(crate) async fn store_fundamentals(
     .into_iter()
     .map(|(symbol, id)| (symbol.to_uppercase(), id))
     .collect();
+    store_industry_classes(&mut *conn, on, records, &mapped).await?;
     let mapped_ids: Vec<i64> = mapped.values().copied().collect();
     let mut closes: HashMap<i64, Option<WideDecimal>> = HashMap::new();
     for (instrument_id, close_raw) in sqlx::query_as::<_, (i64, Option<String>)>(

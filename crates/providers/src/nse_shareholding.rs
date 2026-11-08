@@ -271,6 +271,25 @@ mod tests {
     }
 
     #[test]
+    fn a_quote_carries_the_classification_and_a_dash_is_no_level() {
+        // UPL, archived quote of 15 Oct 2026.
+        let on = NaiveDate::from_ymd_opt(2026, 10, 15).unwrap();
+        let json = br#"{"equityResponse":[{"metaData":{"symbol":"UPL"},"tradeInfo":{"issuedSize":100,"lastPrice":10},
+"orderBook":{},"secInfo":{"macro":"Commodities","sector":"Chemicals","industryInfo":"Fertilizers & Agrochemicals","basicIndustry":"-"}}]}"#;
+        let got = crate::nse::parse_get_symbol_data(json, on, "UPL")
+            .unwrap()
+            .unwrap();
+        let class = got.industry_class.clone().unwrap();
+        assert_eq!(class.macro_sector.as_deref(), Some("Commodities"));
+        assert_eq!(class.sector.as_deref(), Some("Chemicals"));
+        assert_eq!(
+            class.industry.as_deref(),
+            Some("Fertilizers & Agrochemicals")
+        );
+        assert_eq!(class.basic_industry, None);
+    }
+
+    #[test]
     fn neither_schema_is_no_filing() {
         assert_eq!(parse_shareholding_xbrl(b"<x></x>").unwrap(), None);
     }

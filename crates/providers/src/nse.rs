@@ -56,8 +56,8 @@ use crate::ratelimit::RateLimiter;
 use crate::records::{
     CatalystFields, CatalystRecord, CorporateAction, CorporateActionFields, CorporateActionType,
     EarningsDateFields, EarningsDateRecord, EquityFundamental, EquityFundamentalFields,
-    IndexSnapshot, IndexSnapshotFields, ListingFields, ListingRecord, PyDateTime, RecordError,
-    bhavcopy_schema, conform, fo_bhavcopy_schema,
+    IndexSnapshot, IndexSnapshotFields, IndustryClass, ListingFields, ListingRecord, PyDateTime,
+    RecordError, bhavcopy_schema, conform, fo_bhavcopy_schema,
 };
 use crate::retry::{RetryHooks, RetryPolicy, call_with_retry};
 use crate::settings::ProviderSettings;
@@ -3266,7 +3266,24 @@ pub fn parse_get_symbol_data(
     fields.last_price = last;
     fields.marketcap_cr = marketcap_cr;
     fields.pe = pe;
+    fields.industry_class = industry_class(&security);
     fundamental(fields)
+}
+
+/// PM3: `secInfo`'s classification; `None` when NSE gives none of the four levels.
+fn industry_class(security: &Row) -> Option<IndustryClass> {
+    let level = |key: &str| clean(security.get(key)).filter(|v| !matches!(v.as_str(), "-" | "NA"));
+    let class = IndustryClass {
+        macro_sector: level("macro"),
+        sector: level("sector"),
+        industry: level("industryInfo"),
+        basic_industry: level("basicIndustry"),
+    };
+    (class.macro_sector.is_some()
+        || class.sector.is_some()
+        || class.industry.is_some()
+        || class.basic_industry.is_some())
+    .then_some(class)
 }
 
 /// `parse_quote_equity`: NSE's retired `quote-equity` JSON. Kept for the archive, not the

@@ -20,7 +20,7 @@ class TrancheConfig:
     stop: float | None = None  # e.g. -0.35: a tranche line is closed at the first close below entry×(1+stop)
     weighting: str = "equal"  # or "rank": top pick gets ~2× the weight of the last
     keep_if_top_frac: float | None = None  # "re-rank, don't sell": a maturing name still in this top fraction rolls over at no cost
-    max_per_sector: int | None = None  # needs a "sector" column on ds
+    max_per_sector: int | None = 3  # applies only when ds has a "sector" column; None switches it off
 
 
 def month_starts(sessions: list) -> list:
@@ -32,15 +32,26 @@ def month_starts(sessions: list) -> list:
     return out
 
 
+def _capped(day: pl.DataFrame, cap: int, n: int) -> pl.DataFrame:
+    """``day`` is score-sorted. At most ``cap`` per known sector; if that leaves fewer than ``n``,
+    the next best excluded names fill the gap. Names with no sector are not one sector."""
+    ranked = day.with_columns(pl.int_range(pl.len()).over("sector").alias("_k"), pl.int_range(pl.len()).alias("_pos"))
+    within = (pl.col("_k") < cap) | pl.col("sector").is_null()
+    first = ranked.filter(within).head(n)
+    extra = ranked.filter(~pl.col("_pos").is_in(first["_pos"].implode())).head(n - first.height)
+    return pl.concat([first, extra]).sort("_pos").drop("_k", "_pos")
+
+
 def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: TrancheConfig, descending: bool = True) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Returns (picks with their 12-month outcome, daily equity of the rolling book)."""
     sessions = ds["date"].unique().sort().to_list()
     sidx = {d: i for i, d in enumerate(sessions)}
     starts = [d for d in month_starts(sessions) if d in set(scores["date"].to_list())]
     cols = ["instrument_id", "date", "entry_px", "fwd_ret_h", "fwd_min_ret", "label"]
+    cap = cfg.max_per_sector if "sector" in ds.columns else None
     if cfg.gate_col:
         cols.append(cfg.gate_col)
-    if cfg.max_per_sector:
+    if cap:
         cols.append("sector")
     base = ds.select(cols).join(scores.select("instrument_id", "date", score_col), on=["instrument_id", "date"])
     picks = []
@@ -62,8 +73,8 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
         rest = day
         if chosen:
             rest = rest.filter(~pl.col("instrument_id").is_in(chosen[0]["instrument_id"].implode()))
-        if cfg.max_per_sector:
-            rest = rest.with_columns(pl.int_range(pl.len()).over("sector").alias("_k")).filter(pl.col("_k") < cfg.max_per_sector).drop("_k")
+        if cap:
+            rest = _capped(rest, cap, max(n_left, 0))
         chosen.append(rest.head(max(n_left, 0)))
         sel = pl.concat(chosen).sort(score_col, descending=descending)
         n = sel.shape[0]

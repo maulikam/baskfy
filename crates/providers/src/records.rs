@@ -633,6 +633,23 @@ pub struct EquityFundamentalFields {
     /// Dividend yield.
     #[serde(default)]
     pub div_yield: Option<Decimal>,
+    /// PM3: NSE's classification, when the quote carries one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub industry_class: Option<IndustryClass>,
+}
+
+/// NSE's four-level classification of a listed company (`secInfo` on the quote).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IndustryClass {
+    /// `macro`.
+    pub macro_sector: Option<String>,
+    /// `sector`.
+    pub sector: Option<String>,
+    /// `industryInfo`.
+    pub industry: Option<String>,
+    /// `basicIndustry`.
+    pub basic_industry: Option<String>,
 }
 
 impl EquityFundamentalFields {
@@ -648,6 +665,7 @@ impl EquityFundamentalFields {
             pe: None,
             pb: None,
             div_yield: None,
+            industry_class: None,
         }
     }
 }

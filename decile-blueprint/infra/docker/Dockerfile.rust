@@ -6,6 +6,8 @@ ARG DEBIAN_IMAGE=debian:bookworm-slim
 
 FROM ${RUST_IMAGE} AS build
 WORKDIR /src/rust
+# Beats rust/.cargo/config.toml's host path.
+ENV CARGO_TARGET_DIR=/src/rust/target
 COPY rust/rust-toolchain.toml ./
 RUN rustup toolchain install && rustup show active-toolchain
 COPY rust/ ./

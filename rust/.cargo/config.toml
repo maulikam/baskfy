@@ -1,3 +1,6 @@
 # The code default of DRY_RUN is live (DECISIONS-MERGE DRY-LIVE); every cargo test/run is dry.
 [env]
 DRY_RUN = { value = "true", force = true }
+
+[build]
+target-dir = "/Volumes/T7-Work/baskfy-cargo-target"

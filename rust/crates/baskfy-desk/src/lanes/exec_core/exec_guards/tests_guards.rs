@@ -257,8 +257,9 @@ fn test_the_carry_branch_is_nfo_only() {
 }
 
 #[test]
-fn test_mtf_on_cash_is_allowed_only_for_a_confirmed_screen_invest() {
-    assert!(product_exchange_refusal("MTF", "NSE", false, false, false, false, false).contains("CNC"));
+fn test_mtf_is_allowed_on_cash_equity_and_refused_on_a_derivative_venue() {
+    // Non-negotiable 5: CNC or MTF on cash equity (Maulik, 2 Nov 2026; gate opened in c438ff1).
+    assert!(product_exchange_refusal("MTF", "NSE", false, false, false, false, false).is_empty());
     assert!(product_exchange_refusal("MTF", "NSE", false, false, false, false, true).is_empty());
     assert!(!product_exchange_refusal("MTF", "NFO", true, true, false, false, true).is_empty());
 }

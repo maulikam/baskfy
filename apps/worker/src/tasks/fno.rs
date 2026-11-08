@@ -12,7 +12,7 @@
 //! endpoint: the Kite adapters built here carry reads only (`daily_bars`, `option_quotes`), and
 //! F3's auto-exit lives in the desk, not in the worker. No auto-execute flag is read here.
 //!
-//! Grade with `tools/parity/task_diff.py --cases tools/parity/task_cases/fno.json`.
+//! Grade with `legacy/python/tools/parity/task_diff.py --cases legacy/python/tools/parity/task_cases/fno.json`.
 
 mod alerting;
 #[allow(dead_code)] // `fno_cli backfill` (lane clis) is its caller; no task is

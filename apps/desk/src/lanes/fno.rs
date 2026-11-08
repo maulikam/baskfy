@@ -15,7 +15,7 @@
 //!
 //! **Tests ported:** `test_fno_gates.py`, `test_fno_monitor_loop.py::TestTheDay`, the
 //! structural/pure halves of `test_fno_desk.py` and `test_fno_ledger.py` (the DB-backed world is
-//! graded by `tools/parity/desk_diff.py` on `desk_cases/fno_desk.json`).
+//! graded by `legacy/python/tools/parity/desk_diff.py` on `desk_cases/fno_desk.json`).
 
 pub mod clock;
 pub mod desk;

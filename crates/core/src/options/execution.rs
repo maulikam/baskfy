@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.options.execution` (`decile-blueprint/packages/core/src/baskfy_core/options/execution.py`).
+//! Port of `baskfy_core.options.execution` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/options/execution.py`).
 //!
 //! The execution mechanics the core decides and the desk sends (docs/options/04 §8). Pure decisions only — law 2: nothing here sends an order.
 //!

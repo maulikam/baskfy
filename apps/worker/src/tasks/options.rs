@@ -8,8 +8,8 @@
 //! come from the replay upstream under the harness. Everything is off by default (the collect,
 //! scan and monitor flags all default false).
 //!
-//! **Ported** (in [`PORTED`]; graded by `tools/parity/task_diff.py --cases
-//! tools/parity/task_cases/options.json`): `refresh_master`, `collect_chain`, `index_bars`,
+//! **Ported** (in [`PORTED`]; graded by `legacy/python/tools/parity/task_diff.py --cases
+//! legacy/python/tools/parity/task_cases/options.json`): `refresh_master`, `collect_chain`, `index_bars`,
 //! `index_bars_eod`, `backfill_index_bars`, `checks`, `weekly`, `scan`, `plan_o1`, `plan_o2`,
 //! `plan_o3` (the last four on `baskfy_core::options`). `options/probe.py` (a CLI) and
 //! `options/backtest_run.py` (lane `sleeve_backtests`' task) have no task in this lane.

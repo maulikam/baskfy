@@ -2,7 +2,7 @@
 //! bar's monitor state and refresh, the countdown, the SWING prefix, when a Confirm may appear
 //! (`_line_view`), the trigger sentence, SW15's scan line, the fingerprint's hash, the exit
 //! rule, and the breadth decision. The routes and the rendered page are graded against the
-//! Python desk by `tools/parity/desk_cases/swing_desk.json`.
+//! Python desk by `legacy/python/tools/parity/desk_cases/swing_desk.json`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::collections::BTreeSet;
@@ -907,7 +907,7 @@ async fn dump_morning_html() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = morning_store(dir.path()).await;
     let templates_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../kite-momentum-rebalancer/app/templates");
+        .join("../../legacy/python/kite-momentum-rebalancer/app/templates");
     let mut templates = crate::templates::Templates::new(&templates_dir, "X", false);
     crate::lanes::register_templates(&mut templates);
     for t in ["2026-09-02T09:40:00+05:30", "2026-09-02T09:10:30+05:30"] {

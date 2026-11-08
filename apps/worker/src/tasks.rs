@@ -6,7 +6,7 @@
 //! * [`registry`] — one [`TaskSpec`] per Python task: its name, the Python function, its
 //!   parameters (names, annotations, defaults), the retry policy and queue Celery applies, and
 //!   the Rust function that runs it. Held equal to Python by `tests/task_registry.rs` against
-//!   `tests/fixtures/python_task_registry.json` (written by `tools/parity/task_registry.py`).
+//!   `tests/fixtures/python_task_registry.json` (written by `legacy/python/tools/parity/task_registry.py`).
 //! * [`beat`] — `BEAT_SCHEDULE` as data (crontabs in IST, args, kwargs, options), held equal the
 //!   same way, with Celery's crontab expansion and a `due` check.
 //! * [`args`] — a message's `args`/`kwargs` bound to a task's parameters as Python binds them.
@@ -21,7 +21,7 @@
 //!   there); never `lib.rs`, this file, the registry or the Beat table.
 //!
 //! Run one task: `baskfy-worker task <name> --args '<json>' [--now YYYY-MM-DDTHH:MM[:SS]]`.
-//! Grade it against Python: `tools/parity/task_diff.py` (README "Grading a task").
+//! Grade it against Python: `legacy/python/tools/parity/task_diff.py` (README "Grading a task").
 //!
 //! **Law 2.** No task here places, modifies or cancels an order or a GTT, or calls a Kite write
 //! endpoint (`tests/law_two.rs` scans these files too). The swing and VBT "check" tasks *read*

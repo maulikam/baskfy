@@ -1458,7 +1458,9 @@ mod tests {
 
     #[test]
     fn the_page_offers_two_forms_and_both_are_the_confirm() {
-        let html = include_str!("../../../../../kite-momentum-rebalancer/app/templates/fno.html");
+        let html = include_str!(
+            "../../../../../legacy/python/kite-momentum-rebalancer/app/templates/fno.html"
+        );
         let re = regex::Regex::new(r#"<form[^>]*action="([^"]+)""#).unwrap();
         let actions: Vec<&str> = re
             .captures_iter(html)

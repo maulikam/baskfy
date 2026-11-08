@@ -6,7 +6,7 @@
 //! function's case count is asserted so a dropped golden fails loudly. A Python raise is graded
 //! as `{"raises": {"type", "message"}}` (pydantic: `"errors"`), exactly as the dumper stores it.
 //!
-//! The harness side mirrors `tools/parity/golden_ranking.py`: a definition is
+//! The harness side mirrors `legacy/python/tools/parity/golden_ranking.py`: a definition is
 //! `ScreenDefinition.model_validate(inputs["definition"])`, then `smuggle` is applied without
 //! validation (`model_copy(update=...)`); `canonical_json` payloads untag `$decimal`, `$date`
 //! and `$object`.

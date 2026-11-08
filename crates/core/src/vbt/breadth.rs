@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.breadth` (`decile-blueprint/packages/core/src/baskfy_core/vbt/breadth.py`).
+//! Port of `baskfy_core.vbt.breadth` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/breadth.py`).
 //!
 //! The regime gate: how much of the tradable universe is above its own 200-day average
 //! (`docs/vbt/04` §4). A breadth reading of **the universe the book trades**, never the plant's

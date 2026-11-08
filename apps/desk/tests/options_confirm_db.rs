@@ -1482,7 +1482,8 @@ async fn the_page_shows_the_plan_the_button_and_the_sentence() {
     let plan_id = seed(&mut conn, uid, "O3A", "DEBIT_SPREAD", SPREAD, None, None).await;
     let dir = tempfile::tempdir().unwrap();
     std::os::unix::fs::symlink(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer/app"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../legacy/python/kite-momentum-rebalancer/app"),
         dir.path().join("app"),
     )
     .unwrap();

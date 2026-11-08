@@ -39,7 +39,7 @@ pub const NSE_RATE_LIMIT_KEY: &str = "baskfy:ratelimit:nse";
 
 /// Kite's combined read ceiling, as a Redis departure clock. Every Kite read in this deployment
 /// — API, worker, desk — waits on this one key, which makes "3 req/s" a property of the box.
-/// The desk names the same key (`kite-momentum-rebalancer/app/core/kite_limits.py`, `read`).
+/// The desk names the same key (`legacy/python/kite-momentum-rebalancer/app/core/kite_limits.py`, `read`).
 pub const KITE_READ_CLOCK_KEY: &str = "baskfy:ratelimit:kite:read";
 
 /// The bulk lane's own clock, taken *before* the ceiling (see [`LayeredCallSpacer`]).

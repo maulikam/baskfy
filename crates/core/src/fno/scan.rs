@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.scan` (`decile-blueprint/packages/core/src/baskfy_core/fno/scan.py`).
+//! Port of `baskfy_core.fno.scan` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/scan.py`).
 //!
 //! The nightly scan's arithmetic (`docs/fno/04` §2, §3, §8, §10; `06` FO4). The worker reads
 //! the database and writes `fo_scan`; every number it writes is computed here (law 1).

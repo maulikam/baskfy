@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.monitor` (`decile-blueprint/packages/core/src/baskfy_core/fno/monitor.py`).
+//! Port of `baskfy_core.fno.monitor` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/monitor.py`).
 //!
 //! The desk monitor's decisions, pure (`docs/fno/04` §1-§3, §10; `06` FO7). The desk process
 //! reads the scan, the live book and the bhavcopy and hands the numbers here; every verdict it

@@ -82,7 +82,7 @@ public half. There is deliberately no step that copies a private key anywhere.
 Not part of the bridge — the evidence for it. Run on the desk against the deployed source with a
 stubbed `kiteconnect`, it demonstrates the cache problem and the fix as facts:
 
-    cd /home/desk/kite-momentum-rebalancer && \
+    cd /home/desk/legacy/python/kite-momentum-rebalancer && \
       DRY_RUN=true .venv/bin/python /home/desk/bin/prove-live-token-pickup.py
 
 ---

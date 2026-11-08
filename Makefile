@@ -13,11 +13,11 @@ test: ## Rust tests, always dry
 	cargo nextest run --workspace
 
 test-py: ## Python oracle suites
-	cd decile-blueprint && uv run pytest -p no:randomly -q --no-cov
-	cd kite-momentum-rebalancer && DRY_RUN=true OPTIONS_ENABLED=false INTRADAY_ENABLED=false .venv/bin/python -m pytest -q
+	cd legacy/python/decile-blueprint && uv run pytest -p no:randomly -q --no-cov
+	cd legacy/python/kite-momentum-rebalancer && DRY_RUN=true OPTIONS_ENABLED=false INTRADAY_ENABLED=false .venv/bin/python -m pytest -q
 
 test-web: ## Web lint and unit tests
-	cd decile-blueprint && pnpm --filter @baskfy/web run lint && pnpm --filter @baskfy/web run test
+	pnpm --filter @baskfy/web run lint && pnpm --filter @baskfy/web run test
 
 lint: ## fmt, clippy, namespace
 	cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings

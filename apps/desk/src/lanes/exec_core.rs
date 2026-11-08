@@ -8,11 +8,11 @@
 //! `lanes.rs`. A new dependency is a DECISIONS-RS entry the integrator applies.
 //!
 //! **Python it ports:**
-//! * `decile-blueprint/packages/execution/src/baskfy_execution/{gateway,guards,risk,ratelimit,gtt,client_ids,tenancy,broker_ports,brokers,adapters}.py`
+//! * `legacy/python/decile-blueprint/packages/execution/src/baskfy_execution/{gateway,guards,risk,ratelimit,gtt,client_ids,tenancy,broker_ports,brokers,adapters}.py`
 //! * `app/core/gateway.py (the desk shim: tenant stamp, gross_exposure fill, gates read per order)`
 //! * `app/core/{guards,risk,ratelimit,kite_limits,risk_store,net}.py`
 //!
-//! **Tests to port first** (`kite-momentum-rebalancer/tests/`, test functions per file):
+//! **Tests to port first** (`legacy/python/kite-momentum-rebalancer/tests/`, test functions per file):
 //! * `test_execute_gateway.py` (40)
 //! * `test_guards.py` (20)
 //! * `test_seven_non_negotiables.py` (12)
@@ -21,7 +21,7 @@
 //! * `test_risk_store.py` (3)
 //! * `test_outbound_ip.py` (6)
 //!
-//! and `decile-blueprint/packages/execution/tests/`:
+//! and `legacy/python/decile-blueprint/packages/execution/tests/`:
 //! * `test_af_lane_e.py` (11)
 //! * `test_broker_adapters.py` (6)
 //! * `test_broker_ports.py` (2)

@@ -18,7 +18,7 @@
 //!   an aborted day, a raised chain), 2 for a usage or configuration error.
 //! * `step` runs **one** step's block into the open run `N` on one transaction (committed when
 //!   the block returns, the gate's refusal included; rolled back when it raises). For grading:
-//!   `tools/parity/nightly_diff.py --step`. `--context` is a JSON file `{"touched": [ids]}`
+//!   `legacy/python/tools/parity/nightly_diff.py --step`. `--context` is a JSON file `{"touched": [ids]}`
 //!   carrying step 3's answer to step 4.
 //! * `catch-up` is `session_catch_up`'s decision only: `unlanded_sessions(through=today IST,
 //!   lookback_days=7, now=now IST)` printed as `{"checked_through": D, "sessions": [D, ...]}` on
@@ -35,7 +35,7 @@
 //! * `tasks` lists the registry (name, queue by name, lane, ported or not) as JSON lines.
 //! * `beat --now` lists the Beat entries due in that IST minute (Celery's crontab semantics).
 //! * `--replay-upstream URL` (with `--replay-bundle`) points the Kite REST client a task builds at
-//!   the harness's loopback server of recorded upstream answers (`tools/parity/replay_upstream.py`).
+//!   the harness's loopback server of recorded upstream answers (`legacy/python/tools/parity/replay_upstream.py`).
 //! * `--replay-bundle DIR` swaps the provider stack for the replay adapter over `DIR`
 //!   (`baskfy_providers::replay`) behind the production `CompositeProvider`, and arms the
 //!   network block: nothing leaves the box (DECISIONS-RS R7.3).

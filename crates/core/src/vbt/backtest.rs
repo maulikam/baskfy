@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.backtest` (`decile-blueprint/packages/core/src/baskfy_core/vbt/backtest.py`)
+//! Port of `baskfy_core.vbt.backtest` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/backtest.py`)
 //! — the study, re-run by the book's own rules (`docs/vbt/04` §11).
 //!
 //! The session, in order: (1) exits at the open — a queued EMA exit at the open, else a gap

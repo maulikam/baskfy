@@ -1,5 +1,5 @@
 //! Baskfy's market-data adapters — the Rust port of `baskfy_providers`
-//! (`decile-blueprint/packages/providers/src/baskfy_providers`).
+//! (`legacy/python/decile-blueprint/packages/providers/src/baskfy_providers`).
 //!
 //! Python's package docstring, restated: call sites depend on [`ports::Capability`] and the port
 //! traits, never on a vendor — "adding a paid vendor later is a new adapter, not a rewrite".
@@ -23,7 +23,7 @@
 //! | `fixtures` | [`fixtures`] | ported; Parquet files wait on DECISIONS-RS R4.12 |
 //! | `factory` | [`factory`] | ported (DECISIONS-RS R4.13) |
 //! | `fixture_builder`, `cli` | — | not started |
-//! | (harness: `tools/parity/replay_provider.py`) | [`replay`] | the replay adapter for grading the worker (DECISIONS-RS R7.3) |
+//! | (harness: `legacy/python/tools/parity/replay_provider.py`) | [`replay`] | the replay adapter for grading the worker (DECISIONS-RS R7.3) |
 //!
 //! Four modules have no Python twin: [`clock`] (the injected `time.monotonic`/`time.sleep`/
 //! `random` seams as traits), [`net`] (the network chokepoint and the test-suite block that

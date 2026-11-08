@@ -1,5 +1,5 @@
 //! `app.config` and every module-level `os.getenv`, held to the live Python's answers
-//! (`fixtures/settings_defaults.json`, `tools/parity/desk_settings_dump.py`), and the safety
+//! (`fixtures/settings_defaults.json`, `legacy/python/tools/parity/desk_settings_dump.py`), and the safety
 //! defaults the non-negotiables require.
 #![allow(
     clippy::unwrap_used,

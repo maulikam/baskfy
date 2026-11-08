@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.indicators` (`decile-blueprint/packages/core/src/baskfy_core/vbt/indicators.py`).
+//! Port of `baskfy_core.vbt.indicators` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/indicators.py`).
 //!
 //! Per-bar columns the VBT-1 rules read (`docs/vbt/04` §1). One frame in, one frame out. Every
 //! column is Python's polars window expression `.over("instrument_id")`; here each instrument's

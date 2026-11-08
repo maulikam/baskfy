@@ -1,5 +1,5 @@
 //! Baskfy's pure domain logic — the Rust port of `baskfy_core`
-//! (`decile-blueprint/packages/core/src/baskfy_core`).
+//! (`legacy/python/decile-blueprint/packages/core/src/baskfy_core`).
 //!
 //! **Law 1 (root `CLAUDE.md`), inherited verbatim:** this crate touches nothing. Frames and
 //! values in, frames and values out. No database, no network, no disk, no clock, no

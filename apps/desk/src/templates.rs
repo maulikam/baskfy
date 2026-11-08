@@ -1,7 +1,7 @@
 //! The desk's pages: `Jinja2Templates(directory="app/templates")` on minijinja
 //! (DECISIONS-RS R8.4).
 //!
-//! The templates are **read from the Python tree, unchanged** (`kite-momentum-rebalancer/
+//! The templates are **read from the Python tree, unchanged** (`legacy/python/kite-momentum-rebalancer/
 //! app/templates`): one copy, so a page edit lands in both desks. What makes minijinja print what
 //! Jinja2 prints:
 //!

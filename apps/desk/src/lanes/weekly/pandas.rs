@@ -1,6 +1,6 @@
 //! The numpy and pandas arithmetic the weekly scorer and planner are traded on, reproduced bit
 //! for bit (graded by `fixtures/weekly/primitives.json`, dumped from numpy 2.5 / pandas 3.0 by
-//! `tools/parity/desk_weekly_goldens.py`).
+//! `legacy/python/tools/parity/desk_weekly_goldens.py`).
 //!
 //! * [`argsort_quicksort`] — `np.argsort(kind="quicksort")` for float64: numpy's introsort
 //!   (median-of-three quicksort, insertion sort under 16, heapsort past `2·log2(n)` depth). It is

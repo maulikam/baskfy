@@ -3226,7 +3226,7 @@ const PORTED: &[&str] = &[
 /// The Python test names in `path`, lower-cased (Rust test names are snake case).
 pub(super) fn python_tests(path: &str) -> Vec<String> {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../kite-momentum-rebalancer/tests")
+        .join("../../legacy/python/kite-momentum-rebalancer/tests")
         .join(path);
     let source = std::fs::read_to_string(&file).unwrap();
     source

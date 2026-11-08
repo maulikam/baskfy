@@ -3,7 +3,7 @@
 //! The weekly plan's id is `uuid.uuid4().hex[:12]` (`baskfy_core.basket.build_plan`), the
 //! gateway's fallback client id `uuid.uuid4().hex[:10]`, and the sleeves mint a few more. In
 //! production they are random, so two correct desks never agree on them. Under `desk_diff.py`
-//! both desks draw from [`HarnessIds`] instead — `tools/parity/desk_harness.py` patches
+//! both desks draw from [`HarnessIds`] instead — `legacy/python/tools/parity/desk_harness.py` patches
 //! Python's `uuid.uuid4` with the same sequence — so a plan id, and every byte that depends on
 //! it, is comparable. The sequence is `SHA-256("baskfy-desk-harness:<seed>:<n>")[:16]` with the
 //! RFC 4122 version-4 and variant bits set, `n` counting from 0 per process.

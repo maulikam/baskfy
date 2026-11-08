@@ -7,7 +7,7 @@
 //!   sqlite scenario. The Rust SQLite binder refuses `Decimal` writes by design (R8.2), so here
 //!   the same four confirms run through `execute_line` / `rearm_gtt` over the in-memory store and
 //!   the real gateway with the spy; the route-level run is graded on Postgres by
-//!   `tools/parity/desk_cases/swing_exec.json` (the same four kinds through `/swing/execute` and
+//!   `legacy/python/tools/parity/desk_cases/swing_exec.json` (the same four kinds through `/swing/execute` and
 //!   `/swing/rearm`, every journal line and the replay Kite's order/GTT log EQUAL to Python's,
 //!   and the log empty). `test_after_a_full_morning_every_sw_row_belongs_to_the_sole_user` runs
 //!   the real `PgSwingStore` on a bed clone named by `BASKFY_RS_SWING_TEST_PG` (Python's

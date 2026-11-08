@@ -2,7 +2,7 @@
 //! `test_api_portfolios_tree.py`, `test_portfolio_overview.py`, `test_api_trades.py`,
 //! `test_brokers.py`, `test_api_billing.py` and `test_track_b_gates.py`, on the bed's real
 //! accounts (the Python suites build fixtures; the bed is read-only here, so each assertion is
-//! made about the rows the bed has). Byte-equality with Python is `tools/parity/api_diff.py`'s
+//! made about the rows the bed has). Byte-equality with Python is `legacy/python/tools/parity/api_diff.py`'s
 //! job (`api_cases/portfolio.json`); these hold the contracts the Python tests name.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

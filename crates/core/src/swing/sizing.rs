@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.sizing` (`decile-blueprint/packages/core/src/baskfy_core/swing/sizing.py`).
+//! Port of `baskfy_core.swing.sizing` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/sizing.py`).
 //!
 //! Risk per trade to share count (docs/swing/04 §5). Money is `Decimal` (house rule 9).
 //!

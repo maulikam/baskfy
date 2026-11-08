@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.directional` (`decile-blueprint/packages/core/src/baskfy_core/fno/directional.py`).
+//! Port of `baskfy_core.fno.directional` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/directional.py`).
 //!
 //! F3, the directional index credit spread — every rule of `04` §11, pure (Maulik, M.5). Bars
 //! in, decisions out: the desk and the worker hand it daily bars, minute bars, the listed

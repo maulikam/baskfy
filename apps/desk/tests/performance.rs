@@ -269,7 +269,7 @@ fn nan_is_refused_as_starlette_refuses_it() {
 // =============================================================================================
 
 fn desk_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../legacy/python/kite-momentum-rebalancer")
 }
 
 async fn app(dir: &Path, kite_json: &str) -> axum::Router {

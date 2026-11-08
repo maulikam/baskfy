@@ -1,9 +1,9 @@
-//! Baskfy's HTTP API in Rust, ported from `decile-blueprint/services/api` (`baskfy_api`).
+//! Baskfy's HTTP API in Rust, ported from `legacy/python/decile-blueprint/services/api` (`baskfy_api`).
 //!
 //! The strangler rule applies (docs/rust-rewrite/README.md): Python serves until each route here
 //! answers **exactly** as Python does — same status, same `problem+json`, same JSON bytes after
 //! parsing (keys, key order, number and date spelling), same cache headers — graded by
-//! `tools/parity/api_diff.py` against a copy of the database.
+//! `legacy/python/tools/parity/api_diff.py` against a copy of the database.
 //!
 //! The request pipeline, outermost first, is `app.py`'s:
 //!

@@ -1,8 +1,8 @@
 //! The replay provider: one recorded trading day, served from a bundle directory with **zero
-//! network**. No Python twin in production — its twin is `tools/parity/replay_provider.py`, the
+//! network**. No Python twin in production — its twin is `legacy/python/tools/parity/replay_provider.py`, the
 //! harness's adapter, and the two must answer every call identically (DECISIONS-RS R7.3).
 //!
-//! It exists so the worker's nightly can be graded differentially (`tools/parity/nightly_diff.py`):
+//! It exists so the worker's nightly can be graded differentially (`legacy/python/tools/parity/nightly_diff.py`):
 //! the Python chain and the Rust chain read the same answers for the same calls, so any
 //! difference in what they write is a difference in the code, never in the inputs.
 //!

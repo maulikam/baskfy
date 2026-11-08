@@ -327,7 +327,9 @@ mod tests {
         assert_eq!(VBT_RUNBOOK, "docs/runbooks/08-vbt-evening.md");
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         assert!(
-            root.join("decile-blueprint").join(VBT_RUNBOOK).exists()
+            root.join("legacy/python/decile-blueprint")
+                .join(VBT_RUNBOOK)
+                .exists()
                 || root.join(VBT_RUNBOOK).exists(),
             "runbook 8 is missing"
         );

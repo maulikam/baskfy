@@ -11,7 +11,7 @@
 //! 400 for a bad parameter), the public API's 404, and the read-only promise over the source.
 //! On the bed (`cfg(bed)`): the orderings, shapes and visibility rules over real rows. Python's
 //! seeded-database tests (rows the test writes) stay with Python; their outputs are graded by
-//! `tools/parity/api_diff.py` over `tools/parity/api_cases/reference.json`.
+//! `legacy/python/tools/parity/api_diff.py` over `legacy/python/tools/parity/api_cases/reference.json`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;

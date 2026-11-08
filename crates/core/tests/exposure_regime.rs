@@ -4,7 +4,7 @@
     clippy::panic,
     clippy::float_cmp
 )]
-//! Port of `kite-momentum-rebalancer/tests/test_regime.py` onto `baskfy_core::exposure::regime`.
+//! Port of `legacy/python/kite-momentum-rebalancer/tests/test_regime.py` onto `baskfy_core::exposure::regime`.
 
 use std::collections::BTreeMap;
 

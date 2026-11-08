@@ -8,7 +8,7 @@
 //! The DB-backed halves (a confirm's four simulated fills, 410/409 refusals, abandonment, the
 //! exit shorts first, the ledger's pauses) are `tests/options_confirm_db.rs`, run against a bed
 //! clone (`BASKFY_RS_OPTIONS_TEST_PG`); the routes' views and refusals are graded against the
-//! Python desk by `tools/parity/desk_diff.py` over `desk_cases/options.json`.
+//! Python desk by `legacy/python/tools/parity/desk_diff.py` over `desk_cases/options.json`.
 //!
 //! Every order here goes to the replay Kite, which records each call and sends nothing.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

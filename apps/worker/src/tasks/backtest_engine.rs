@@ -15,7 +15,7 @@
 //!
 //! Private submodules: `loader` (`baskfy_worker.backtest`), `payload` (`baskfy_api.backtests`),
 //! `job` (`tasks/backtests.py`), `risk_free` (`baskfy_core.risk_free`). Grade with
-//! `tools/parity/task_diff.py --cases tools/parity/task_cases/backtest_engine.json`.
+//! `legacy/python/tools/parity/task_diff.py --cases legacy/python/tools/parity/task_cases/backtest_engine.json`.
 //!
 //! **Law 2.** Nothing here reaches a broker: a backtest reads the database and writes its own
 //! row, three CSV files and Redis progress frames.

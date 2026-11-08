@@ -15,7 +15,7 @@
 //! and the parsing it applies to the answer (`_format_response`, `_parse_instruments`,
 //! `_format_historical`, reused from `baskfy_providers::kite`). The replay client
 //! ([`crate::fake_kite::ReplayKite`]) records exactly that call, and
-//! `tools/parity/desk_harness.py` records the same call from Python by intercepting
+//! `legacy/python/tools/parity/desk_harness.py` records the same call from Python by intercepting
 //! `KiteConnect._request` — so the two desks' order and GTT calls are compared at the wire.
 //!
 //! [`KiteHttp`] is the production client: kiteconnect 5.2.1's `_request` over HTTP, built on

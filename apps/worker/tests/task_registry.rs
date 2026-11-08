@@ -1,5 +1,5 @@
 //! The Rust task registry and Beat table, held equal to the Python worker's Celery surface
-//! (`tests/fixtures/python_task_registry.json`, written by `tools/parity/task_registry.py` from the
+//! (`tests/fixtures/python_task_registry.json`, written by `legacy/python/tools/parity/task_registry.py` from the
 //! live `celery_app` — DECISIONS-RS R8.1). A task added, renamed, re-routed, re-scheduled or given
 //! a new parameter or retry policy in Python fails here until the port follows.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

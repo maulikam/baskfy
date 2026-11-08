@@ -12,7 +12,7 @@
 //! client** — as it has no live Kite client (R8.0). Every request goes through [`NseHttp`]:
 //! [`Offline`] (the production default: every request fails, so the page serves its disk cache
 //! or says NSE is unreachable) or [`Replay`] (the parity harness: files from a fixture
-//! directory, shared byte for byte with `tools/parity/desk_nse_replay.py`). A live client is a
+//! directory, shared byte for byte with `legacy/python/tools/parity/desk_nse_replay.py`). A live client is a
 //! cutover item.
 //!
 //! The process-wide state Python keeps in module globals (`_last_archive_at`, `_blocked_until`,

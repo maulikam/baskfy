@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.options.gating` (`decile-blueprint/packages/core/src/baskfy_core/options/gating.py`).
+//! Port of `baskfy_core.options.gating` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/options/gating.py`).
 //!
 //! `options_gates(sleeve)` — the one function that ANDs the four switches (docs/options/02 Track B). The flags are passed in as values; this module never reads the environment (law 1).
 //!

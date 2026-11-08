@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.sleeve` (`decile-blueprint/packages/core/src/baskfy_core/vbt/sleeve.py`).
+//! Port of `baskfy_core.vbt.sleeve` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/sleeve.py`).
 //!
 //! The sleeve's own money (`docs/vbt/06` VB5, DECISIONS-VB PACK.4). **This book sizes against
 //! its own cash and never against the account.** The arithmetic is stated once here:

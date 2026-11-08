@@ -1,6 +1,6 @@
 //! `baskfy_core.backtest.run_backtest` and `run_fragility`.
 //!
-//! Ported from `decile-blueprint/packages/core/src/baskfy_core/backtest.py` (docs/10
+//! Ported from `legacy/python/decile-blueprint/packages/core/src/baskfy_core/backtest.py` (docs/10
 //! §"Execution model", steps 1-8, in order) and graded by `tests/golden_backtest_engine.rs`
 //! against `rust/testdata/golden/L1/backtest/run_{backtest,fragility}.*`.
 //!

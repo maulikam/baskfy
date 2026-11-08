@@ -314,7 +314,7 @@ fn the_page_with_results_renders_byte_equal_to_python() {
     let g = PyValue::from_json(&std::fs::read(path).unwrap()).unwrap();
     let asset_v = at(&g, "asset_v").py_str();
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../kite-momentum-rebalancer/app/templates");
+        .join("../../legacy/python/kite-momentum-rebalancer/app/templates");
     let t = crate::templates::Templates::new(&dir, &asset_v, false);
     let mut bad = Vec::new();
     for (name, case) in map(at(&g, "cases")).iter() {

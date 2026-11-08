@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.underlying` (`decile-blueprint/packages/core/src/baskfy_core/fno/underlying.py`).
+//! Port of `baskfy_core.fno.underlying` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/underlying.py`).
 //!
 //! One session's `fo_underlying_daily` rows from a window of `fo_contract_daily` (`03` §2):
 //! the pure half of the nightly derivation. It joins [`continuous_futures`] and

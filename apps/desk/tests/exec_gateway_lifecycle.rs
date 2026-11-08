@@ -1,4 +1,4 @@
-//! `kite-momentum-rebalancer/tests/test_lifecycle.py` (LV6): one lifecycle per trade, the stop
+//! `legacy/python/kite-momentum-rebalancer/tests/test_lifecycle.py` (LV6): one lifecycle per trade, the stop
 //! judged at the broker, and explicit adoption. Python's books are the executor suites'
 //! in-memory stores given the two reads adoption needs; here they are [`MemoryBook`], the same
 //! contract ([`AdoptBook`]) over vectors. The broker's GTT list is a list of Kite-shaped dicts;
@@ -187,7 +187,7 @@ fn test_rows_put_unresolved_and_overdue_first_and_carry_the_reconcilers_findings
 
 fn templates() -> baskfy_desk::templates::Templates {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../kite-momentum-rebalancer/app/templates");
+        .join("../../legacy/python/kite-momentum-rebalancer/app/templates");
     let mut t = baskfy_desk::templates::Templates::new(&dir, "X", false);
     baskfy_desk::lanes::register_templates(&mut t);
     t
@@ -587,7 +587,7 @@ fn test_card_rules_come_from_the_configs_and_name_the_numbers() {
 #[test]
 fn test_card_shows_initial_stop_rupee_risk_and_the_exit_rule() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../kite-momentum-rebalancer/app/templates");
+        .join("../../legacy/python/kite-momentum-rebalancer/app/templates");
     for page in ["twt.html", "vbt.html", "swing.html"] {
         let text = std::fs::read_to_string(dir.join(page)).unwrap();
         assert!(
@@ -646,7 +646,7 @@ fn test_no_order_verb_in_the_module() {
 /// The fixture's broker GTT list (`desk_fixtures/lifecycle_gtts/kite.json`, route `gtt`).
 fn fixture_gtts() -> GttIndex {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tools/parity/desk_fixtures/lifecycle_gtts/kite.json");
+        .join("../../legacy/python/tools/parity/desk_fixtures/lifecycle_gtts/kite.json");
     let raw: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     let data = serde_json::to_vec(&raw["routes"]["gtt"]["data"]).unwrap();
     let PyValue::List(rows) = PyValue::from_json(&data).unwrap() else {

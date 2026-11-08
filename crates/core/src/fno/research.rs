@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.research` (`decile-blueprint/packages/core/src/baskfy_core/fno/research.py`).
+//! Port of `baskfy_core.fno.research` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/research.py`).
 //!
 //! The `RESEARCH.md` families as pure functions of polars frames (`04` §6; FO1, FO9): a
 //! faithful port of the research scripts — `cont.py` ([`continuous`]), `res_options.py`

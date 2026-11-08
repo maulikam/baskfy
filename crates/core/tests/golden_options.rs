@@ -1,7 +1,7 @@
 //! Grades the options ports against every golden in `rust/testdata/golden/L1/options`:
 //! `condor.exit_decision`, `costs.charges`, `execution.never_naked`, `execution.simulate_fill`,
 //! `gating.options_gates` and `ledger.journal_figures`. Each case is called from its stored
-//! inputs exactly as `tools/parity/golden_options.py` calls the Python function.
+//! inputs exactly as `legacy/python/tools/parity/golden_options.py` calls the Python function.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::collections::BTreeMap;

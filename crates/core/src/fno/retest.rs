@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.retest` (`decile-blueprint/packages/core/src/baskfy_core/fno/retest.py`).
+//! Port of `baskfy_core.fno.retest` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/retest.py`).
 //!
 //! The quarterly re-test (`docs/fno/04` §6, FO9): every `RESEARCH.md` family, from the table.
 //! The worker reads `fo_contract_daily`; this module turns those rows into the research's two

@@ -1,7 +1,7 @@
-//! Ports `tools/runs/options/replay.py` (OP9): a recorded session through the options monitor, and
+//! Ports `legacy/python/tools/runs/options/replay.py` (OP9): a recorded session through the options monitor, and
 //! what it raised.
 //!
-//! A fixture (`tools/runs/options/make_fixtures.py` writes them) is one JSON file: the day, one open
+//! A fixture (`legacy/python/tools/runs/options/make_fixtures.py` writes them) is one JSON file: the day, one open
 //! position as `op_position` and its plan carry it, NIFTY 50's minute bars, and each leg's
 //! bid/ask each minute. Each index minute becomes four ticks — open, low, high, close at +0, +15,
 //! +30 and +45 seconds — and each leg quote one depth tick at +50 seconds. `feed_stops` drops

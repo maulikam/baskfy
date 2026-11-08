@@ -1,5 +1,5 @@
 //! Lane **exec_gateway**: the gateway's non-negotiables, ported test-first from
-//! `decile-blueprint/packages/execution/tests/{test_non_negotiables,test_client_id_journal,
+//! `legacy/python/decile-blueprint/packages/execution/tests/{test_non_negotiables,test_client_id_journal,
 //! test_tenant_isolation,test_derivative_product_gate}.py` (the gateway halves) and the desk's
 //! `app/core/gateway.py` shim (`test_execute_gateway.py`'s gateway-level assertions).
 //!

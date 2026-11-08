@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.plan` (`decile-blueprint/packages/core/src/baskfy_core/swing/plan.py`).
+//! Port of `baskfy_core.swing.plan` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/plan.py`).
 //!
 //! A day's plan (docs/swing/04 §9): watch items and account to lines the desk can confirm. Advice with numbers only — law 2: nothing here sends an order.
 //!

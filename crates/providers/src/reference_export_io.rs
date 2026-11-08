@@ -9,15 +9,15 @@ use std::path::PathBuf;
 
 use crate::errors::ProviderError;
 
-/// The export's file name under `decile-blueprint/tests/fixtures/`.
+/// The export's file name under `legacy/python/decile-blueprint/tests/fixtures/`.
 pub const REFERENCE_EXPORT_FILE: &str = "reference-screen-export-2026-08-18.csv";
 
-/// `REFERENCE_EXPORT`: Python resolves `parents[4]` of its own file (the `decile-blueprint`
+/// `REFERENCE_EXPORT`: Python resolves `parents[4]` of its own file (the `legacy/python/decile-blueprint`
 /// tree); Rust resolves the same file from this crate's manifest directory at build time.
 #[must_use]
 pub fn reference_export() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../decile-blueprint/tests/fixtures")
+        .join("../../legacy/python/decile-blueprint/tests/fixtures")
         .join(REFERENCE_EXPORT_FILE)
 }
 

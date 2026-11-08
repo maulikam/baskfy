@@ -259,7 +259,7 @@ mod tests {
     fn committed_report() -> String {
         std::fs::read_to_string(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../decile-blueprint/reconciliation/REPORT.md"),
+                .join("../../legacy/python/decile-blueprint/reconciliation/REPORT.md"),
         )
         .unwrap()
     }

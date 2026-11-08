@@ -8,7 +8,7 @@
 //!   and `with_twt_indicators`' `limit_locked`. Every expected value was printed by the live
 //!   Python (polars 1.43.2) from the identical frame; each case names the divergence from IEEE
 //!   it pins.
-//! * **Differential fuzz** (ignored by default): `tests/fuzz/pl_semantics_fuzz.py` writes 5,765
+//! * **Differential fuzz** (ignored by default): `legacy/python/tools/rust-fixtures/pl_semantics_fuzz.py` writes 5,765
 //!   cases from the live Python — `max_horizontal`/`min_horizontal` over 3,000 random frames,
 //!   group `min`/`max` over 2,000 value sets, the five comparisons over every pair, and
 //!   `tight_state`/`month_low_back`/`liquidity_floor` over random NaN-laden frames — and
@@ -304,10 +304,10 @@ fn opt_bools(v: &Value) -> Vec<Option<bool>> {
 }
 
 /// Differential fuzz against the live Python: `BASKFY_PL_FUZZ` names the file
-/// `tests/fuzz/pl_semantics_fuzz.py` wrote. Ignored by default; run with
+/// `legacy/python/tools/rust-fixtures/pl_semantics_fuzz.py` wrote. Ignored by default; run with
 /// `BASKFY_PL_FUZZ=... cargo test -p baskfy-core --test pl_semantics -- --ignored`.
 #[test]
-#[ignore = "needs BASKFY_PL_FUZZ from tests/fuzz/pl_semantics_fuzz.py"]
+#[ignore = "needs BASKFY_PL_FUZZ from legacy/python/tools/rust-fixtures/pl_semantics_fuzz.py"]
 fn differential_fuzz() {
     let path = std::env::var("BASKFY_PL_FUZZ").expect("BASKFY_PL_FUZZ");
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();

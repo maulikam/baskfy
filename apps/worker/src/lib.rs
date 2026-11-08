@@ -1,8 +1,8 @@
-//! Baskfy's worker in Rust, ported from `decile-blueprint/services/worker` (`baskfy_worker`).
+//! Baskfy's worker in Rust, ported from `legacy/python/decile-blueprint/services/worker` (`baskfy_worker`).
 //!
 //! Wave 5 ports the **nightly pipeline first** (docs/rust-rewrite/STATUS.md, "Wave 5"). The
 //! strangler rule applies: Python's Celery task keeps running the chain until every step here
-//! writes what Python writes, graded by `tools/parity/nightly_diff.py` on clones of the bed with
+//! writes what Python writes, graded by `legacy/python/tools/parity/nightly_diff.py` on clones of the bed with
 //! the replay provider serving identical inputs to both sides.
 //!
 //! | Python | Rust | state |

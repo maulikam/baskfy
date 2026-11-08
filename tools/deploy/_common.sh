@@ -7,8 +7,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BLUE="$ROOT/decile-blueprint"
-COMPOSE_FILE="$BLUE/deploy/compose.prod.yml"
+BLUE="$ROOT/legacy/python/decile-blueprint"
+COMPOSE_FILE="$ROOT/deploy/compose.prod.yml"
 ENV_COMPOSE="$ROOT/.env.staging.compose"
 WEB_IMAGE="${BASKFY_WEB_IMAGE:-baskfy-web:local}"
 PY_IMAGE="${BASKFY_PY_IMAGE:-baskfy-py:local}"

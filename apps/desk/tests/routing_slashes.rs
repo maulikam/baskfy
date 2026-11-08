@@ -33,7 +33,8 @@ async fn app(dir: &Path) -> Router {
     let db = Db::open(DbConfig::from_settings(&settings, None))
         .await
         .unwrap();
-    let desk = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer");
+    let desk =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../legacy/python/kite-momentum-rebalancer");
     let ist = FixedOffset::east_opt(19800).unwrap();
     let state = build_state(StateParts {
         settings,

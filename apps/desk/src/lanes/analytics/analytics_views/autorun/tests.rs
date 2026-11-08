@@ -230,7 +230,9 @@ fn a_failed_autostart_never_costs_the_login() {
 
 #[test]
 fn the_runner_places_no_orders() {
-    let src = include_str!("../../../../../../../kite-momentum-rebalancer/scripts/autorun.py");
+    let src = include_str!(
+        "../../../../../../../legacy/python/kite-momentum-rebalancer/scripts/autorun.py"
+    );
     for token in ["place_order", "place_gtt", "modify_order", "cancel_order"] {
         assert!(!src.contains(token), "{token}");
     }

@@ -22,7 +22,7 @@
 //! * `GET /reconcile`
 //! * `GET /reconcile/data`
 //!
-//! **Tests to port first** (`kite-momentum-rebalancer/tests/`, test functions per file):
+//! **Tests to port first** (`legacy/python/kite-momentum-rebalancer/tests/`, test functions per file):
 //! * `test_plan_store.py` (30)
 //! * `test_stops_route.py` (21)
 //! * `test_protection.py` (41)

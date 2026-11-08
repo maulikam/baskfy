@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.signals` (`decile-blueprint/packages/core/src/baskfy_core/vbt/signals.py`).
+//! Port of `baskfy_core.vbt.signals` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/signals.py`).
 //!
 //! The VBT-1 signal: Chartink's five lines, plus the six filters that make them a strategy
 //! (`docs/vbt/04` §3). Every predicate reads a field of [`crate::vbt::config`]. **A null on

@@ -8,7 +8,7 @@
 //! `postgres` database) and run `cargo test -p baskfy-worker -- --ignored twt_jobs`; without the
 //! variable they are reported `ignored`. A URL naming the `baskfy` database is refused.
 //! Task-level parity against Python on a real clone is `task_diff.py --cases
-//! tools/parity/task_cases/twt_jobs.json`.
+//! legacy/python/tools/parity/task_cases/twt_jobs.json`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use baskfy_api::Settings;

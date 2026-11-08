@@ -155,7 +155,8 @@ mod costs {
 fn desk_root() -> PathBuf {
     match std::env::var_os("BASKFY_DESK_ROOT") {
         Some(root) if !root.is_empty() => PathBuf::from(root),
-        _ => Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer"),
+        _ => Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../legacy/python/kite-momentum-rebalancer"),
     }
 }
 

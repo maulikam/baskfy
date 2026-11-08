@@ -1,8 +1,8 @@
-//! `baskfy-desk`: the operator desk (`kite-momentum-rebalancer/app`) in Rust — wave D
+//! `baskfy-desk`: the operator desk (`legacy/python/kite-momentum-rebalancer/app`) in Rust — wave D
 //! (DECISIONS-RS R8.0–R8.5).
 //!
 //! **Porting is not cutover** (R8.0). The Python desk keeps serving and placing every order.
-//! This crate reproduces it route by route, graded by `tools/parity/desk_diff.py` against the
+//! This crate reproduces it route by route, graded by `legacy/python/tools/parity/desk_diff.py` against the
 //! Python desk on bed clones with a replay Kite and an injected clock; the execution core is
 //! ported test-first, DRY_RUN-only, and cuts over only on Maulik's explicit go after two shadow
 //! Fridays.

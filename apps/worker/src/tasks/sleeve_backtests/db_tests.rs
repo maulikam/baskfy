@@ -6,7 +6,7 @@
 //! database, inside `TEMP` tables shaped like the production ones — never the bed's `baskfy`.
 //! Set `BASKFY_RS_SCRATCH_DATABASE_URL` and run `cargo test -p baskfy-worker -- --ignored
 //! sleeve_backtests`; without it they are reported `ignored`. The planted-trade tests are graded
-//! on the bed's real bars instead, by `tools/parity/twt_backtest_diff.py` and `task_diff.py`.
+//! on the bed's real bars instead, by `legacy/python/tools/parity/twt_backtest_diff.py` and `task_diff.py`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::{DateTime, TimeZone, Utc};

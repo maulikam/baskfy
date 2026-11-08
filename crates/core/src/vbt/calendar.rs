@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.calendar` (`decile-blueprint/packages/core/src/baskfy_core/vbt/calendar.py`).
+//! Port of `baskfy_core.vbt.calendar` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/calendar.py`).
 //!
 //! The run's own trading calendar: thin sessions removed (`docs/vbt/04` §2.1). A muhurat
 //! session, or a special Saturday the exchange runs as a test, is a session to the exchange and

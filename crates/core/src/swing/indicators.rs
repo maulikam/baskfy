@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.indicators` (`decile-blueprint/packages/core/src/baskfy_core/swing/indicators.py`).
+//! Port of `baskfy_core.swing.indicators` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/indicators.py`).
 //!
 //! Per-bar columns the swing detectors read (docs/swing/04 §1).
 //!

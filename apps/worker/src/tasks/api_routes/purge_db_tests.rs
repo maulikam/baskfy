@@ -5,7 +5,7 @@
 //! `ON DELETE CASCADE`s the purge relies on) — never the bed's `baskfy`. Set
 //! `BASKFY_RS_SCRATCH_DATABASE_URL` and run `cargo test -p baskfy-worker -- --ignored
 //! api_routes::purge_db_tests`; without it they are reported `ignored`. The parity against Python
-//! on real clones is `task_diff.py --cases tools/parity/task_cases/api_routes.json`.
+//! on real clones is `task_diff.py --cases legacy/python/tools/parity/task_cases/api_routes.json`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::{DateTime, Duration, TimeZone, Utc};

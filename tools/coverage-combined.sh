@@ -2,7 +2,7 @@
 # Measure baskfy_core's coverage across BOTH suites, because both of them test it.
 #
 # M15-M17 moved the desk's score, basket construction, exposure overlay and cost model into
-# packages/core. Their tests did not move: they live in kite-momentum-rebalancer/tests/, which runs
+# packages/core. Their tests did not move: they live in legacy/python/kite-momentum-rebalancer/tests/, which runs
 # in a different virtualenv and never reached the coverage report.
 #
 # So the gate saw exposure/regime.py at 39% and basket.py at 15.9% and failed baskfy_core at
@@ -15,8 +15,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DECILE="$ROOT/decile-blueprint"
-DESK="$ROOT/kite-momentum-rebalancer"
+DECILE="$ROOT/legacy/python/decile-blueprint"
+DESK="$ROOT/legacy/python/kite-momentum-rebalancer"
 WORK="${COVERAGE_WORKDIR:-$ROOT/.coverage-combined}"
 
 # Without this the db-marked suites skip and the gate refuses to report a number it does not

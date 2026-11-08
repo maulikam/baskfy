@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.calendar` (`decile-blueprint/packages/core/src/baskfy_core/fno/calendar.py`).
+//! Port of `baskfy_core.fno.calendar` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/calendar.py`).
 //!
 //! Monthly expiries, entry and hard-exit sessions, the entry window (`04` §1, `03` §4). Two
 //! sources and no arithmetic on weekdays: **expiries come from the NFO master** (the monthly is

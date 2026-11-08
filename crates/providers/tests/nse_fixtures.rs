@@ -541,7 +541,7 @@ async fn a_parquet_file_is_refused_until_the_feature_is_declared() {
 fn the_default_fixture_directory_is_the_python_one() {
     arm();
     let dir = default_fixture_dir().unwrap();
-    assert!(dir.ends_with("decile-blueprint/tests/fixtures/providers"));
+    assert!(dir.ends_with("legacy/python/decile-blueprint/tests/fixtures/providers"));
     // Anyone reading these numbers must be able to see what is real and what is not.
     let text = std::fs::read_to_string(dir.join("PROVENANCE.md")).unwrap();
     assert!(text.contains("Synthetic"));

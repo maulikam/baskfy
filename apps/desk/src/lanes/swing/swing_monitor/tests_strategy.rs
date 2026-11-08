@@ -1,7 +1,7 @@
 //! `tests/test_swing_monitor.py`'s strategy tests, driven through the runner's tick reading
 //! ([`super::runner::tick_of`]) exactly as the loop drives them: `TestTheStrategy`,
-//! `TestTheRangeIsTheTicks`, `TestTheReplay` (the fixture morning in `tools/runs/swing/fixtures`,
-//! with `tools/runs/swing/replay.py`'s candle-to-tick convention ported below) and
+//! `TestTheRangeIsTheTicks`, `TestTheReplay` (the fixture morning in `legacy/python/tools/runs/swing/fixtures`,
+//! with `legacy/python/tools/runs/swing/replay.py`'s candle-to-tick convention ported below) and
 //! `TestTelemetryNeverStopsAVerdict`'s verdict half. Where Python reads a private attribute
 //! (`state[t].reconciled`), the test observes the same fact through the candle source's asks.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -459,11 +459,12 @@ async fn test_observe_raises_in_the_verdict_sink_is_dropped_and_the_signal_still
 }
 
 // =============================================================================================
-// TestTheReplay: `tools/runs/swing/replay.py`, ported for the fixture morning
+// TestTheReplay: `legacy/python/tools/runs/swing/replay.py`, ported for the fixture morning
 // =============================================================================================
 
 fn fixtures() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/runs/swing/fixtures")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../legacy/python/tools/runs/swing/fixtures")
 }
 
 /// `read_candles`: `token,symbol,start,open,high,low,close,volume` → candles per token, sorted.

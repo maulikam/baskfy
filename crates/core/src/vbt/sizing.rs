@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.sizing` (`decile-blueprint/packages/core/src/baskfy_core/vbt/sizing.py`).
+//! Port of `baskfy_core.vbt.sizing` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/sizing.py`).
 //!
 //! Ten equal slots, and the cap that bound is named (`docs/vbt/04` §5). Money is `Decimal`
 //! (house rule 9). The share count is the floor of the smallest of four budgets, and **which one

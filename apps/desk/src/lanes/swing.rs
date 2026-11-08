@@ -25,7 +25,7 @@
 //! **Background services** (`baskfy-desk service <name>`, via [`run_service`]):
 //! * swing-monitor (python -m app.swing_monitor)
 //!
-//! **Tests to port first** (`kite-momentum-rebalancer/tests/`, test functions per file):
+//! **Tests to port first** (`legacy/python/kite-momentum-rebalancer/tests/`, test functions per file):
 //! * `test_swing_desk.py` (114)
 //! * `test_swing_execute.py` (122)
 //! * `test_swing_monitor.py` (84)

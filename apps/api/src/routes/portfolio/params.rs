@@ -1,6 +1,6 @@
 //! Path and query parameters as FastAPI + pydantic v2 validate them, for this lane's routes.
 //!
-//! pydantic's lax `int` from a string (checked against pydantic-core in the decile-blueprint
+//! pydantic's lax `int` from a string (checked against pydantic-core in the legacy/python/decile-blueprint
 //! venv): surrounding whitespace is stripped (Unicode, as Rust's `trim`), then an optional sign,
 //! ASCII digits with single `_` separators between digits, and an optional `.` followed by zeros
 //! only (`"12.0"` is 12, `"12.5"` and `"12."` are refused). The value is unbounded in Python; it
@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn pydantic_lax_int() {
-        // Each checked against pydantic-core in the decile-blueprint venv.
+        // Each checked against pydantic-core in the legacy/python/decile-blueprint venv.
         for (raw, want) in [
             ("12", Some(12)),
             (" 12 ", Some(12)),

@@ -1,5 +1,5 @@
 //! Port of `baskfy_core.fno.directional_retest`
-//! (`decile-blueprint/packages/core/src/baskfy_core/fno/directional_retest.py`).
+//! (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/directional_retest.py`).
 //!
 //! F3's EOD re-test: the daily half of `04` §11 on the option bhavcopy, pure (F3-3). The index
 //! bars are the front-month future's OHLC; the entry is at the next session's settle; each

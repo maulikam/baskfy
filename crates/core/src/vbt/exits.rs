@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.exits` (`decile-blueprint/packages/core/src/baskfy_core/vbt/exits.py`)
+//! Port of `baskfy_core.vbt.exits` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/exits.py`)
 //! — the stop and the exit (`docs/vbt/04` §6). **The EMA is the exit; the stop is insurance.**
 //!
 //! Pure: a position and a bar in, an action out. Nothing here places, cancels or arms anything;

@@ -4,7 +4,7 @@
 //!
 //! Every case for each function is loaded and graded strictly by the testkit, and each
 //! function's case count is asserted so a dropped golden fails loudly. A Python raise is graded
-//! as `{"raises": {"type", "message"}}`, exactly as `tools/parity/golden_ranking.py` stores it.
+//! as `{"raises": {"type", "message"}}`, exactly as `legacy/python/tools/parity/golden_ranking.py` stores it.
 //!
 //! The harness mirrors the dumper: a spec is built from JSON (each `TermSpec` validated, then
 //! the `RankingSpec`); a series input is `_float_series` (`null` → NaN); frames are pandas

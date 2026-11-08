@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.costs` (`decile-blueprint/packages/core/src/baskfy_core/fno/costs.py`).
+//! Port of `baskfy_core.fno.costs` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/costs.py`).
 //!
 //! What an FO round trip costs, itemised, in `Decimal` (`04` §3, §10).
 //!

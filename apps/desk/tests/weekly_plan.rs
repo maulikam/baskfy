@@ -1,5 +1,5 @@
 //! Lane weekly_plan: the plan store (graded on `fixtures/weekly/plan_store.json`, dumped from
-//! the live Python by `tools/parity/desk_weekly_goldens.py`), the spec tests of
+//! the live Python by `legacy/python/tools/parity/desk_weekly_goldens.py`), the spec tests of
 //! `tests/test_plan_store.py` (the properties, not the numbers), the confirm gate of the weekly
 //! book, and the strategy interface.
 //!

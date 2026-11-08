@@ -10,9 +10,9 @@
 # install the same five packages would be three things to keep in step, and the day they drift is
 # the day the worker runs different code than the API that enqueued the job.
 #
-# BUILD CONTEXT IS `decile-blueprint/`
+# BUILD CONTEXT IS `legacy/python/decile-blueprint/`
 # ------------------------------------
-#     docker build -f deploy/Dockerfile.python -t baskfy-py decile-blueprint
+#     docker build -f deploy/Dockerfile.python -t baskfy-py legacy/python/decile-blueprint
 #
 # WHY uv AND NOT pip
 # ------------------

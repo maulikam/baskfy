@@ -9,7 +9,7 @@
 //! `sw_config`, fresh instruments and bars, then the function under test. Set
 //! `BASKFY_RS_SWING_EOD_DB_URL` and run `cargo test -p baskfy-worker -- --ignored
 //! tasks::swing_eod::db_tests`; without it they are reported `ignored`. The task-level parity
-//! against Python on real clones is `task_diff.py --cases tools/parity/task_cases/swing_eod.json`.
+//! against Python on real clones is `task_diff.py --cases legacy/python/tools/parity/task_cases/swing_eod.json`.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

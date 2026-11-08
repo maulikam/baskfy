@@ -33,13 +33,13 @@ done
 # alone flagged two explanatory comments that write `$2a$14$…` — with an ellipsis — to explain why
 # the `$` has to be escaped for Compose. This check therefore failed on documentation, and had
 # been failing since before M74; a safety check that is always red is one nobody reads.
-if git ls-files 'decile-blueprint/infra/**' 'tools/deploy/**' \
+if git ls-files 'legacy/python/decile-blueprint/infra/**' 'tools/deploy/**' \
      | xargs grep -lE '\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}' 2>/dev/null | grep -q .; then
   fail "a bcrypt hash is committed"
 fi
 
 # 3. The safety rails, in the file that describes the box.
-C="$BLUE/deploy/compose.prod.yml"
+C="$ROOT/deploy/compose.prod.yml"
 # The default is false since 1 Nov 2026 (Maulik; DECISIONS-MERGE DRY-LIVE). The rail now is that
 # compose reads it from the env file and deploy-swing.sh pins the box true when that file is silent.
 grep -qE 'DRY_RUN: "\$\{BASKFY_DRY_RUN:-false\}"' "$C" \
@@ -48,7 +48,7 @@ grep -q 'for k in BASKFY_DRY_RUN BASKFY_DESK_DRY_RUN' "$ROOT/tools/deploy/deploy
   || fail "deploy-swing.sh no longer pins the box's DRY_RUN when unset"
 grep -q 'BASKFY_PUBLIC_API_ENABLED: "false"' "$C" || fail "the public API is not shut (D9)"
 grep -q 'BASKFY_FREE_TIER_ENABLED: "false"'  "$C" || fail "a Track B flag is not false"
-grep -q 'DRY_RUN=false' "$BLUE/deploy/Dockerfile.python" || fail "the image does not state DRY_RUN's default (DRY-LIVE)"
+grep -q 'DRY_RUN=false' "$ROOT/deploy/Dockerfile.python" || fail "the image does not state DRY_RUN's default (DRY-LIVE)"
 
 # 3b. VB13 — the volume-breakout sleeve's rails, as compose defaults.
 #
@@ -58,7 +58,7 @@ grep -q 'DRY_RUN=false' "$BLUE/deploy/Dockerfile.python" || fail "the image does
 #
 # And there must be no auto-execute for it, here or anywhere: non-negotiable 1's named exception
 # belongs to the swing sleeve alone. The repository-wide version of this check is
-# `kite-momentum-rebalancer/tests/test_vbt_safety.py`; this is the deployed-config half.
+# `legacy/python/kite-momentum-rebalancer/tests/test_vbt_safety.py`; this is the deployed-config half.
 grep -q 'BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"' "$C"   || fail "BASKFY_VBT_EXECUTION_ENABLED is not named-and-false in compose.prod.yml"
 # Comment lines are stripped first: the block above states the prohibition in prose
 # ("THERE IS NO BASKFY_VBT_AUTO_EXECUTE"), and a prohibition must not trip the check that

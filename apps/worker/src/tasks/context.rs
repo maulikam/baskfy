@@ -5,7 +5,7 @@
 //! the same moment on both sides. Every Rust task reads time through [`TaskContext::now_ist`] /
 //! [`TaskContext::now_utc`] / [`TaskContext::clock`], never the system clock: `--now` pins the
 //! start (IST wall clock), and the clock then **advances** with real elapsed time (monotonic) in
-//! whole seconds, as the Python side's injected clock does (`tools/parity/task_py.py`). A frozen clock would hang
+//! whole seconds, as the Python side's injected clock does (`legacy/python/tools/parity/task_py.py`). A frozen clock would hang
 //! any task that waits for a moment to pass (`swing.timing_probe` polls until 09:15).
 //!
 //! What cannot be injected, on either side: Postgres's own `now()` (column defaults, SQL that
@@ -95,7 +95,7 @@ pub struct TaskContext {
     /// `--replay-bundle`: the provider stack is the replay adapter over this bundle.
     pub replay_bundle: Option<PathBuf>,
     /// `--replay-upstream`: a loopback server answering recorded Kite REST and NSE archive
-    /// requests (`tools/parity/replay_upstream.py`). A lane that builds a Kite client points it
+    /// requests (`legacy/python/tools/parity/replay_upstream.py`). A lane that builds a Kite client points it
     /// here ([`TaskContext::kite_root`]); the NSE adapter reads `BASKFY_NSE_ARCHIVE_URL` itself.
     pub replay_upstream: Option<String>,
     clock: Arc<TaskClock>,

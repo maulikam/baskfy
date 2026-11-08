@@ -2,7 +2,7 @@
 //! `run_backtest` and `run_fragility` against the goldens (`rust/testdata/golden/L1/backtest`):
 //! 22 + 3 cases.
 //!
-//! Each case is decoded exactly as `tools/parity/golden_backtest.py`'s `call_run_backtest` /
+//! Each case is decoded exactly as `legacy/python/tools/parity/golden_backtest.py`'s `call_run_backtest` /
 //! `call_run_fragility` decode it (`decode_config`, `decode_data`, the optional `schedule`),
 //! the Rust port is called, and the result is encoded the way the dumper encodes the Python
 //! result: the dataclasses field for field, a raised `BacktestError` as `{"error": {"type",

@@ -10,8 +10,8 @@
 !apps/worker
 !crates
 !db/migrations
-!kite-momentum-rebalancer/app/templates
-!kite-momentum-rebalancer/app/static
+!legacy/python/kite-momentum-rebalancer/app/templates
+!legacy/python/kite-momentum-rebalancer/app/static
 **/.env
 **/.env.*
 **/*.pem

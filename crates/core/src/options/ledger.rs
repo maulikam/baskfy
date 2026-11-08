@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.options.ledger` (`decile-blueprint/packages/core/src/baskfy_core/options/ledger.py`).
+//! Port of `baskfy_core.options.ledger` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/options/ledger.py`).
 //!
 //! A closed session's journal figures, pure (docs/options/04 §12), computed from the session's fills.
 //!

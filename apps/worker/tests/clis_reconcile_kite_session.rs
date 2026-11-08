@@ -64,7 +64,7 @@ fn reconcile_writes_the_report_file() {
     assert_eq!(out.status.code(), Some(0));
     let committed = std::fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../decile-blueprint/reconciliation/REPORT.md"),
+            .join("../../legacy/python/decile-blueprint/reconciliation/REPORT.md"),
     )
     .unwrap();
     assert_eq!(std::fs::read_to_string(&target).unwrap(), committed);

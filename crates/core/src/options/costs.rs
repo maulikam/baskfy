@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.options.costs` (`decile-blueprint/packages/core/src/baskfy_core/options/costs.py`).
+//! Port of `baskfy_core.options.costs` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/options/costs.py`).
 //!
 //! What a round trip costs, itemised, in `Decimal` (docs/options/04 §6).
 //!

@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.published` (`decile-blueprint/packages/core/src/baskfy_core/vbt/published.py`).
+//! Port of `baskfy_core.vbt.published` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/published.py`).
 //!
 //! The study's own answers, as a record (`research/volume-breakout/STRATEGY.md` §4-§5). These
 //! are **not** parameters: every number is a result the research measured once. The tests on

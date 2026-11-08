@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.market` (`decile-blueprint/packages/core/src/baskfy_core/swing/market.py`).
+//! Port of `baskfy_core.swing.market` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/market.py`).
 //!
 //! Breadth, the market gate, and progressive exposure (docs/swing/04 §8).
 //!

@@ -1,5 +1,5 @@
 //! The one door to the network, and the test suite's lock on it. Ports the guarantee of
-//! `decile-blueprint/network_guard.py` (Prompt 2 acceptance criterion 1: "zero network calls in
+//! `legacy/python/decile-blueprint/network_guard.py` (Prompt 2 acceptance criterion 1: "zero network calls in
 //! the test suite").
 //!
 //! Python monkeypatches `socket.connect`, `create_connection` and `getaddrinfo` for the whole

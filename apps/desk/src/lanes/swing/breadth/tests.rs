@@ -212,10 +212,10 @@ fn libpq_parses_the_key_value_form_sqlx_cannot() {
     );
 }
 
-/// Driven by `tools/parity/breadth_diff.py`: the same rows on a bed database read by both
+/// Driven by `legacy/python/tools/parity/breadth_diff.py`: the same rows on a bed database read by both
 /// languages; every case's dict must equal Python's, key order and floats included.
 #[tokio::test]
-#[ignore = "needs the bed: run through tools/parity/breadth_diff.py"]
+#[ignore = "needs the bed: run through legacy/python/tools/parity/breadth_diff.py"]
 async fn pipeline_parity_on_the_bed() {
     // Read with the order-keeping JSON reader: Python's dict order is part of what is graded.
     let path = std::env::var("RSD_BREADTH_CASES").unwrap();

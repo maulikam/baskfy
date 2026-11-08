@@ -18,7 +18,7 @@
 //!
 //! **Malformed broker replies raise what Python raises** (wave D2): `TypeError`, `KeyError`,
 //! `AttributeError`, `IndexError`, `ValueError` with Python's own messages, pinned by
-//! `fixtures/exec_kite/goldens.json` (written by `tools/parity/exec_kite_goldens.py` from the
+//! `fixtures/exec_kite/goldens.json` (written by `legacy/python/tools/parity/exec_kite_goldens.py` from the
 //! live `Kite`). `list(x or [])` reads a dict as its keys and a string as its characters, and
 //! `dict(...)` takes pairs, exactly as Python does.
 //!

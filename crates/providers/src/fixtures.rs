@@ -62,7 +62,7 @@ pub const FILES: [(&str, &str); 7] = [
 const REGENERATE: &str = "regenerate with `python -m baskfy_providers.fixture_builder`";
 
 /// `default_fixture_dir`: `tests/fixtures/providers`, located by walking up from this crate (the
-/// Python walks up from its own file; the fixtures live in `decile-blueprint/tests`).
+/// Python walks up from its own file; the fixtures live in `legacy/python/decile-blueprint/tests`).
 ///
 /// # Errors
 /// `FileNotFoundError` when no ancestor holds the directory.
@@ -72,7 +72,7 @@ pub fn default_fixture_dir() -> Result<PathBuf, ProviderError> {
         for candidate in [
             parent.join("tests").join("fixtures").join("providers"),
             parent
-                .join("decile-blueprint")
+                .join("legacy/python/decile-blueprint")
                 .join("tests")
                 .join("fixtures")
                 .join("providers"),

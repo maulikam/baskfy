@@ -18,7 +18,7 @@ pub const TEST_JWT_SECRET: &str = "baskfy-test-secret-0123456789abc";
 /// `PROBLEM_MEDIA_TYPE`.
 pub const PROBLEM: &str = "application/problem+json";
 
-/// The bed's `owner` account (`tools/parity/api_diff.py` USERS).
+/// The bed's `owner` account (`legacy/python/tools/parity/api_diff.py` USERS).
 pub const OWNER: &str = "2fe482ed2015";
 /// A plain account on the bed.
 pub const PLAIN: &str = "a0a1fd14fa3e";

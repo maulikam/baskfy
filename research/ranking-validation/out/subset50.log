@@ -1,0 +1,64 @@
+factor cache: 102 signal dates 2018-03-28 -> 2026-08-31, 50 instruments, NIFTY 500 levels ABSENT (rs_persist_126 is NULL)
+stage 1 done [1s, max RSS 0.66 GB]
+cache: 5100 rows, 102 dates, 50 instruments
+panel: 2090 sessions x 50 instruments [1s, max RSS 0.66 GB]
+  base                               full CAGR 0.2049593218  DD -0.3992424952  OOS CAGR 0.2325115672  turnover 1.0347662391  [0s, max RSS 0.66 GB]
+  base+atr_ext_20                    full CAGR 0.2278174137  DD -0.398157333  OOS CAGR 0.2584342721  turnover 1.5989498203  [0s, max RSS 0.66 GB]
+  base+ma50_slope_20                 full CAGR 0.2229875003  DD -0.4243344159  OOS CAGR 0.2511922966  turnover 1.217589457  [0s, max RSS 0.66 GB]
+  base+eff_ratio_63                  full CAGR 0.2401010316  DD -0.3742784817  OOS CAGR 0.2806647507  turnover 1.263743754  [0s, max RSS 0.66 GB]
+  base+max_dd_6m                     full CAGR 0.1958994974  DD -0.3949791401  OOS CAGR 0.2302762155  turnover 0.8352910534  [0s, max RSS 0.66 GB]
+  base+max_dd_12m                    full CAGR 0.194010559  DD -0.375532837  OOS CAGR 0.2384534593  turnover 0.728194827  [0s, max RSS 0.66 GB]
+  base+downside_vol_6m               full CAGR 0.1896316033  DD -0.3771347425  OOS CAGR 0.239958602  turnover 0.7003952304  [0s, max RSS 0.66 GB]
+  base+downside_vol_12m              full CAGR 0.1924153441  DD -0.361045158  OOS CAGR 0.2415970464  turnover 0.5762589523  [0s, max RSS 0.66 GB]
+  base+sortino_6m                    full CAGR 0.2199400003  DD -0.3972177775  OOS CAGR 0.2569301641  turnover 1.0429500078  [0s, max RSS 0.66 GB]
+  base+sortino_12m                   full CAGR 0.2109333867  DD -0.4137188588  OOS CAGR 0.2548884989  turnover 0.9164920342  [0s, max RSS 0.66 GB]
+  base+underwater_12m                full CAGR 0.1954875373  DD -0.4174273356  OOS CAGR 0.237923544  turnover 0.9360804151  [0s, max RSS 0.66 GB]
+  base+ret_ex_top3_12m               full CAGR 0.1874971069  DD -0.3992424952  OOS CAGR 0.2123360337  turnover 0.8987416425  [0s, max RSS 0.66 GB]
+  base+accel_21_105                  full CAGR 0.2175625111  DD -0.4018194302  OOS CAGR 0.2480766304  turnover 1.6421348532  [0s, max RSS 0.66 GB]
+  base+accel_21_105_vs               full CAGR 0.2102639724  DD -0.380892565  OOS CAGR 0.2465919614  turnover 1.6488698895  [0s, max RSS 0.66 GB]
+  base+vol_exp_21_126                full CAGR 0.2108701157  DD -0.3873075233  OOS CAGR 0.2503096894  turnover 1.2907285928  [0s, max RSS 0.66 GB]
+  base+vol_persist_20                full CAGR 0.2310924489  DD -0.4260064324  OOS CAGR 0.265376692  turnover 1.2574163373  [0s, max RSS 0.66 GB]
+  base+resid_ret_12m                 full CAGR 0.2039232603  DD -0.4055485703  OOS CAGR 0.2552896771  turnover 0.9260745515  [0s, max RSS 0.66 GB]
+  base+rs_persist_126                full CAGR 0.2049593218  DD -0.3992424952  OOS CAGR 0.2325115672  turnover 1.0347662391  [0s, max RSS 0.66 GB]
+  base+rank_persist_20               full CAGR 0.1764190076  DD -0.3992424952  OOS CAGR 0.2009176959  turnover 1.0613551477  [0s, max RSS 0.66 GB]
+  base+regime_priority               full CAGR 0.2038983187  DD -0.3882825218  OOS CAGR 0.2298007698  turnover 1.1230414076  [0s, max RSS 0.66 GB]
+  base+nse_momentum_score            full CAGR 0.2212295591  DD -0.3992424952  OOS CAGR 0.2535695186  turnover 0.8740549263  [0s, max RSS 0.66 GB]
+  sharpe_12_6                        full CAGR 0.1641783865  DD -0.4366451971  OOS CAGR 0.2040937056  turnover 0.9156113229  [0s, max RSS 0.66 GB]
+  sortino_for_sharpe                 full CAGR 0.182047239  DD -0.3919477696  OOS CAGR 0.2129771998  turnover 0.8876026671  [0s, max RSS 0.66 GB]
+  base+rsi_penalty                   full CAGR 0.2054455212  DD -0.3992424952  OOS CAGR 0.233139758  turnover 1.0346511776  [0s, max RSS 0.66 GB]
+  base|regime_in=BULL                full CAGR 0.1678064136  DD -0.3497603408  OOS CAGR 0.2301903893  turnover 2.5198208868  [0s, max RSS 0.66 GB]
+  base|regime_in=BULL+NEUTRAL        full CAGR 0.1666705976  DD -0.4850888896  OOS CAGR 0.2265583129  turnover 2.2911852741  [0s, max RSS 0.66 GB]
+  grid_e10_r20                       full CAGR 0.1521279009  DD -0.2731208528  OOS CAGR 0.1783049781  turnover 1.520288942  [0s, max RSS 0.66 GB]
+  grid_e10_r30                       full CAGR 0.2075417047  DD -0.3539775671  OOS CAGR 0.2398905566  turnover 1.2140287427  [0s, max RSS 0.66 GB]
+  grid_e10_r40                       full CAGR 0.182273277  DD -0.3816808204  OOS CAGR 0.2142562026  turnover 1.0005643411  [0s, max RSS 0.66 GB]
+  grid_e10_r60                       full CAGR 0.1953260879  DD -0.3956060775  OOS CAGR 0.2400750169  turnover 0.4187719179  [0s, max RSS 0.66 GB]
+  grid_e15_r20                       full CAGR 0.1819556172  DD -0.348065362  OOS CAGR 0.2127405965  turnover 2.1374305171  [0s, max RSS 0.66 GB]
+  grid_e15_r30                       full CAGR 0.2378672507  DD -0.3909406721  OOS CAGR 0.2698300688  turnover 1.4117419389  [0s, max RSS 0.66 GB]
+  grid_e15_r40                       full CAGR 0.1966547749  DD -0.3992424952  OOS CAGR 0.230164762  turnover 1.0394217945  [0s, max RSS 0.66 GB]
+  grid_e15_r60                       full CAGR 0.2039086107  DD -0.4120157588  OOS CAGR 0.2436437711  turnover 0.4244264028  [0s, max RSS 0.66 GB]
+  grid_e20_r20                       full CAGR 0.2179858937  DD -0.4068281484  OOS CAGR 0.2583823031  turnover 2.8779136974  [0s, max RSS 0.66 GB]
+  grid_e20_r30                       full CAGR 0.2418964601  DD -0.3948849978  OOS CAGR 0.2748752536  turnover 1.4432171147  [0s, max RSS 0.66 GB]
+  grid_e20_r40                       full CAGR 0.2049593218  DD -0.3992424952  OOS CAGR 0.2325115672  turnover 1.0347662391  [0s, max RSS 0.66 GB]
+  grid_e20_r60                       full CAGR 0.2135383787  DD -0.4140115257  OOS CAGR 0.2470389805  turnover 0.4232378067  [0s, max RSS 0.66 GB]
+  grid_e25_r30                       full CAGR 0.2418964601  DD -0.3948849978  OOS CAGR 0.2748752536  turnover 1.4432171147  [0s, max RSS 0.66 GB]
+  grid_e25_r40                       full CAGR 0.2049593218  DD -0.3992424952  OOS CAGR 0.2325115672  turnover 1.0347662391  [0s, max RSS 0.66 GB]
+  grid_e25_r60                       full CAGR 0.2135383787  DD -0.4140115257  OOS CAGR 0.2470389805  turnover 0.4232378067  [0s, max RSS 0.66 GB]
+wrote /Users/maulikdave/Documents/projects/baskfy/research/ranking-validation/out/ablation-subset50.csv: 41 models, generated 2026-09-13 [10s, max RSS 0.66 GB]
+       11.01 real        12.27 user         0.35 sys
+           658112512  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               57346  page reclaims
+                8307  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   1  messages sent
+                   1  messages received
+                   1  signals received
+                   8  voluntary context switches
+               23516  involuntary context switches
+           194453850  instructions retired
+            64548071  cycles elapsed
+            15008152  peak memory footprint

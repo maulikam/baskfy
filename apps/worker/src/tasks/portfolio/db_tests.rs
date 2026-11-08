@@ -7,7 +7,7 @@
 //! `BASKFY_RS_SCRATCH_DATABASE_URL` and run `cargo test -p baskfy-worker -- --ignored
 //! portfolio`; without it they are reported `ignored`. A URL naming `baskfy` is refused. The
 //! task-level grade against Python on a real clone is `task_diff.py --cases
-//! tools/parity/task_cases/portfolio.json`.
+//! legacy/python/tools/parity/task_cases/portfolio.json`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::NaiveDate;

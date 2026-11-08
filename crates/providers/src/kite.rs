@@ -3595,7 +3595,7 @@ mod tests {
     }
 
     /// `_decimal`, `_int`, `_text`, `_date` and `_aware_ist` against the live Python's answers
-    /// (`tests/fixtures/kite_coercions.py`, run with the repo's interpreter, 29 Oct 2026). The
+    /// (`legacy/python/tools/rust-fixtures/kite_coercions.py`, run with the repo's interpreter, 29 Oct 2026). The
     /// documented R4.10 limits — Decimal NaN/Infinity, more than 28 digits, ints beyond i64 —
     /// must still be refused, never answered differently.
     #[test]
@@ -3675,7 +3675,7 @@ mod tests {
     }
 
     /// `_parse_instruments` against kiteconnect 5.2.1's own answers
-    /// (`tests/fixtures/kite_instruments_csv.py`): BOM, line endings, blank and short rows,
+    /// (`legacy/python/tools/rust-fixtures/kite_instruments_csv.py`): BOM, line endings, blank and short rows,
     /// quoting, bad numbers, a missing column, invalid UTF-8. `extra_field` is the one
     /// documented gap — `csv.DictReader` keys the surplus cells by `None`, which a `KiteMap`
     /// cannot hold, so it is dropped (DECISIONS-RS R4.10).

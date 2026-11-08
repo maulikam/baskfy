@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn the_series_is_pythons() {
         let python = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../decile-blueprint/packages/core/src/baskfy_core/data/india_tbill.csv");
+            .join("../../legacy/python/decile-blueprint/packages/core/src/baskfy_core/data/india_tbill.csv");
         let text = std::fs::read_to_string(&python).expect("the Python series");
         assert_eq!(
             text, SERIES_CSV,

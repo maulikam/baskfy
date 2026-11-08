@@ -1,5 +1,5 @@
 //! Lane **exec_gateway** (wave D2): the gateway halves of the execution package's tests that wave
-//! D left unported — `decile-blueprint/packages/execution/tests/`:
+//! D left unported — `legacy/python/decile-blueprint/packages/execution/tests/`:
 //!
 //! * `test_fno_carry_gate.py` — the gateway half (the pure allow-list half is
 //!   `exec_guards/tests_guards.rs`): every product × switch on NFO through the gateway, the

@@ -46,7 +46,7 @@ async fn clone() -> PgConnection {
 
 fn case_seed(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tools/parity/task_cases/twt_jobs.json");
+        .join("../../legacy/python/tools/parity/task_cases/twt_jobs.json");
     let text = std::fs::read_to_string(path).unwrap();
     let file: serde_json::Value = serde_json::from_str(&text).unwrap();
     file["cases"]

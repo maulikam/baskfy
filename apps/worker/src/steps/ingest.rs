@@ -14,7 +14,7 @@
 //! Each step writes what Python's writes, statement for statement where a statement's *count*
 //! is observable (every identity-keyed upsert consumes one sequence value per proposed row, so
 //! the row counts per table are Python's), and value for value everywhere: the replay grading
-//! (`tools/parity/nightly_diff.py --step`) compares every row, sequence and step row.
+//! (`legacy/python/tools/parity/nightly_diff.py --step`) compares every row, sequence and step row.
 //!
 //! **House rule 5.** The nightly passes **no** `as_of` to the adjustment rebuild: the adjusted
 //! `close` is an "as of today" series on purpose (the root CLAUDE.md, rule 5's note). Do not

@@ -11,7 +11,7 @@
 //!
 //! **The harness hooks** (`--harness`, never in production): `POST /__harness/clock`
 //! (`{"iso": "2026-10-30T09:16:00+05:30"}` or `{"advance": 60}`) moves the [`FixedClock`];
-//! `GET /__harness/kite-calls` lists the replay Kite's recorded calls. `tools/parity/
+//! `GET /__harness/kite-calls` lists the replay Kite's recorded calls. `legacy/python/tools/parity/
 //! desk_harness.py` adds the same two routes to the Python desk.
 
 use std::path::{Path, PathBuf};
@@ -34,7 +34,7 @@ use crate::storage::Db;
 use crate::templates::Templates;
 use crate::wire::{PyValue, dict, orjson_dumps};
 
-/// Where the desk's files are: the Python desk's working directory (`kite-momentum-rebalancer`).
+/// Where the desk's files are: the Python desk's working directory (`legacy/python/kite-momentum-rebalancer`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeskPaths {
     /// The working directory every relative path (`data/…`, `DB_PATH`) resolves against.

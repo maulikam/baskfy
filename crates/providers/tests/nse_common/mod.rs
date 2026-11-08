@@ -1,5 +1,5 @@
 //! The NSE tests' doubles: `FakeHttpClient`, `InertLimiter` and `build` from `test_nse.py`, and
-//! the recorded fixtures read in place from `decile-blueprint/packages/providers/tests/fixtures`.
+//! the recorded fixtures read in place from `legacy/python/decile-blueprint/packages/providers/tests/fixtures`.
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::path::PathBuf;
@@ -15,10 +15,10 @@ use baskfy_providers::ratelimit::RateLimiter;
 use baskfy_providers::retry::RetryPolicy;
 use baskfy_providers::settings::ProviderSettings;
 
-/// `decile-blueprint/packages/providers/tests/fixtures/nse/<name>`, read in place.
+/// `legacy/python/decile-blueprint/packages/providers/tests/fixtures/nse/<name>`, read in place.
 pub fn recorded(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../decile-blueprint/packages/providers/tests/fixtures/nse")
+        .join("../../legacy/python/decile-blueprint/packages/providers/tests/fixtures/nse")
         .join(name);
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }

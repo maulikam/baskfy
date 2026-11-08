@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.opening_range` (`decile-blueprint/packages/core/src/baskfy_core/swing/opening_range.py`).
+//! Port of `baskfy_core.swing.opening_range` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/opening_range.py`).
 //!
 //! The opening range and the live trigger (docs/swing/04 §7).
 //!

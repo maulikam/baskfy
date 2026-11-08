@@ -3,8 +3,8 @@
 //!
 //! Python: `tasks/portfolio_nav_job.run_portfolio_nav` ([`nav`], on the ledger arithmetic in
 //! [`ledger`]) and `baskfy_api.broker_trades.capture_kite_trades` ([`capture`]; holdings and
-//! trades from the replay upstream under the harness). Graded with `tools/parity/task_diff.py
-//! --cases tools/parity/task_cases/portfolio.json` (DECISIONS-RS R8.pf1–R8.pf4).
+//! trades from the replay upstream under the harness). Graded with `legacy/python/tools/parity/task_diff.py
+//! --cases legacy/python/tools/parity/task_cases/portfolio.json` (DECISIONS-RS R8.pf1–R8.pf4).
 //!
 //! The lane's other named modules have no task of their own here: `tasks/desk.py`'s three tasks
 //! are lane `clis`'s registry rows, `tasks/resync.py` is lane `api_routes`'s

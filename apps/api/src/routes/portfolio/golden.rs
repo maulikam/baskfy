@@ -1,4 +1,4 @@
-//! Python's answers for random inputs (written by a dumper run against the decile-blueprint
+//! Python's answers for random inputs (written by a dumper run against the legacy/python/decile-blueprint
 //! venv; regenerate rather than edit). Graded by `tests` below.
 #![allow(
     clippy::unwrap_used,

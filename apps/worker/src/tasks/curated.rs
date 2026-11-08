@@ -15,7 +15,7 @@
 //! **No order path.** A SIP plan raises a `SIP_DUE` *reminder*; a batch sync *reads* the desk
 //! journal's fills; the notify job sends mail. Nothing here reaches an order, a GTT, a Kite
 //! endpoint or an auto-execute flag (`tests/law_two.rs` scans these files). Grade with
-//! `tools/parity/task_diff.py --cases tools/parity/task_cases/curated.json`.
+//! `legacy/python/tools/parity/task_diff.py --cases legacy/python/tools/parity/task_cases/curated.json`.
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 

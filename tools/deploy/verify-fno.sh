@@ -44,9 +44,9 @@ grep -q '      INTRADAY_ENABLED: "false"' "$COMPOSE" && ok 'compose pins INTRADA
   || bad "compose does not pin INTRADAY_ENABLED false"
 # M.5 (Maulik, 28 Sep 2026): BASKFY_FNO_F3_AUTO_EXIT (the desk reads it as FNO_F3_AUTO_EXIT) is the one
 # admitted flag — an exit only. Any other FNO…AUTO spelling still fails here.
-if grep -rEh 'FNO[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/kite-momentum-rebalancer/app" \
-     "$ROOT/kite-momentum-rebalancer/scripts" "$ROOT/decile-blueprint/services" \
-     "$ROOT/decile-blueprint/packages" --include='*.py' --include='*.yml' --exclude-dir=tests \
+if grep -rEh 'FNO[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/legacy/python/kite-momentum-rebalancer/app" \
+     "$ROOT/legacy/python/kite-momentum-rebalancer/scripts" "$ROOT/legacy/python/decile-blueprint/services" \
+     "$ROOT/legacy/python/decile-blueprint/packages" --include='*.py' --include='*.yml' --exclude-dir=tests \
      2>/dev/null | sed -e 's/BASKFY_FNO_F3_AUTO_EXIT//g' -e 's/FNO_F3_AUTO_EXIT//g' | grep -Eq 'FNO[A-Z0-9_]*AUTO'; then
   bad "an FNO…AUTO name other than BASKFY_FNO_F3_AUTO_EXIT appears in compose or code (02 Track B)"
 else
@@ -57,7 +57,7 @@ grep -q "  fno-monitor:" "$COMPOSE" && grep -q "command: \[fno-monitor-loop\]" "
 
 if [ "${LOCAL:-0}" = "1" ]; then
   echo "── the dev stack"
-  DESK_FLAGS="$(cd "$ROOT/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
+  DESK_FLAGS="$(cd "$ROOT/legacy/python/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
     .venv/bin/python -c 'from app import config as C
 print(C.DRY_RUN, C.OPTIONS_ENABLED, C.INTRADAY_ENABLED, C.FNO_CARRY_ENABLED,
       C.FNO_F1_EXECUTION_ENABLED, C.FNO_F2_EXECUTION_ENABLED, C.FNO_F3_EXECUTION_ENABLED,
@@ -65,7 +65,7 @@ print(C.DRY_RUN, C.OPTIONS_ENABLED, C.INTRADAY_ENABLED, C.FNO_CARRY_ENABLED,
   [ "$DESK_FLAGS" = "False False False False False False False False False" ] \
     && ok "desk defaults: DRY_RUN false (DRY-LIVE), every FO switch false" \
     || bad "desk defaults are not safe: $DESK_FLAGS"
-  GATES="$(cd "$ROOT/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
+  GATES="$(cd "$ROOT/legacy/python/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
     .venv/bin/python -c 'from baskfy_core.fno.config import FoSleeve
 from app.fno_gates import fno_gates
 print(" ".join(f"{s.value}={fno_gates(s).mode.value}" for s in FoSleeve))' 2>&1 | tail -1)"
@@ -73,7 +73,7 @@ print(" ".join(f"{s.value}={fno_gates(s).mode.value}" for s in FoSleeve))' 2>&1 
     *LIVE*|"") bad "fno_gates with an empty environment: ${GATES:-unreadable}" ;;
     *) ok "fno_gates with an empty environment: $GATES" ;;
   esac
-  WORKER_FLAGS="$(cd "$ROOT/decile-blueprint" && env -i PATH="$PATH" HOME="$HOME" \
+  WORKER_FLAGS="$(cd "$ROOT/legacy/python/decile-blueprint" && env -i PATH="$PATH" HOME="$HOME" \
     uv run --quiet python -c 'from baskfy_worker.settings import WorkerSettings
 w = WorkerSettings(_env_file=None); print(w.fno_scan_enabled, w.fno_monitor_enabled)' 2>&1 | tail -1)"
   [ "$WORKER_FLAGS" = "False False" ] \

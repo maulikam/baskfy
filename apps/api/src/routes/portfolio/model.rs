@@ -4,7 +4,7 @@
 //!
 //! FastAPI validates `json.loads(body)` against the route's model with
 //! `model_validate(..., from_attributes=True)`, so the rules are Python mode's, checked against
-//! pydantic-core 2.x in the decile-blueprint venv (`tests` below pin them):
+//! pydantic-core 2.x in the legacy/python/decile-blueprint venv (`tests` below pin them):
 //!
 //! * `int`: an `int` (and a `bool`, which *is* an `int` in Python mode); a float with no fractional
 //!   part (`int_from_float` otherwise, `finite_number` for NaN/inf, `int_parsing_size` beyond
@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn pydantic_errors_for_ints_decimals_and_enums() {
-        // Pinned from pydantic 2.13 in the decile-blueprint venv.
+        // Pinned from pydantic 2.13 in the legacy/python/decile-blueprint venv.
         let mut e = Errors::default();
         assert_eq!(
             int(&OrderedJson::Bool(true), "a", Bounds::default(), &mut e),

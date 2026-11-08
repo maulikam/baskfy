@@ -2,7 +2,7 @@
 //! TWT lane B against the goldens (`rust/testdata/golden/L1/twt`): `exits`, `plan` and
 //! `backtest`.
 //!
-//! Each case is decoded exactly as `tools/parity/golden_twt.py`'s `call_*` decodes it, the Rust
+//! Each case is decoded exactly as `legacy/python/tools/parity/golden_twt.py`'s `call_*` decodes it, the Rust
 //! port is called, and the result is encoded the way the dumper encodes the Python result (a
 //! raise as `{"raises": {"type", "message"}}`). Every case of every function is graded strictly
 //! and the per-function case count is asserted, so a dropped case fails.

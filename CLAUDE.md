@@ -135,11 +135,11 @@ Two clocks, both correct: daily-bar surfaces show the last completed session; pr
 
 ## The screener's house rules (they govern the data plant, and the root lacked them)
 
-Verbatim from `decile-blueprint/CLAUDE.md`, with module paths updated for M2's rename. A
+Verbatim from `legacy/python/decile-blueprint/CLAUDE.md`, with module paths updated for M2's rename. A
 contributor who reads only this file must not be able to break the pipeline either, which is
 M3's acceptance criterion.
 
-1. Read `decile-blueprint/docs/02-tech-stack-adr.md` before proposing any dependency. Nothing
+1. Read `legacy/python/decile-blueprint/docs/02-tech-stack-adr.md` before proposing any dependency. Nothing
    outside the locked stack without saying why first.
 2. Tests assert the **spec**, never current behaviour. If a test would only lock in what the code
    happens to do today, it is not worth writing.
@@ -186,11 +186,11 @@ hit; add vocabulary to the script's `ALLOWED` list with a reason, and record it 
 
 - **`DRY_RUN`'s code default is `false` — Maulik's decision, 1 Nov 2026 ("I want DRY_RUN off from
   entire system, i want to take real trades"; `docs/DECISIONS-MERGE.md` DRY-LIVE).** Every test
-  harness pins `DRY_RUN=true` (`tests/conftest.py`, `decile-blueprint/conftest.py`,
+  harness pins `DRY_RUN=true` (`tests/conftest.py`, `legacy/python/decile-blueprint/conftest.py`,
   `.cargo/config.toml`, `Settings::dry_defaults()`); a new harness must too. An agent still
   never places a live order, never calls `/execute`/order/GTT endpoints, and never runs execution
   tests against live credentials. AWS stays pinned dry by `deploy-swing.sh`.
-- **`kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence** (trades, fills,
+- **`legacy/python/kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence** (trades, fills,
   decisions — the strategy's track record). Before any step that can touch it: a verified backup
   (`python -m scripts.backup` must say `ok`) plus a dated copy outside the repo. Migrations run
   against a copy first; the original SQLite file is archived forever, never deleted.
@@ -198,7 +198,7 @@ hit; add vocabulary to the script's `ALLOWED` list with a reason, and record it 
   would echo a token, don't run it that way.
 - **The desk must be able to rebalance on any Friday.** No module ends with the desk's tree
   broken; its test suite is green before an agent stops for the day.
-- **`kite-momentum-rebalancer/data/uploads/*.csv` is the regression corpus.** Read-only. It is
+- **`legacy/python/kite-momentum-rebalancer/data/uploads/*.csv` is the regression corpus.** Read-only. It is
   the answer key the whole merge is graded against (docs/README, "the one thing").
 - **`frozen/strangle/` (after M6) is untouched** — no refactors, no deletions, no lint fixes.
 - **Never weaken a test to make a module pass.** If an acceptance criterion looks wrong, settle

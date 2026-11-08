@@ -4,7 +4,7 @@
     clippy::panic,
     clippy::float_cmp
 )]
-//! Port of the pure allocation tests of `kite-momentum-rebalancer/tests/test_regime_plan.py`.
+//! Port of the pure allocation tests of `legacy/python/kite-momentum-rebalancer/tests/test_regime_plan.py`.
 
 use std::collections::BTreeSet;
 

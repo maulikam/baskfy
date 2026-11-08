@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.series` (`decile-blueprint/packages/core/src/baskfy_core/fno/series.py`).
+//! Port of `baskfy_core.fno.series` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/series.py`).
 //!
 //! The continuous futures series and its derived columns (`04` §4, `03` §2):
 //!

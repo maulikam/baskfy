@@ -22,7 +22,7 @@
 //!
 //!   The pairs form polars' parallel reduction tree (rayon's `try_reduce_with` over the columns,
 //!   split at `len / 2`): three columns are `a op (b op c)`, four `(a op b) op (c op d)`. That
-//!   tree is fuzzed against the live Python by `tests/fuzz/pl_semantics_fuzz.py` (3,000 frames of
+//!   tree is fuzzed against the live Python by `legacy/python/tools/rust-fixtures/pl_semantics_fuzz.py` (3,000 frames of
 //!   one to four columns and one to four rows: NaN, `±0.0`, `inf`, null); the wave-3 review re-ran
 //!   it over 8,000 more frames of one to six columns, up to 17 rows, `-inf` included, with no
 //!   mismatch. Five or more columns fold a sub-slice left

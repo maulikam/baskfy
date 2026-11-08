@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.condor` (`decile-blueprint/packages/core/src/baskfy_core/fno/condor.py`).
+//! Port of `baskfy_core.fno.condor` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/condor.py`).
 //!
 //! F1: the index monthly iron condor's strikes, credit, max loss, liquidity and sequences
 //! (`04` §2), and its profit-take and loss-close predicates (`04` §1).

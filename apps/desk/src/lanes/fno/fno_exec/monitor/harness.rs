@@ -1,4 +1,4 @@
-//! `POST /__harness/fno-monitor` — **harness-only** (`--harness`; `tools/parity/desk_diff.py
+//! `POST /__harness/fno-monitor` — **harness-only** (`--harness`; `legacy/python/tools/parity/desk_diff.py
 //! --plans`, `desk_cases/plans_fno.json`): drive the real FO monitor and executor on the side's
 //! database through the side's real paper-pinned FO gateway, with the market seams (books, the
 //! index, the margin, the NFO master, the calendar and the bhavcopy) given in the body, so the

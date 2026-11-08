@@ -16,7 +16,7 @@ pub(super) const MOVED: &str = "retired from Beat; collection runs in the desk-d
 pub(super) fn desk_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("kite-momentum-rebalancer")
+        .join("legacy/python/kite-momentum-rebalancer")
 }
 
 /// `DeskRunResult`.
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn it_finds_the_desk() {
-        assert!(desk_root().ends_with("kite-momentum-rebalancer"));
+        assert!(desk_root().ends_with("legacy/python/kite-momentum-rebalancer"));
     }
 
     #[tokio::test]

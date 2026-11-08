@@ -1,7 +1,7 @@
 //! The replay Kite (DECISIONS-RS R8.3): [`KiteReads`] + [`KiteWrites`] over a recorded fixture,
 //! **recording every call instead of sending it**. Nothing here opens a socket.
 //!
-//! Its twin is `tools/parity/desk_fake_kite.py`, which replaces `KiteConnect._request` in the
+//! Its twin is `legacy/python/tools/parity/desk_fake_kite.py`, which replaces `KiteConnect._request` in the
 //! Python desk (harness-only; the desk's code is unchanged). Both read the same fixture
 //! directory and answer by the same rules, and both append the same JSON line per call to the
 //! same kind of log, so `desk_diff.py` can require the two desks' order/GTT calls to be EQUAL.

@@ -1,5 +1,5 @@
 //! The sub-lane's parity gate: `fixtures/weekly_books/goldens.json`, Python's own answers
-//! (`tools/parity/weekly_books_goldens.py`, never edited by hand), reproduced byte for byte as
+//! (`legacy/python/tools/parity/weekly_books_goldens.py`, never edited by hand), reproduced byte for byte as
 //! `json.dumps` text. These modules have no route of their own, so this stands where a
 //! `desk_diff.py` scenario would.
 #![allow(

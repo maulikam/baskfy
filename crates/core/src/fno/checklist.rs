@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.checklist` (`decile-blueprint/packages/core/src/baskfy_core/fno/checklist.py`).
+//! Port of `baskfy_core.fno.checklist` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/checklist.py`).
 //!
 //! The paper checklist, `04` §9, as a tally — pure (`docs/fno/06` FO10).
 //!

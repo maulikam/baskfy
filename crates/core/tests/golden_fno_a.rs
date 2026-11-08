@@ -1,7 +1,7 @@
 //! Grades the fno money-path and series ports against every golden of
 //! `baskfy_core.fno.{config, calendar, costs, gating, vol, series, underlying, sizing, ledger,
 //! journal}` in `rust/testdata/golden/L1/fno`. Each case is called from its stored inputs exactly
-//! as `tools/parity/golden_fno.py`'s `call_*` function calls the Python; a Python raise is
+//! as `legacy/python/tools/parity/golden_fno.py`'s `call_*` function calls the Python; a Python raise is
 //! stored as `{"raises": {"type", "message"}}` and the port's error is graded the same way.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

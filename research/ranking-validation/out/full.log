@@ -1,0 +1,166 @@
+factor cache: 102 signal dates 2018-03-28 -> 2026-08-31, all instruments, NIFTY 500 levels ABSENT (rs_persist_126 is NULL)
+  [1/102] 2018-03-28 rows=358 5s (elapsed 5s)
+  [2/102] 2018-04-30 rows=330 5s (elapsed 9s)
+  [3/102] 2018-05-31 rows=317 5s (elapsed 14s)
+  [4/102] 2018-06-29 rows=308 5s (elapsed 19s)
+  [5/102] 2018-07-31 rows=290 5s (elapsed 24s)
+  [6/102] 2018-08-31 rows=292 6s (elapsed 30s)
+  [7/102] 2018-09-28 rows=296 6s (elapsed 36s)
+  [8/102] 2018-10-31 rows=300 6s (elapsed 42s)
+  [9/102] 2018-11-30 rows=288 7s (elapsed 49s)
+  [10/102] 2018-12-31 rows=268 7s (elapsed 56s)
+  [11/102] 2019-01-31 rows=260 7s (elapsed 63s)
+  [12/102] 2019-02-28 rows=255 7s (elapsed 71s)
+  [13/102] 2019-03-29 rows=266 8s (elapsed 79s)
+  [14/102] 2019-04-30 rows=271 8s (elapsed 87s)
+  [15/102] 2019-05-31 rows=276 10s (elapsed 96s)
+  [16/102] 2019-06-28 rows=265 10s (elapsed 107s)
+  [17/102] 2019-07-31 rows=253 9s (elapsed 115s)
+  [18/102] 2019-08-30 rows=242 9s (elapsed 125s)
+  [19/102] 2019-09-30 rows=241 9s (elapsed 134s)
+  [20/102] 2019-10-31 rows=249 10s (elapsed 144s)
+  [21/102] 2019-11-29 rows=257 10s (elapsed 154s)
+  [22/102] 2019-12-31 rows=263 11s (elapsed 165s)
+  [23/102] 2020-01-31 rows=278 11s (elapsed 176s)
+  [24/102] 2020-02-28 rows=283 12s (elapsed 188s)
+  [25/102] 2020-03-31 rows=306 12s (elapsed 200s)
+  [26/102] 2020-04-30 rows=305 12s (elapsed 212s)
+  [27/102] 2020-05-29 rows=290 12s (elapsed 224s)
+  [28/102] 2020-06-30 rows=305 12s (elapsed 237s)
+  [29/102] 2020-07-31 rows=340 14s (elapsed 251s)
+  [30/102] 2020-08-31 rows=382 15s (elapsed 266s)
+  [31/102] 2020-09-30 rows=390 16s (elapsed 282s)
+  [32/102] 2020-10-30 rows=370 16s (elapsed 298s)
+  [33/102] 2020-11-27 rows=352 15s (elapsed 312s)
+  [34/102] 2020-12-31 rows=387 16s (elapsed 328s)
+  [35/102] 2021-01-29 rows=439 18s (elapsed 346s)
+  [36/102] 2021-02-26 rows=466 19s (elapsed 365s)
+  [37/102] 2021-03-31 rows=481 20s (elapsed 385s)
+  [38/102] 2021-04-30 rows=480 20s (elapsed 405s)
+  [39/102] 2021-05-31 rows=518 21s (elapsed 426s)
+  [40/102] 2021-06-30 rows=553 23s (elapsed 448s)
+  [41/102] 2021-07-30 rows=620 25s (elapsed 473s)
+  [42/102] 2021-08-31 rows=623 25s (elapsed 499s)
+  [43/102] 2021-09-30 rows=605 25s (elapsed 524s)
+  [44/102] 2021-10-29 rows=597 25s (elapsed 548s)
+  [45/102] 2021-11-30 rows=583 24s (elapsed 572s)
+  [46/102] 2021-12-31 rows=559 23s (elapsed 595s)
+  [47/102] 2022-01-31 rows=554 23s (elapsed 618s)
+  [48/102] 2022-02-28 rows=560 23s (elapsed 641s)
+  [49/102] 2022-03-31 rows=576 23s (elapsed 664s)
+  [50/102] 2022-04-29 rows=590 24s (elapsed 688s)
+  [51/102] 2022-05-31 rows=564 23s (elapsed 711s)
+  [52/102] 2022-06-30 rows=523 22s (elapsed 733s)
+  [53/102] 2022-07-29 rows=480 20s (elapsed 753s)
+  [54/102] 2022-08-30 rows=492 20s (elapsed 773s)
+  [55/102] 2022-09-30 rows=557 23s (elapsed 796s)
+  [56/102] 2022-10-31 rows=571 23s (elapsed 819s)
+  [57/102] 2022-11-30 rows=565 23s (elapsed 842s)
+  [58/102] 2022-12-30 rows=558 23s (elapsed 866s)
+  [59/102] 2023-01-31 rows=553 24s (elapsed 889s)
+  [60/102] 2023-02-28 rows=533 23s (elapsed 912s)
+  [61/102] 2023-03-31 rows=512 23s (elapsed 935s)
+  [62/102] 2023-04-28 rows=522 23s (elapsed 958s)
+  [63/102] 2023-05-31 rows=553 24s (elapsed 982s)
+  [64/102] 2023-06-30 rows=624 26s (elapsed 1008s)
+  [65/102] 2023-07-31 rows=670 27s (elapsed 1035s)
+  [66/102] 2023-08-31 rows=738 30s (elapsed 1065s)
+  [67/102] 2023-09-29 rows=766 31s (elapsed 1097s)
+  [68/102] 2023-10-31 rows=780 31s (elapsed 1128s)
+  [69/102] 2023-11-30 rows=758 31s (elapsed 1159s)
+  [70/102] 2023-12-29 rows=790 31s (elapsed 1190s)
+  [71/102] 2024-01-31 rows=817 32s (elapsed 1222s)
+  [72/102] 2024-02-29 rows=863 34s (elapsed 1257s)
+  [73/102] 2024-03-28 rows=868 35s (elapsed 1292s)
+  [74/102] 2024-04-30 rows=852 34s (elapsed 1326s)
+  [75/102] 2024-05-31 rows=823 33s (elapsed 1359s)
+  [76/102] 2024-06-28 rows=869 34s (elapsed 1393s)
+  [77/102] 2024-07-31 rows=895 36s (elapsed 1428s)
+  [78/102] 2024-08-30 rows=957 37s (elapsed 1466s)
+  [79/102] 2024-09-30 rows=960 38s (elapsed 1503s)
+  [80/102] 2024-10-31 rows=920 37s (elapsed 1540s)
+  [81/102] 2024-11-29 rows=888 35s (elapsed 1575s)
+  [82/102] 2024-12-31 rows=865 34s (elapsed 1609s)
+  [83/102] 2025-01-31 rows=855 33s (elapsed 1643s)
+  [84/102] 2025-02-28 rows=832 33s (elapsed 1675s)
+  [85/102] 2025-03-28 rows=845 33s (elapsed 1708s)
+  [86/102] 2025-04-30 rows=853 33s (elapsed 1741s)
+  [87/102] 2025-05-30 rows=867 33s (elapsed 1774s)
+  [88/102] 2025-06-30 rows=865 34s (elapsed 1808s)
+  [89/102] 2025-07-31 rows=878 34s (elapsed 1841s)
+  [90/102] 2025-08-29 rows=875 34s (elapsed 1875s)
+  [91/102] 2025-09-30 rows=879 33s (elapsed 1909s)
+  [92/102] 2025-10-31 rows=864 33s (elapsed 1942s)
+  [93/102] 2025-11-28 rows=873 34s (elapsed 1975s)
+  [94/102] 2025-12-31 rows=842 32s (elapsed 2008s)
+  [95/102] 2026-01-30 rows=839 32s (elapsed 2040s)
+  [96/102] 2026-02-27 rows=832 33s (elapsed 2073s)
+  [97/102] 2026-03-30 rows=882 34s (elapsed 2107s)
+  [98/102] 2026-04-30 rows=915 36s (elapsed 2143s)
+  [99/102] 2026-05-29 rows=953 37s (elapsed 2180s)
+  [100/102] 2026-06-30 rows=991 37s (elapsed 2217s)
+  [101/102] 2026-07-31 rows=992 37s (elapsed 2254s)
+  [102/102] 2026-08-31 rows=1009 38s (elapsed 2293s)
+stage 1 done [2294s, max RSS 1.56 GB]
+cache: 59364 rows, 102 dates, 1445 instruments
+panel: 2090 sessions x 1445 instruments [2296s, max RSS 1.88 GB]
+  base                               full CAGR 0.2734955598  DD -0.385012735  OOS CAGR 0.3596297399  turnover 3.6690615088  [0s, max RSS 1.88 GB]
+  base+atr_ext_20                    full CAGR 0.283292185  DD -0.4059329725  OOS CAGR 0.4025475052  turnover 6.8455480526  [0s, max RSS 1.88 GB]
+  base+ma50_slope_20                 full CAGR 0.2671448843  DD -0.4304319534  OOS CAGR 0.3563222057  turnover 5.1404480354  [0s, max RSS 1.88 GB]
+  base+eff_ratio_63                  full CAGR 0.2586353001  DD -0.3997604852  OOS CAGR 0.3483717094  turnover 6.0401970651  [0s, max RSS 1.88 GB]
+  base+max_dd_6m                     full CAGR 0.190949052  DD -0.3662796832  OOS CAGR 0.229089898  turnover 4.0509697384  [0s, max RSS 1.88 GB]
+  base+max_dd_12m                    full CAGR 0.21479522  DD -0.3340201037  OOS CAGR 0.2567466397  turnover 3.3125225943  [0s, max RSS 1.88 GB]
+  base+downside_vol_6m               full CAGR 0.1718277089  DD -0.3361665035  OOS CAGR 0.1950011305  turnover 3.31208244  [0s, max RSS 1.88 GB]
+  base+downside_vol_12m              full CAGR 0.1789520122  DD -0.2983703102  OOS CAGR 0.194523352  turnover 2.835163551  [0s, max RSS 1.88 GB]
+  base+sortino_6m                    full CAGR 0.2595291558  DD -0.3472996127  OOS CAGR 0.3401860743  turnover 4.0671329153  [0s, max RSS 1.88 GB]
+  base+sortino_12m                   full CAGR 0.2574344453  DD -0.3821125359  OOS CAGR 0.3447450592  turnover 3.2774537789  [0s, max RSS 1.88 GB]
+  base+underwater_12m                full CAGR 0.2728848835  DD -0.3626347764  OOS CAGR 0.3408336512  turnover 2.8613738471  [0s, max RSS 1.88 GB]
+  base+ret_ex_top3_12m               full CAGR 0.2518824125  DD -0.4260941122  OOS CAGR 0.3543962743  turnover 3.2666955524  [0s, max RSS 1.88 GB]
+  base+accel_21_105                  full CAGR 0.1489081636  DD -0.597799385  OOS CAGR 0.2745939672  turnover 10.0883034592  [0s, max RSS 1.88 GB]
+  base+accel_21_105_vs               full CAGR 0.158218055  DD -0.5009724886  OOS CAGR 0.2537555522  turnover 10.0771958038  [0s, max RSS 1.88 GB]
+  base+vol_exp_21_126                full CAGR 0.2707255494  DD -0.3638753929  OOS CAGR 0.3275267193  turnover 6.99669924  [0s, max RSS 1.88 GB]
+  base+vol_persist_20                full CAGR 0.2625084692  DD -0.3702069971  OOS CAGR 0.3260474572  turnover 6.4894857007  [0s, max RSS 1.88 GB]
+  base+resid_ret_12m                 full CAGR 0.2317866577  DD -0.4348329821  OOS CAGR 0.3269141021  turnover 3.327848829  [0s, max RSS 1.88 GB]
+  base+rs_persist_126                full CAGR 0.2734955598  DD -0.385012735  OOS CAGR 0.3596297399  turnover 3.6690615088  [0s, max RSS 1.88 GB]
+  base+rank_persist_20               full CAGR 0.2833532335  DD -0.3442449679  OOS CAGR 0.368623185  turnover 3.3708428025  [0s, max RSS 1.88 GB]
+  base+regime_priority               full CAGR 0.2616162573  DD -0.40099675  OOS CAGR 0.3423413359  turnover 4.7757963294  [0s, max RSS 1.88 GB]
+  base+nse_momentum_score            full CAGR 0.294296268  DD -0.385012735  OOS CAGR 0.3877400214  turnover 2.0986945903  [0s, max RSS 1.88 GB]
+  sharpe_12_6                        full CAGR 0.2845877681  DD -0.3379549194  OOS CAGR 0.3574316761  turnover 3.5565696199  [0s, max RSS 1.88 GB]
+  sortino_for_sharpe                 full CAGR 0.2589264263  DD -0.3464497909  OOS CAGR 0.3320271043  turnover 3.6373826964  [0s, max RSS 1.88 GB]
+  base+rsi_penalty                   full CAGR 0.309193516  DD -0.3914310026  OOS CAGR 0.4119403156  turnover 3.6932996376  [0s, max RSS 1.88 GB]
+  base|regime_in=BULL                full CAGR 0.2726283527  DD -0.4010030483  OOS CAGR 0.3540988813  turnover 4.8091045208  [0s, max RSS 1.88 GB]
+  base|regime_in=BULL+NEUTRAL        full CAGR 0.2995933654  DD -0.3924505353  OOS CAGR 0.3920966207  turnover 4.4456966382  [0s, max RSS 1.88 GB]
+  grid_e10_r20                       full CAGR 0.1685102941  DD -0.2958092528  OOS CAGR 0.2360265312  turnover 2.8749428096  [0s, max RSS 1.88 GB]
+  grid_e10_r30                       full CAGR 0.1834214879  DD -0.3731785392  OOS CAGR 0.2636428917  turnover 2.81048862  [0s, max RSS 1.88 GB]
+  grid_e10_r40                       full CAGR 0.2133052424  DD -0.3680164371  OOS CAGR 0.2878872156  turnover 2.7340396717  [0s, max RSS 1.88 GB]
+  grid_e10_r60                       full CAGR 0.281420818  DD -0.3440889806  OOS CAGR 0.3692612728  turnover 2.5517325438  [0s, max RSS 1.88 GB]
+  grid_e15_r20                       full CAGR 0.224054023  DD -0.3660865176  OOS CAGR 0.3160257457  turnover 4.29870759  [0s, max RSS 1.88 GB]
+  grid_e15_r30                       full CAGR 0.2442240995  DD -0.4363912774  OOS CAGR 0.3536491134  turnover 4.0110617324  [0s, max RSS 1.88 GB]
+  grid_e15_r40                       full CAGR 0.2686633866  DD -0.3761258624  OOS CAGR 0.3587413486  turnover 3.5221596044  [0s, max RSS 1.88 GB]
+  grid_e15_r60                       full CAGR 0.2995238645  DD -0.3440889806  OOS CAGR 0.3942897144  turnover 2.9571280673  [0s, max RSS 1.88 GB]
+  grid_e20_r20                       full CAGR 0.2878121509  DD -0.4054193215  OOS CAGR 0.4023850297  turnover 5.7172994154  [0s, max RSS 1.88 GB]
+  grid_e20_r30                       full CAGR 0.2642499711  DD -0.4415245027  OOS CAGR 0.3749829828  turnover 4.4348005133  [0s, max RSS 1.88 GB]
+  grid_e20_r40                       full CAGR 0.2734955598  DD -0.385012735  OOS CAGR 0.3596297399  turnover 3.6690615088  [0s, max RSS 1.88 GB]
+  grid_e20_r60                       full CAGR 0.3053823545  DD -0.3418980332  OOS CAGR 0.3931555829  turnover 3.0062796643  [0s, max RSS 1.88 GB]
+  grid_e25_r30                       full CAGR 0.2642499711  DD -0.4415245027  OOS CAGR 0.3749829828  turnover 4.4348005133  [0s, max RSS 1.88 GB]
+  grid_e25_r40                       full CAGR 0.2734955598  DD -0.385012735  OOS CAGR 0.3596297399  turnover 3.6690615088  [0s, max RSS 1.88 GB]
+  grid_e25_r60                       full CAGR 0.3053823545  DD -0.3418980332  OOS CAGR 0.3931555829  turnover 3.0062796643  [0s, max RSS 1.88 GB]
+wrote /Users/maulikdave/Documents/projects/baskfy/research/ranking-validation/out/ablation.csv: 41 models, generated 2026-09-13 [2311s, max RSS 1.88 GB]
+     2311.18 real      3774.28 user      1070.67 sys
+          1875771392  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+            32155860  page reclaims
+                1496  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   1  messages sent
+                   1  messages received
+                   1  signals received
+                   5  voluntary context switches
+           104803832  involuntary context switches
+           170324958  instructions retired
+            62879978  cycles elapsed
+            15057304  peak memory footprint

@@ -2,7 +2,7 @@
 //! supervisor, lifecycle, telemetry, /status, /static (ported by the wave-D *views* lane, which
 //! also owns `analytics.rs`).
 //!
-//! **STATUS (views lane):** ported and graded by `tools/parity/desk_diff.py`
+//! **STATUS (views lane):** ported and graded by `legacy/python/tools/parity/desk_diff.py`
 //! (`desk_cases/views.json`): `GET /status`, `GET /login`, `GET /static/{path}` (Starlette's
 //! `StaticFiles`), and [`startup`] (`main._apply_stored_settings` — the integrator calls it once
 //! after `build_state`, R8.7).

@@ -36,7 +36,8 @@ fn flag_on() -> Settings {
 
 async fn state(settings: Settings, backend: &str, dir: &std::path::Path) -> AppState {
     std::os::unix::fs::symlink(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer/app"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../legacy/python/kite-momentum-rebalancer/app"),
         dir.join("app"),
     )
     .unwrap();
@@ -69,8 +70,8 @@ async fn state(settings: Settings, backend: &str, dir: &std::path::Path) -> AppS
 #[test]
 fn the_lab_is_frozen_so_the_flag_alone_wakes_nothing() {
     let s = flag_on();
-    let repo =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer");
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../legacy/python/kite-momentum-rebalancer");
     assert!(!gates::lab_present(&repo));
     assert!(!gates::lab_enabled(&s, &repo));
     assert!(!baskfy_desk::lanes::options::lab_enabled(&s));

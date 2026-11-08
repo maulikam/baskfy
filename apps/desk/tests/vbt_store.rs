@@ -112,7 +112,7 @@ fn iso(t: DateTime<FixedOffset>) -> String {
 }
 
 fn desk_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../legacy/python/kite-momentum-rebalancer")
 }
 
 fn lane_dir() -> PathBuf {

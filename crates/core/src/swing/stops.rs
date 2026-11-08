@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.stops` (`decile-blueprint/packages/core/src/baskfy_core/swing/stops.py`).
+//! Port of `baskfy_core.swing.stops` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/stops.py`).
 //!
 //! Stops and the day-by-day management of an open position (docs/swing/04 §6).
 //!

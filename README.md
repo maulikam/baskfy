@@ -9,13 +9,13 @@ through Zerodha Kite. It runs as a Rust stack in Docker Compose on one machine.
 |---|---|
 | `rust/` | The three production binaries: `baskfy-api`, `baskfy-desk`, `baskfy-worker` |
 | `testdata/golden/` | Golden cases the Rust port is graded against |
-| `decile-blueprint/` | Next.js web app and the Python oracle |
+| `legacy/python/decile-blueprint/` | Next.js web app and the Python oracle |
 | `db/migrations/` | Schema migrations, applied by `baskfy-worker migrate` |
-| `kite-momentum-rebalancer/` | Python desk oracle; its templates and static files ship in the image |
+| `legacy/python/kite-momentum-rebalancer/` | Python desk oracle; its templates and static files ship in the image |
 | `deploy/` | Dockerfiles, compose files, Caddyfile |
 | `tools/deploy/` | `local.sh` and verification scripts; AWS-era scripts are in `retired/` |
-| `tools/parity/` | Rust-against-Python diff harnesses |
-| `tools/runs/` | One-off run packs |
+| `legacy/python/tools/parity/` | Rust-against-Python diff harnesses |
+| `legacy/python/tools/runs/` | One-off run packs |
 | `docs/` | Design record and decisions; `history/`, `gates/` and `audit/` are the archive |
 | `research/` | Research notebooks and data notes |
 | `frozen/` | Frozen options lab, out of every gate |

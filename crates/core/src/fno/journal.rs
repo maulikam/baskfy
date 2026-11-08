@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.journal` (`decile-blueprint/packages/core/src/baskfy_core/fno/journal.py`).
+//! Port of `baskfy_core.fno.journal` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/journal.py`).
 //!
 //! A closed FO structure's journal figures, pure (`docs/fno/03` §6, `06` FO10). One
 //! `fo_journal` row per structure, in ₹ and R, computed from the position's own **fills**:

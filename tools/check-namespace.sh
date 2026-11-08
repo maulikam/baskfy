@@ -27,7 +27,7 @@ EXCLUDES=(
   ':!docs/*'
   ':!*/docs/*'
   ':!docs/history/MERGE-PROMPTS.md'
-  ':!decile-blueprint/PROMPTS.md'
+  ':!legacy/python/decile-blueprint/PROMPTS.md'
   ':!tools/check-namespace.sh'
   # A *FINAL-REPORT.md is a run's historical record. It has to be able to say what was renamed,
   # and rewording "`SITE_NAME` was \"Decile\"" to satisfy a checker would be the checker editing

@@ -54,8 +54,8 @@ RUN apt-get update \
  && install -d -o baskfy -g baskfy /desk /desk/app /desk/data /desk/data/uploads \
       /var/lib/baskfy /var/lib/baskfy/archive /var/lib/baskfy/state
 COPY --from=build /out/ /usr/local/bin/
-COPY --chown=baskfy:baskfy kite-momentum-rebalancer/app/templates /desk/app/templates
-COPY --chown=baskfy:baskfy kite-momentum-rebalancer/app/static    /desk/app/static
+COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app/templates /desk/app/templates
+COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app/static    /desk/app/static
 # Same BASKFY_ -> desk credential mapping as Dockerfile.desk's desk-entrypoint.
 RUN cat > /usr/local/bin/baskfy-rs-entrypoint <<'EOF'
 #!/bin/sh

@@ -40,8 +40,8 @@ grep -q '      OPTIONS_ENABLED: "false"' "$COMPOSE" && ok 'compose pins OPTIONS_
   || bad "compose does not pin OPTIONS_ENABLED false"
 grep -q '      INTRADAY_ENABLED: "false"' "$COMPOSE" && ok 'compose pins INTRADAY_ENABLED "false"' \
   || bad "compose does not pin INTRADAY_ENABLED false"
-if grep -rEq 'OPTIONS[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/kite-momentum-rebalancer/app" \
-     "$ROOT/decile-blueprint/services" --include='*.py' --include='*.yml' 2>/dev/null; then
+if grep -rEq 'OPTIONS[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/legacy/python/kite-momentum-rebalancer/app" \
+     "$ROOT/legacy/python/decile-blueprint/services" --include='*.py' --include='*.yml' 2>/dev/null; then
   bad "an OPTIONS…AUTO name appears in compose or code (02 Track B: there is none)"
 else
   ok "no OPTIONS…AUTO name in compose, the desk or the services"
@@ -51,14 +51,14 @@ grep -q "options-monitor:" "$COMPOSE" && ok "compose runs options-monitor" \
 
 if [ "${LOCAL:-0}" = "1" ]; then
   echo "── the dev stack"
-  DESK_FLAGS="$(cd "$ROOT/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
+  DESK_FLAGS="$(cd "$ROOT/legacy/python/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
     .venv/bin/python -c 'from app import config as C
 print(C.DRY_RUN, C.OPTIONS_ENABLED, C.INTRADAY_ENABLED, C.OPTIONS_O1M_EXECUTION_ENABLED,
       C.OPTIONS_O1W_EXECUTION_ENABLED, C.OPTIONS_O2_EXECUTION_ENABLED, C.OPTIONS_O3_EXECUTION_ENABLED)' 2>&1 | tail -1)"
   [ "$DESK_FLAGS" = "False False False False False False False" ] \
     && ok "desk defaults: DRY_RUN false (DRY-LIVE), every options switch false" \
     || bad "desk defaults are not safe: $DESK_FLAGS"
-  WORKER_FLAGS="$(cd "$ROOT/decile-blueprint" && env -i PATH="$PATH" HOME="$HOME" \
+  WORKER_FLAGS="$(cd "$ROOT/legacy/python/decile-blueprint" && env -i PATH="$PATH" HOME="$HOME" \
     uv run --quiet python -c 'from baskfy_worker.options import options_flags
 f = options_flags(); print(f.dry_run, f.options_enabled, f.intraday_enabled, f.o1m_execution_enabled,
       f.o1w_execution_enabled, f.o2_execution_enabled, f.o3_execution_enabled)' 2>&1 | tail -1)"

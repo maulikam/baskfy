@@ -4,7 +4,7 @@
 //! `apply_position_limits`, `CostSpec.charge`, `PricePanel`, `PointInTimeReader` and
 //! `AdjustmentCoverage.caveats` — 71 cases.
 //!
-//! Each case is decoded exactly as `tools/parity/golden_backtest.py`'s `call_*` function
+//! Each case is decoded exactly as `legacy/python/tools/parity/golden_backtest.py`'s `call_*` function
 //! decodes it, the Rust port is called, and the result is encoded the way the dumper encodes
 //! the Python result (a raised `BacktestError` is `{"error": {"type", "message"}}`, a
 //! `LookAheadError` adds `what`, `offending`, `as_of`). Every case is graded strictly by the

@@ -6,7 +6,7 @@
 //!
 //! Production is [`SystemClock`]. [`FixedClock`] is settable and only advances when told to: the
 //! harness (`--harness`) installs one and moves it through `POST /__harness/clock`, exactly as
-//! `tools/parity/desk_harness.py` moves Python's patched `time.time` / `datetime.now`.
+//! `legacy/python/tools/parity/desk_harness.py` moves Python's patched `time.time` / `datetime.now`.
 
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};

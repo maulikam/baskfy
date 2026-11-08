@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.exits` (`decile-blueprint/packages/core/src/baskfy_core/fno/exits.py`).
+//! Port of `baskfy_core.fno.exits` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/exits.py`).
 //!
 //! Exits and pauses (`04` §1, §7, §10).
 //!

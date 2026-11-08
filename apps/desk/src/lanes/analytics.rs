@@ -2,7 +2,7 @@
 //! indices, regime, settings, ops (ported by the wave-D *views* lane, which also owns
 //! `session.rs`).
 //!
-//! **STATUS (views lane):** ported and graded by `tools/parity/desk_diff.py`
+//! **STATUS (views lane):** ported and graded by `legacy/python/tools/parity/desk_diff.py`
 //! (`desk_cases/views.json`): `GET /settings`, `GET /settings/data`, `POST /settings`,
 //! `POST /settings/reset`, `GET /ops`, `GET /ops/data`, `GET /ops/job/{job_id}`, `POST /ops/run`.
 //! Python ported as private submodules: `analytics/settings.py` ([`desk_settings`]),

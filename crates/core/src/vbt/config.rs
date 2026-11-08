@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.config` (`decile-blueprint/packages/core/src/baskfy_core/vbt/config.py`).
+//! Port of `baskfy_core.vbt.config` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/config.py`).
 //!
 //! Every threshold of VBT-1, named once (`docs/vbt/04-business-rules.md`). Nothing downstream
 //! compares to a literal: a detector, a task, a router and a page each read a field of one of

@@ -519,8 +519,8 @@ mod tests {
             Name::QueueBacklog,
         ] {
             // TestEveryAlertNamesARunbookThatExists.test_the_file_is_there.
-            let root =
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../decile-blueprint");
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../legacy/python/decile-blueprint");
             assert!(root.join(name.runbook()).is_file(), "{}", name.runbook());
         }
     }

@@ -37,7 +37,7 @@ echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/de
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BLUE="$ROOT/decile-blueprint"
+BLUE="$ROOT/legacy/python/decile-blueprint"
 HERE="$ROOT/tools/deploy"
 REGION="${AWS_REGION:-ap-south-1}"
 PROFILE="${AWS_PROFILE:-baskfy-poc}"
@@ -176,8 +176,8 @@ BUCKET="${BASKFY_ARCHIVE_BUCKET:-$(cd "$BLUE/infra/terraform" && \
 echo "   images $REG/{web,py,desk}:$TAG   bucket s3://$BUCKET"
 
 say "1. ship compose.prod.yml + Caddyfile ($TAG)"
-aws s3 cp --region "$REGION" --only-show-errors "$BLUE/deploy/compose.prod.yml" "s3://$BUCKET/deploy/$TAG/compose.prod.yml"
-aws s3 cp --region "$REGION" --only-show-errors "$BLUE/deploy/Caddyfile"         "s3://$BUCKET/deploy/$TAG/Caddyfile"
+aws s3 cp --region "$REGION" --only-show-errors "$ROOT/deploy/compose.prod.yml" "s3://$BUCKET/deploy/$TAG/compose.prod.yml"
+aws s3 cp --region "$REGION" --only-show-errors "$ROOT/deploy/Caddyfile"         "s3://$BUCKET/deploy/$TAG/Caddyfile"
 # OV11 (26 Sep 2026): the sidecar's pinned wheels, bind-mounted as /app/requirements.txt.
 
 # Every box step is `cd /opt/baskfy` + the compose invocation NEEDS-MAULIK §30 uses.

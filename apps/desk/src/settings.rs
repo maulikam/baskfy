@@ -5,7 +5,7 @@
 //! **Table-driven, and the table is the answer key's.** [`ENV_VARS`] lists every variable with
 //! the Python parse it gets (`os.getenv(K, d).lower() == "true"`, `!= "false"`, `int(...)`,
 //! `int(... or n)`, `float(...)`, `tuple(....split(","))`). `fixtures/settings_defaults.json`
-//! (written by `tools/parity/desk_settings_dump.py` from the live Python) records, for each one,
+//! (written by `legacy/python/tools/parity/desk_settings_dump.py` from the live Python) records, for each one,
 //! the default and the value after a reload with each of 18 probe strings; `tests/settings.rs`
 //! requires this module to agree on all of them and to know exactly the same set of variables.
 //!

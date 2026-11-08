@@ -10,14 +10,14 @@ summarizes and points, it does not replace. **Where this file and `CLAUDE.md` di
 **Read order for any agent session:** this file → `CLAUDE.md` → `docs/README.md` →
 `docs/history/MERGE-PROMPTS.md`, and the docs they cite as you reach them. `docs/history/RUN-AND-TEST.md` is the
 from-scratch guide to running and testing everything. Each sub-tree's own `CLAUDE.md`
-(`decile-blueprint/CLAUDE.md`, `kite-momentum-rebalancer/CLAUDE.md`) remains authoritative for
+(`legacy/python/decile-blueprint/CLAUDE.md`, `legacy/python/kite-momentum-rebalancer/CLAUDE.md`) remains authoritative for
 that tree's internals.
 
 ## What this repository is
 
-**Baskfy** merges two products into one: `decile-blueprint/` (the momentum screener / data
+**Baskfy** merges two products into one: `legacy/python/decile-blueprint/` (the momentum screener / data
 plant — Python 3.12 uv workspace + TypeScript/Next.js, PostgreSQL 16 + TimescaleDB; has never
-placed an order and never will) and `kite-momentum-rebalancer/` (the live momentum execution
+placed an order and never will) and `legacy/python/kite-momentum-rebalancer/` (the live momentum execution
 desk — FastAPI + Kite Connect on NSE cash equities; the only thing here that can place an
 order). They share `packages/core` — factors, scoring, basket construction. `frozen/strangle/`
 is a frozen options lab: no refactors, no deletions, no lint fixes. `docs/gates/` holds
@@ -31,10 +31,10 @@ These are the ones that are catastrophic to miss. They are not advisory.
    of 1 Nov 2026 (`docs/DECISIONS-MERGE.md` DRY-LIVE), so every test harness pins
    `DRY_RUN=true`; never run execution tests against live credentials. Orders fire only from
    `POST /execute` with `confirm=true` and a `plan_id` from `/analyze` — and never from an agent.
-2. **`kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence.** Before anything
+2. **`legacy/python/kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence.** Before anything
    that could touch it: verified backup (`python -m scripts.backup` says `ok`) plus a dated
    copy outside the repo. Migrations run against a copy first. The file is archived forever.
-3. **`kite-momentum-rebalancer/data/uploads/*.csv` is the read-only regression corpus** — the
+3. **`legacy/python/kite-momentum-rebalancer/data/uploads/*.csv` is the read-only regression corpus** — the
    answer key the merge is graded against. Never modify it.
 4. **The two laws:** `packages/core` touches nothing (no DB, network, disk, or clock — I/O
    lives in `services/` or `packages/providers`); `packages/execution` is the only path to an
@@ -60,13 +60,13 @@ Run each suite from its own directory — `pytest` at the repo root walks into b
 fails confusingly.
 
 ```bash
-# decile-blueprint/ (uv + pnpm; `make help` lists everything)
+# legacy/python/decile-blueprint/ (uv + pnpm; `make help` lists everything)
 make up            # postgres + redis + mailpit
 make test          # python + TS suites          make lint   # ruff + mypy strict + TS
 uv run pytest -p no:randomly
 pnpm -r run test
 
-# kite-momentum-rebalancer/
+# legacy/python/kite-momentum-rebalancer/
 .venv/bin/python -m pytest
 
 # repo root
@@ -74,7 +74,7 @@ tools/ci-local.sh          # CI's steps, locally; honest about skips
 tools/check-namespace.sh   # no `decile` namespace tokens outside the ALLOWED vocabulary
 ```
 
-Dependencies: read `decile-blueprint/docs/02-tech-stack-adr.md` before proposing anything
+Dependencies: read `legacy/python/decile-blueprint/docs/02-tech-stack-adr.md` before proposing anything
 outside the locked stack. Money and prices are `numeric`, never `float`. `close` is adjusted,
 `close_raw` is the exchange print. Ingestion and seeding are idempotent; round at write time.
 

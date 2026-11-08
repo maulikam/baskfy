@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.config` (`decile-blueprint/packages/core/src/baskfy_core/swing/config.py`).
+//! Port of `baskfy_core.swing.config` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/config.py`).
 //!
 //! Every threshold of the swing method, named once (docs/swing/04). Deserialise the golden's `config` object into these structs.
 //!

@@ -8,11 +8,11 @@
 //!   `a_malformed_date_is_rejected_before_any_database_is_touched`,
 //!   `an_uploads_id_resolves_to_the_bytes_that_made_it`) are ported at the function level here
 //!   **and** graded route-to-route against the live Python desk by `desk_diff.py` over
-//!   `tools/parity/desk_cases/weekly_plan.json` (the same requests, both desks, the bed's bars).
+//!   `legacy/python/tools/parity/desk_cases/weekly_plan.json` (the same requests, both desks, the bed's bars).
 //! * `tests/test_desk_score_parity.py` (3) — `score_day` (`baskfy_core.desk_score_service`) is the
 //!   nightly worker's and has no Rust port in this crate; the property ported is the half the desk
 //!   owns: the desk's book from a generated scan equals the Python desk's book, row for row
-//!   (`fixtures/weekly/generated.json`, dumped by `tools/parity/desk_generated_goldens.py`).
+//!   (`fixtures/weekly/generated.json`, dumped by `legacy/python/tools/parity/desk_generated_goldens.py`).
 //! * `tests/test_desk_config_parity.py` (4) — `ScoringConfig::default()` against `app.config`.
 //! * `tests/test_scoring_moved_to_core.py` (2) — the scored frame's digest over the corpus.
 //! * `tests/test_breadth_and_shadow.py` (15) — the breadth decision and the band table (10); the
@@ -42,7 +42,8 @@ use baskfy_desk::wire::{PyDict, PyValue, dict, orjson_dumps};
 use chrono::NaiveDate;
 use serde_json::Value;
 
-const CORPUS: &str = "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads";
+const CORPUS: &str =
+    "/Volumes/T7-Work/Dev/projects/baskfy/legacy/python/kite-momentum-rebalancer/data/uploads";
 
 fn manifest() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -915,8 +916,8 @@ fn scored_csv(sc: &Scored) -> (String, usize) {
 #[test]
 fn the_score_is_unchanged_since_it_moved_to_core() {
     use sha2::{Digest, Sha256};
-    let golden_path =
-        manifest().join("../../kite-momentum-rebalancer/tests/fixtures/scoring_golden.json");
+    let golden_path = manifest()
+        .join("../../legacy/python/kite-momentum-rebalancer/tests/fixtures/scoring_golden.json");
     let expected: Value = serde_json::from_slice(&std::fs::read(golden_path).unwrap()).unwrap();
     let cfg = ScoringConfig::default();
     let mut checked = 0;
@@ -1110,7 +1111,7 @@ fn the_flag_is_off() {
 
 #[test]
 fn the_protocol_is_written_down() {
-    let doc = manifest().join("../../kite-momentum-rebalancer/docs/SHADOW-MODE.md");
+    let doc = manifest().join("../../legacy/python/kite-momentum-rebalancer/docs/SHADOW-MODE.md");
     let text = std::fs::read_to_string(doc).unwrap();
     assert!(
         text.to_lowercase()

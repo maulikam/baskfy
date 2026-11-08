@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.plan` (`decile-blueprint/packages/core/src/baskfy_core/vbt/plan.py`)
+//! Port of `baskfy_core.vbt.plan` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/plan.py`)
 //! — a session's plan: what the desk shows and a person confirms (`docs/vbt/04` §9).
 //!
 //! The plan is the only thing that becomes an order, and **a plan is not honest without its

@@ -1,6 +1,6 @@
 //! Lane **exec_kite**: `app.kite_client.Kite` against the live Python's own answers.
 //!
-//! `fixtures/exec_kite/goldens.json` is written by `tools/parity/exec_kite_goldens.py`: for each
+//! `fixtures/exec_kite/goldens.json` is written by `legacy/python/tools/parity/exec_kite_goldens.py`: for each
 //! case a scripted broker reply (well-formed or not), the method called, the value Python
 //! returned or the exception it raised (`type(exc).__name__`, `str(exc)`), and the broker calls
 //! Python made. This test replays every case through [`DeskKite`] over the same script and

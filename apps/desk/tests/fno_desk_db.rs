@@ -6,7 +6,7 @@
 //! monitor raises the 09:20 plans and runs the exits. That half of the monitor belongs to the
 //! sibling sub-lane and is not ported, so the rows it writes are seeded here instead — **the
 //! rows the real Python monitor, executor and ledger wrote**, recorded by
-//! `tools/parity/fno_desk_goldens.py` into `fixtures/fno/goldens.json` (ids and the plan ids'
+//! `legacy/python/tools/parity/fno_desk_goldens.py` into `fixtures/fno/goldens.json` (ids and the plan ids'
 //! `-u<uid>` remapped to this test's own user). Every assertion of the Python tests is kept;
 //! where a Python test also ticks the monitor, the monitor's *input* from this lane is asserted
 //! instead (`entry_block`'s reasons, the plan the page shows) and the test says so. On top,
@@ -379,7 +379,8 @@ static DESK_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static MIGRATED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
 
 fn desk_app() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer/app")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../legacy/python/kite-momentum-rebalancer/app")
 }
 
 /// The scenario's quote books as Kite `quote` entries, plus the NIFTY index level.

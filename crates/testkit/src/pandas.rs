@@ -1,6 +1,6 @@
 //! Pandas frames and series in the golden encoding (the ranking goldens, DECISIONS-RS R1.5).
 //!
-//! Three frame shapes occur, all written by `tools/parity/golden_ranking.py`:
+//! Three frame shapes occur, all written by `legacy/python/tools/parity/golden_ranking.py`:
 //!
 //! | shape | where | dtypes |
 //! |---|---|---|

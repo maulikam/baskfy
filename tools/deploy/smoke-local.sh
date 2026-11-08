@@ -17,8 +17,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BLUE="$ROOT/decile-blueprint"
-DOCK="$BLUE/deploy"
+BLUE="$ROOT/legacy/python/decile-blueprint"
+DOCK="$ROOT/deploy"
 # The agent session's scratchpad when it exists (never the repo, never /tmp's shared root
 # for a file that holds a generated password), else a private directory under $TMPDIR.
 _AGENT_SCRATCH=/private/tmp/claude-501/-Users-maulikdave-Documents-projects-baskfy/b145c25e-ef2d-4ffe-ae88-9465ecb011fc/scratchpad
@@ -56,7 +56,7 @@ docker image inspect "$WEB_IMAGE" >/dev/null 2>&1 || {
     --build-arg "NEXT_PUBLIC_API_ORIGIN=http://localhost:$HTTP" \
     --build-arg "NEXT_PUBLIC_API_URL=http://localhost:$HTTP/api/v1" \
     --build-arg "NEXT_PUBLIC_DESK_URL=http://localhost:$HTTP/desk" \
-    --build-arg "BASKFY_RELEASE=smoke" "$BLUE" >/dev/null
+    --build-arg "BASKFY_RELEASE=smoke" "$ROOT" >/dev/null
 }
 echo "   $PY_IMAGE  $DESK_IMAGE  $WEB_IMAGE"
 

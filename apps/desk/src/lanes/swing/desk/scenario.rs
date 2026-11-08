@@ -791,7 +791,7 @@ impl Reply {
 
 /// The desk's templates and static files in this checkout.
 pub fn desk_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../legacy/python/kite-momentum-rebalancer")
 }
 
 impl Client {

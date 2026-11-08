@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 docker image inspect "$PY_IMAGE" >/dev/null 2>&1 || {
   echo "building $PY_IMAGE …"
-  docker build --platform "$PLATFORM" -f "$BLUE/deploy/Dockerfile.python" -t "$PY_IMAGE" "$BLUE" \
+  docker build --platform "$PLATFORM" -f "$ROOT/deploy/Dockerfile.python" -t "$PY_IMAGE" "$BLUE" \
     >/dev/null 2>&1 || fail "python image did not build"
 }
 

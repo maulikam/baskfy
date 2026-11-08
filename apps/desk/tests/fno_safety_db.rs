@@ -152,7 +152,8 @@ struct Desk {
 }
 
 fn desk_app() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer/app")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../legacy/python/kite-momentum-rebalancer/app")
 }
 
 impl Desk {

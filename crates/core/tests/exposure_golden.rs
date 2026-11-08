@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! `baskfy_core.exposure` against the goldens of `tools/parity/golden_exposure.py`.
+//! `baskfy_core.exposure` against the goldens of `legacy/python/tools/parity/golden_exposure.py`.
 
 use std::collections::{BTreeMap, BTreeSet};
 

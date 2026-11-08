@@ -2,7 +2,7 @@
 //! reads — the EOD snapshot, the holdings table, FIFO tax lots, the Console tradebook, the
 //! plan-against-broker view and the LV2 reconciler.
 //!
-//! **Python it ports** (`kite-momentum-rebalancer/app/`):
+//! **Python it ports** (`legacy/python/kite-momentum-rebalancer/app/`):
 //! * `analytics/snapshot.py` → [`snapshot`] (collection, `run`, the CLI) over [`snapshot_db`]
 //!   (`db.py`'s snapshot and cashflow half, kept here until lane `analytics` ports `db.py`,
 //!   DECISIONS-RS R8.WB3)

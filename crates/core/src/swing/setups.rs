@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.swing.setups` (`decile-blueprint/packages/core/src/baskfy_core/swing/setups.py`).
+//! Port of `baskfy_core.swing.setups` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/swing/setups.py`).
 //!
 //! The three detectors (docs/swing/04 §2-§4): one as-of date in, one row per candidate out.
 //!

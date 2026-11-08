@@ -7,7 +7,7 @@
 //! `load_dotenv()` does). Without `--harness` the broker is [`KiteHttp`] (Kite Connect over
 //! HTTP); its order verbs are reachable only through the gateway, which honours `DRY_RUN`.
 //!
-//! `--harness <fixture dir>` (`tools/parity/desk_diff.py` only): the replay Kite over that
+//! `--harness <fixture dir>` (`legacy/python/tools/parity/desk_diff.py` only): the replay Kite over that
 //! fixture (calls appended to `--kite-log`), a settable clock starting at `--harness-clock`
 //! (RFC 3339), harness ids seeded by `--harness-seed`, and the two `/__harness/*` routes. It
 //! refuses to start unless `DRY_RUN` is true.

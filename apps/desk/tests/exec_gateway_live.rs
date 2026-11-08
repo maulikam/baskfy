@@ -5,7 +5,7 @@
 //! only the live path writes (`placed`, `gtt_placed`, `gtt_modified`, `gtt_deleted`,
 //! `order_cancelled`, every broker-error record) never reach a graded case there.
 //! `fixtures/exec_gateway/live_goldens.json` is written by
-//! `tools/parity/exec_gateway_live_goldens.py`: the Python `OrderGateway` with `dry_run=False`
+//! `legacy/python/tools/parity/exec_gateway_live_goldens.py`: the Python `OrderGateway` with `dry_run=False`
 //! over the harness's Python replay Kite (kiteconnect shaping each request, nothing sent). This
 //! test runs the same operations through the Rust gateway over `fake_kite.rs` and requires, per
 //! scenario, the **same result dicts** (or the same exception), the **same journal lines**

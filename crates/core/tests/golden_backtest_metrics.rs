@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! `baskfy_core.backtest_metrics` against the goldens
 //! (`rust/testdata/golden/L1/backtest/<fn>.case_NNN.json`, written by
-//! `tools/parity/golden_backtest.py`). Every case of every function is graded strictly by the
+//! `legacy/python/tools/parity/golden_backtest.py`). Every case of every function is graded strictly by the
 //! testkit, and each function's case count is pinned so a dropped case fails.
 
 use baskfy_core::backtest_metrics::{

@@ -8,7 +8,7 @@
 //! | `baskfy.overlap.catalyst_scan` | `overlap_catalyst_scan_task` (`baskfy_api.overlap`, `swing_catalyst`) | [`catalyst_scan`], over the API's own overlap view | **gated** (R8.ar4): the feed's loop is the `swing_eod` lane's, unreachable with `symbols=` |
 //!
 //! Each Python `run_in_session` / `session_scope` is one transaction here. Grade with
-//! `tools/parity/task_diff.py --cases tools/parity/task_cases/api_routes.json`.
+//! `legacy/python/tools/parity/task_diff.py --cases legacy/python/tools/parity/task_cases/api_routes.json`.
 //!
 //! **Law 2.** The resync reaches ingestion, the trading calendar, the Kite *session* bridge (the
 //! `ops_alerts` lane's) and the worker's own Celery queue; the purge erases accounts; the scan

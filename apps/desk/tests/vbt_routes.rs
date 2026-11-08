@@ -49,7 +49,7 @@ fn txt(s: &str) -> Param {
 }
 
 fn desk_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../legacy/python/kite-momentum-rebalancer")
 }
 
 fn monorepo() -> PathBuf {
@@ -744,8 +744,8 @@ fn no_get_on_the_desk_page_can_execute() {
 fn sources() -> Vec<PathBuf> {
     let roots = [
         desk_root().join("app"),
-        monorepo().join("decile-blueprint/services"),
-        monorepo().join("decile-blueprint/packages/core/src"),
+        monorepo().join("legacy/python/decile-blueprint/services"),
+        monorepo().join("legacy/python/decile-blueprint/packages/core/src"),
         monorepo().join("apps/web/src"),
         monorepo().join("apps/api"),
         monorepo().join("apps/desk"),
@@ -850,7 +850,8 @@ fn the_desk_config_says_so_where_somebody_would_look_for_it() {
 #[test]
 fn no_scheduler_entry_reaches_an_execute_path() {
     let beat = std::fs::read_to_string(
-        monorepo().join("decile-blueprint/services/worker/src/baskfy_worker/celery_app.py"),
+        monorepo()
+            .join("legacy/python/decile-blueprint/services/worker/src/baskfy_worker/celery_app.py"),
     )
     .unwrap();
     let re = regex::Regex::new(r#""(baskfy\.vbt\.[a-z_]+)""#).unwrap();

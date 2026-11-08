@@ -4,7 +4,7 @@
 //!
 //! Every case of every function is loaded and graded strictly by the testkit; the case count
 //! per function is asserted so a new or vanished golden is noticed. Inputs are decoded the way
-//! `tools/parity/golden_vbt.py` decodes them; a Python raise is graded as
+//! `legacy/python/tools/parity/golden_vbt.py` decodes them; a Python raise is graded as
 //! `{"raises": {"type", "message"}}`.
 
 use baskfy_core::CoreError;

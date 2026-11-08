@@ -284,8 +284,8 @@ async fn desk(settings: Settings, authed: bool) -> Desk {
     let db = crate::storage::Db::open(crate::storage::DbConfig::from_settings(&settings, None))
         .await
         .unwrap();
-    let root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../legacy/python/kite-momentum-rebalancer");
     let state = build_state(StateParts {
         settings,
         clock: Arc::new(crate::clock::FixedClock::new(open())),

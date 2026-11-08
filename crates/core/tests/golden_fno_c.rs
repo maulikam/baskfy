@@ -1,6 +1,6 @@
 //! Grades the fno research ports against every golden of
 //! `baskfy_core.fno.{research, directional_retest, retest}` in `rust/testdata/golden/L1/fno`.
-//! Each case is called from its stored inputs exactly as `tools/parity/golden_fno.py`'s `call_*`
+//! Each case is called from its stored inputs exactly as `legacy/python/tools/parity/golden_fno.py`'s `call_*`
 //! function calls the Python (the compositions its notes name included); a Python raise is
 //! stored as `{"raises": {"type", "message"}}` and the port's error is graded the same way.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

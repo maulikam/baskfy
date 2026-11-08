@@ -2,7 +2,7 @@
 //! `shift_schedule`, `raw_weights`, `apply_position_limits`, `CostSpec`, `PricePanel`,
 //! `PointInTimeReader`, `AdjustmentCoverage`.
 //!
-//! Ported from `decile-blueprint/packages/core/src/baskfy_core/backtest.py` and graded by
+//! Ported from `legacy/python/decile-blueprint/packages/core/src/baskfy_core/backtest.py` and graded by
 //! `tests/golden_backtest_helpers.rs` against `rust/testdata/golden/L1/backtest`.
 //!
 //! ## Python's decimal context ([`WideDecimal`])

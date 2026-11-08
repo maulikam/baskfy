@@ -35,8 +35,8 @@ skip() {          # skip <job> <name> <reason>
   SKIP=$((SKIP+1)); SKIPPED+=("$1/$2 — $3")
 }
 
-D=decile-blueprint
-K=kite-momentum-rebalancer
+D=legacy/python/decile-blueprint
+K=legacy/python/kite-momentum-rebalancer
 have_pg() { docker exec baskfy-postgres pg_isready -U baskfy >/dev/null 2>&1; }
 
 # The workflow sets this at job level; this script never did, so every "coverage gate" run here
@@ -69,7 +69,7 @@ run python "Reconciliation report against the reference export" "$D" "uv run pyt
 run python "Performance budgets (docs/11)" "$D" "uv run pytest -m benchmark -q"
 if docker info >/dev/null 2>&1; then
   run python "Prometheus rules and config are loadable" "$D" \
-    "docker run --rm --entrypoint promtool -v \"\$PWD/infra/prometheus:/rules:ro\" prom/prometheus:v3.1.0 check rules /rules/alerts.yml"
+    "docker run --rm --entrypoint promtool -v \"\$PWD/../../../deploy/monitoring/prometheus:/rules:ro\" prom/prometheus:v3.1.0 check rules /rules/alerts.yml"
 else
   skip python "Prometheus rules and config are loadable" "docker daemon not running"
 fi

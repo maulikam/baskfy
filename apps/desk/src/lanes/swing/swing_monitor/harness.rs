@@ -1,4 +1,4 @@
-//! `POST /__harness/swing-signal` — **harness-only** (`--harness`; `tools/parity/desk_diff.py`):
+//! `POST /__harness/swing-signal` — **harness-only** (`--harness`; `legacy/python/tools/parity/desk_diff.py`):
 //! raise one signal through the monitor's real [`PgSignalStore`] on the side's database, so the
 //! SIGNAL plan kind is graded byte for byte against Python's (`desk_harness.py` mounts the same
 //! route over `app.swing_monitor`). Without the harness the path answers Starlette's 404 for

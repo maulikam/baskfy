@@ -8,8 +8,8 @@
 //! [`WorkerError::TaskNotPorted`](crate::WorkerError::TaskNotPorted) until the lane lands its body
 //! and adds the task's name to [`PORTED`]. The signatures are the registry's contract; a lane
 //! adds private submodules here (`mod x;` → `tasks/sleeve_backtests/x.rs`) and never edits `lib.rs`,
-//! `tasks.rs`, the registry or the Beat table. Grade with `tools/parity/task_diff.py --cases
-//! tools/parity/task_cases/sleeve_backtests.json`.
+//! `tasks.rs`, the registry or the Beat table. Grade with `legacy/python/tools/parity/task_diff.py --cases
+//! legacy/python/tools/parity/task_cases/sleeve_backtests.json`.
 
 mod common;
 #[cfg(test)]

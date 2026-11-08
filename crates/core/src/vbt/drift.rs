@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.drift` (`decile-blueprint/packages/core/src/baskfy_core/vbt/drift.py`).
+//! Port of `baskfy_core.vbt.drift` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/drift.py`).
 //!
 //! VB9: how far a fresh run sits from the study, and when that is worth saying out loud. The
 //! flag fires above one CAGR point in either direction; it says the two numbers stopped

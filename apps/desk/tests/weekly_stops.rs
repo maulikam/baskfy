@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 use tower::ServiceExt as _;
 
 fn python_desk() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kite-momentum-rebalancer")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../legacy/python/kite-momentum-rebalancer")
 }
 
 fn holding(symbol: &str, qty: i64, last: f64) -> Value {

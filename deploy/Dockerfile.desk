@@ -28,7 +28,7 @@ ENV PATH="/venv/bin:$PATH"
 
 # The desk's own lock, minus the test-only lines (pytest, pytest-cov, httpx2 is the TestClient
 # transport). The lock pins the runtime; the image does not carry a test runner.
-COPY kite-momentum-rebalancer/requirements.txt desk-requirements.txt
+COPY legacy/python/kite-momentum-rebalancer/requirements.txt desk-requirements.txt
 RUN grep -vE '^(pytest|pytest-cov|httpx2)==' desk-requirements.txt > runtime.txt \
  && pip install -r runtime.txt
 
@@ -37,9 +37,9 @@ RUN grep -vE '^(pytest|pytest-cov|httpx2)==' desk-requirements.txt > runtime.txt
 # pydantic than the suite was green against. psycopg is the desk's Postgres backend
 # (`app/analytics/pg.py`, DESK_DB_BACKEND=postgres) and is not in its requirements.txt because
 # the retired box ran SQLite.
-COPY decile-blueprint/packages/core       packages/core
-COPY decile-blueprint/packages/execution  packages/execution
-COPY decile-blueprint/packages/providers  packages/providers
+COPY legacy/python/decile-blueprint/packages/core       packages/core
+COPY legacy/python/decile-blueprint/packages/execution  packages/execution
+COPY legacy/python/decile-blueprint/packages/providers  packages/providers
 RUN cat > constraints.txt <<'EOF'
 sqlalchemy==2.0.52
 pydantic==2.13.4
@@ -81,9 +81,9 @@ RUN apt-get update \
  && install -d -o baskfy -g baskfy /var/lib/baskfy/state
 
 COPY --from=build --chown=baskfy:baskfy /venv /venv
-COPY --chown=baskfy:baskfy kite-momentum-rebalancer/app      /desk/app
-COPY --chown=baskfy:baskfy kite-momentum-rebalancer/config   /desk/config
-COPY --chown=baskfy:baskfy kite-momentum-rebalancer/scripts  /desk/scripts
+COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app      /desk/app
+COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/config   /desk/config
+COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/scripts  /desk/scripts
 
 # Entry point: maps the box's BASKFY_-prefixed credentials onto the desk's unprefixed names,
 # preferring the BASKFY_ ones — `.env.example` carries both halves and the box's measured,

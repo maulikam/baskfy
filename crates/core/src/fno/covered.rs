@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.covered` (`decile-blueprint/packages/core/src/baskfy_core/fno/covered.py`).
+//! Port of `baskfy_core.fno.covered` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/covered.py`).
 //!
 //! The covered-overnight predicate (`02` §2.1, `04` §2).
 //!

@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.sizing` (`decile-blueprint/packages/core/src/baskfy_core/fno/sizing.py`).
+//! Port of `baskfy_core.fno.sizing` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/sizing.py`).
 //!
 //! Lots from a risk budget; margin a ceiling, never a source (`04` §3, §10; Track C §6).
 //!

@@ -1,7 +1,7 @@
 //! Grades the fno decision ports against every golden of
 //! `baskfy_core.fno.{condor, covered, exits, checklist, scan, monitor, directional}` in
 //! `rust/testdata/golden/L1/fno`. Each case is called from its stored inputs exactly as
-//! `tools/parity/golden_fno.py`'s `call_*` function calls the Python; a Python raise is stored
+//! `legacy/python/tools/parity/golden_fno.py`'s `call_*` function calls the Python; a Python raise is stored
 //! as `{"raises": {"type", "message"}}` and the port's error is graded the same way.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

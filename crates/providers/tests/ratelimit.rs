@@ -382,7 +382,7 @@ fn a_layered_spacer_needs_a_clock() {
 fn python_script(name: &str) -> String {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../decile-blueprint/packages/providers/src/baskfy_providers/ratelimit.py"
+        "/../../legacy/python/decile-blueprint/packages/providers/src/baskfy_providers/ratelimit.py"
     );
     let source = std::fs::read_to_string(path).unwrap();
     let open = format!("{name} = \"\"\"");

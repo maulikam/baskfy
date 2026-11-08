@@ -1,7 +1,7 @@
 //! The formatting and serialisation engines against the live Python's answers:
 //! `fixtures/pyfmt_probes.json` (`%` and `format()`), `fixtures/wire_probes.json` (orjson,
 //! `json.dumps`), `fixtures/template_probes.json` (Jinja2 through the desk's own environment) —
-//! all written by `tools/parity/desk_probes.py`. And every desk template must compile.
+//! all written by `legacy/python/tools/parity/desk_probes.py`. And every desk template must compile.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use baskfy_desk::pyfmt::{PyArg, format_value, percent_format, str_format};
@@ -136,7 +136,7 @@ fn orjson_floats_and_documents_are_orjsons() {
 
 fn templates() -> Templates {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../kite-momentum-rebalancer/app/templates");
+        .join("../../legacy/python/kite-momentum-rebalancer/app/templates");
     Templates::new(&dir, "0123abcd", false)
 }
 

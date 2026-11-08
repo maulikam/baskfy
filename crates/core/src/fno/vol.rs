@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.vol` (`decile-blueprint/packages/core/src/baskfy_core/fno/vol.py`).
+//! Port of `baskfy_core.fno.vol` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/vol.py`).
 //!
 //! ATM implied volatility per underlying per session (`04` §4 `iv_atm`). The rule: the
 //! **nearest monthly with ≥ 8 sessions left**; the **strike nearest the future's settle** (the

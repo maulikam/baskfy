@@ -1,5 +1,5 @@
 //! Drives the replay adapter over a bundle with a list of calls and prints every answer as
-//! JSON, for `tools/parity/replay_selfcheck.py`, which runs the Python adapter over the same
+//! JSON, for `legacy/python/tools/parity/replay_selfcheck.py`, which runs the Python adapter over the same
 //! calls and requires the two outputs to be equal (DECISIONS-RS R7.3). No network: the block is
 //! armed before anything runs.
 //!

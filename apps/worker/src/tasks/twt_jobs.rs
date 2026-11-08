@@ -20,7 +20,7 @@
 //! multiplier, never whether anything is sent, and this worker reads **no** auto-execute flag —
 //! `BASKFY_TWT_AUTO_EXECUTE` is the desk's alone.
 //!
-//! Grade with `tools/parity/task_diff.py --cases tools/parity/task_cases/twt_jobs.json`.
+//! Grade with `legacy/python/tools/parity/task_diff.py --cases legacy/python/tools/parity/task_cases/twt_jobs.json`.
 
 pub(in crate::tasks) mod alerting;
 pub(in crate::tasks) mod celery;

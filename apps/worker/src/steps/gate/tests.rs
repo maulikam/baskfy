@@ -1,7 +1,7 @@
 //! The step-level assertions of `services/worker/tests/test_quality_gate.py` and
 //! `test_quality_universe_sources.py` that hold without a database, ported as the **spec**:
 //! each verdict is computed from the numbers its check reads. The database half of the gate is
-//! graded by `tools/parity/nightly_diff.py --step data_quality_gate` (fresh, rerun, gate-refuse).
+//! graded by `legacy/python/tools/parity/nightly_diff.py --step data_quality_gate` (fresh, rerun, gate-refuse).
 #![allow(clippy::unwrap_used, clippy::float_cmp, clippy::panic)]
 
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.config` (`decile-blueprint/packages/core/src/baskfy_core/fno/config.py`).
+//! Port of `baskfy_core.fno.config` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/config.py`).
 //!
 //! Every number of the FO run, named once (`docs/fno/04-business-rules.md`). Each default is the
 //! number printed there; each bound is the range printed beside it. Python validates a config in

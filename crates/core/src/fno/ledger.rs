@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.ledger` (`decile-blueprint/packages/core/src/baskfy_core/fno/ledger.py`).
+//! Port of `baskfy_core.fno.ledger` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/ledger.py`).
 //!
 //! The FO ledger and `04` §7's pauses, pure (`docs/fno/06` FO10).
 //!

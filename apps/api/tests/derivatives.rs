@@ -8,7 +8,7 @@
 //! On the bed (`cfg(bed)`): the sole-tenant guard, the entitlement gate, the tenant's 404 and a
 //! finished run's event stream. The seeded-database tests (`_completed` runs, scan rows written
 //! by the test) are writes and stay with Python; their outputs are graded instead by
-//! `tools/parity/api_diff.py` over `tools/parity/api_cases/derivatives.json`.
+//! `legacy/python/tools/parity/api_diff.py` over `legacy/python/tools/parity/api_cases/derivatives.json`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;

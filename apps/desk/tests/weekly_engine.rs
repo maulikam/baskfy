@@ -1,7 +1,7 @@
 //! Lane weekly: the scorer, the planner and the cost model, graded against the Python desk.
 //!
 //! The answer key is `fixtures/weekly/*.json`, dumped from the live Python by
-//! `tools/parity/desk_weekly_goldens.py` (numpy 2.5, pandas 3.0, the worktree's `app` and
+//! `legacy/python/tools/parity/desk_weekly_goldens.py` (numpy 2.5, pandas 3.0, the worktree's `app` and
 //! `baskfy_core`). Nothing here is tolerance-compared: floats are compared by their Python repr,
 //! plans by their orjson bytes.
 //!
@@ -33,7 +33,8 @@ use baskfy_desk::lanes::weekly::score::{Scored, ScoringConfig, audit, load_scan,
 use baskfy_desk::wire::{PyDict, PyValue, orjson_dumps};
 use serde_json::Value;
 
-const CORPUS: &str = "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads";
+const CORPUS: &str =
+    "/Volumes/T7-Work/Dev/projects/baskfy/legacy/python/kite-momentum-rebalancer/data/uploads";
 
 fn fixture(name: &str) -> Value {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))

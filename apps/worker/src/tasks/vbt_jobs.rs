@@ -22,7 +22,7 @@
 //! auto-execute flag and this lane reads none; `BASKFY_VBT_EXECUTION_ENABLED` only sets a
 //! session's mode, the first-live half size and which counter the evening moves.
 //!
-//! Grade with `tools/parity/task_diff.py --cases tools/parity/task_cases/vbt_jobs.json`.
+//! Grade with `legacy/python/tools/parity/task_diff.py --cases legacy/python/tools/parity/task_cases/vbt_jobs.json`.
 
 mod book;
 #[cfg(test)]

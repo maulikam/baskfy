@@ -76,7 +76,7 @@ services:
     ports:
       - "${BASKFY_PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - ../decile-blueprint/infra/prometheus:/etc/prometheus:ro
+      - ./monitoring/prometheus:/etc/prometheus:ro
       - baskfy-prometheus-data:/prometheus
     command:
       # `prometheus.local.yml`, not `prometheus.yml`: the API and the worker run on the host
@@ -101,9 +101,9 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - ../decile-blueprint/infra/grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/baskfy.yml:ro
-      - ../decile-blueprint/infra/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/baskfy.yml:ro
-      - ../decile-blueprint/infra/grafana/dashboards:/etc/grafana/provisioning/dashboards/baskfy:ro
+      - ./monitoring/grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/baskfy.yml:ro
+      - ./monitoring/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/baskfy.yml:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards/baskfy:ro
       - baskfy-grafana-data:/var/lib/grafana
 
 volumes:

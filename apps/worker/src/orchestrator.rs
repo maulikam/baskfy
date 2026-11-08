@@ -20,7 +20,7 @@
 //! reconcile after it, the desk score inside step 7, the hard-failure check after step 9) — is
 //! [`run_block`], and [`run_chain`] walks [`NIGHTLY_CHAIN`] through it. The statements run in
 //! Python's order; the split exists so `baskfy-worker step <name>` can run exactly one block
-//! into an open run for grading (`tools/parity/nightly_diff.py --step`).
+//! into an open run for grading (`legacy/python/tools/parity/nightly_diff.py --step`).
 //!
 //! The post-publish steps cannot fail the run: their wrappers turn any error into `skipped`
 //! with `skipped_reason = "{type}: {message}"`, as Python's do.

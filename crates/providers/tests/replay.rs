@@ -1,6 +1,6 @@
 //! The replay adapter (DECISIONS-RS R7.3) over a small bundle written here: answers, frames on
 //! the schemas, the explicit refusals, and the composite's wording around them. Its agreement
-//! with the Python twin is graded by `tools/parity/replay_selfcheck.py` over a real bundle.
+//! with the Python twin is graded by `legacy/python/tools/parity/replay_selfcheck.py` over a real bundle.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;

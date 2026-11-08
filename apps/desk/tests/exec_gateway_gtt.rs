@@ -1,5 +1,5 @@
 //! Lane **exec_gateway** (adversarial review): the gateway's live-transport halves, ported from
-//! `decile-blueprint/packages/execution/tests/{test_gtt_gateway,test_gtt_modify_and_cancel}.py`
+//! `legacy/python/decile-blueprint/packages/execution/tests/{test_gtt_gateway,test_gtt_modify_and_cancel}.py`
 //! and the order path's idempotency rules (`gateway.py` `place`: a definitive refusal releases
 //! the reservation, an unknown ERROR keeps it, a concurrent twin cannot double-send).
 //!

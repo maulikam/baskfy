@@ -1,6 +1,6 @@
 //! PyJWT 2.13's acceptance rules as `baskfy_api.auth.decode_token` uses them, case by case. Each
 //! decode outcome was checked against `jwt.decode(..., algorithms=["HS256"], options={"require":
-//! ["exp", "iat", "sub"]}, leeway=30)` in the decile-blueprint venv (the `exp == now - leeway`
+//! ["exp", "iat", "sub"]}, leeway=30)` in the legacy/python/decile-blueprint venv (the `exp == now - leeway`
 //! boundary follows PyJWT's `<=`; the epoch cases are the API's `_token_epoch`, DECISIONS-RS R5.5).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

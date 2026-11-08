@@ -922,7 +922,7 @@ mod routes {
                 .await
                 .unwrap();
             let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../kite-momentum-rebalancer");
+                .join("../../legacy/python/kite-momentum-rebalancer");
             let paths = DeskPaths {
                 root: kite_dir.path().to_path_buf(),
                 templates: root.join("app").join("templates"),
@@ -1756,8 +1756,9 @@ async fn reading_a_run_is_a_get_and_needs_no_origin() {
 // --- TestTheTwoCopiesAgree: the copied constants, read back from the worker -----------------
 
 fn worker_source() -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../decile-blueprint/services/worker/src/baskfy_worker/tasks/twt_scan.py");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../legacy/python/decile-blueprint/services/worker/src/baskfy_worker/tasks/twt_scan.py",
+    );
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 

@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.fno.gating` (`decile-blueprint/packages/core/src/baskfy_core/fno/gating.py`).
+//! Port of `baskfy_core.fno.gating` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/fno/gating.py`).
 //!
 //! `fno_gates(sleeve)` — the one function that ANDs the FO run's four switches (`02` Track B).
 //! A real FO order needs **four** flags at once for its sleeve: `DRY_RUN=false`,

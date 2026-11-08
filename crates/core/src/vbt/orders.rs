@@ -1,4 +1,4 @@
-//! Port of `baskfy_core.vbt.orders` (`decile-blueprint/packages/core/src/baskfy_core/vbt/orders.py`).
+//! Port of `baskfy_core.vbt.orders` (`legacy/python/decile-blueprint/packages/core/src/baskfy_core/vbt/orders.py`).
 //!
 //! The working limit order (`docs/vbt/04` §7). STRATEGY §3: *"Do not chase the open."* A VBT-1
 //! entry is a limit at the signal bar's close, working for three sessions, then cancelled.

@@ -846,12 +846,12 @@ never confirms. **Reversal.** Scope the OP scan to `options_*` files.
 
 Law 2's scan (`test_fno_safety_proof`) walks the packages, services, the desk's `app`/`scripts` and
 `tools/`. `app/kite_client.py` is the broker adapter the gateway itself calls (the allowance
-`test_seven_non_negotiables` 6b already makes); `tools/friday-drill.py` calls `place_order` on its
+`test_seven_non_negotiables` 6b already makes); `tools/runs/friday-drill/friday-drill.py` calls `place_order` on its
 own recording spy to prove the spy records. Everything else is refused by name.
 
 ## FO11.5 — The drill isolates the desk's database and journal before importing `app.main` · ⚠ UNREVIEWED
 
-`tools/fno/drill.py` confirms through the real `POST /fno/execute`, so it builds `app.main`, which
+`tools/runs/fno/drill.py` confirms through the real `POST /fno/execute`, so it builds `app.main`, which
 migrates and reads the desk database it is configured with on import. The drill now points
 `db.DB_BACKEND`/`DB_PATH` and the order journal at its temporary directory first (the suite's
 `conftest` isolation). Its first run in this session, before that line existed, imported `app.main`

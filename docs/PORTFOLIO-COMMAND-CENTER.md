@@ -254,8 +254,8 @@ five can run at once.
 
 ### 6.4 Status log (continued)
 
-- **11 Sep 2026** — §6 written. PC2–PC6 gates in `gates/pc2.md` … `gates/pc6.md`, integration in
-  `gates/pc-integration.md`.
+- **11 Sep 2026** — §6 written. PC2–PC6 gates in `docs/gates/pc2.md` … `docs/gates/pc6.md`, integration in
+  `docs/gates/pc-integration.md`.
 
 - **11 Sep 2026 — the integration node, while the five leaves ran.**
   * **`GATES.md` G18 could never have passed, and that hid the real answer.** It inspected a
@@ -266,7 +266,7 @@ five can run at once.
     Maulik's call because that box is the live auto-execute host), so G18 and I12 carry an
     `ABANDON` with the handover written into `NEEDS-MAULIK.md`.
   * **Six of the brief's requirements belonged to no leaf's gates** and are now I13–I18 in
-    `gates/pc-integration.md` rather than silently dropped: top-navigation conformance, the
+    `docs/gates/pc-integration.md` rather than silently dropped: top-navigation conformance, the
     interaction set (export, shareable report, undo, audit log), copy style, the token and
     component specification, the two remaining states (permission restricted, market closed), and
     chart drill-down. Two more were added after that: I19, which makes somebody actually LOOK at

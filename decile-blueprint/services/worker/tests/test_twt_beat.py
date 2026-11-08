@@ -88,7 +88,7 @@ def test_the_sweep_is_not_on_a_timer() -> None:
     The sweep re-arms GTT stops. Scheduling it would be the desk placing orders on a timer, which
     is an auto-execute exception nobody named (TW17's covers the morning plan only), which an
     agent may not add. It stays `POST /twt/sweep` and
-    `tools/twt/sweep.py` — a person's command, which is what the runbook §9 already says it is.
+    `tools/runs/twt/sweep.py` — a person's command, which is what the runbook §9 already says it is.
 
     Asserted two ways because either alone is weak: no TWT entry may be *named* for a sweep, and
     no TWT entry may point at a task whose name contains one.

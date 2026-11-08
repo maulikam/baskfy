@@ -1,6 +1,6 @@
 #!/bin/sh
 # Hand a Kite request_token from the Baskfy box to the desk. Installed at
-# /opt/baskfy/bin/baskfy-desk-handoff by tools/deploy/install-desk-handoff.sh.
+# /opt/baskfy/bin/baskfy-desk-handoff by tools/deploy/retired/install-desk-handoff.sh.
 #
 #     printf '%s' "$REQUEST_TOKEN" | /opt/baskfy/bin/baskfy-desk-handoff
 #
@@ -20,7 +20,7 @@ KEY="${BASKFY_DESK_HANDOFF_KEY:-/opt/baskfy/secrets/ssh/desk-handoff}"
 KNOWN_HOSTS="${BASKFY_DESK_KNOWN_HOSTS:-/opt/baskfy/secrets/ssh/known_hosts}"
 TARGET="${BASKFY_KITE_DESK_SSH_TARGET:-desk@65.0.226.77}"
 
-[ -r "$KEY" ] || { echo "no handoff key at $KEY — run tools/deploy/install-desk-handoff.sh" >&2; exit 3; }
+[ -r "$KEY" ] || { echo "no handoff key at $KEY — run tools/deploy/retired/install-desk-handoff.sh" >&2; exit 3; }
 [ -r "$KNOWN_HOSTS" ] || { echo "no pinned host key at $KNOWN_HOSTS" >&2; exit 3; }
 
 # StrictHostKeyChecking=yes, never accept-new: an unattended handoff has nobody to judge an

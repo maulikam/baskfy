@@ -7,14 +7,14 @@ echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/de
 # `box.sh`, which runs it through SSM, and two of them run a further command inside the `web`
 # container. That is three levels of quoting, and a gate CHECK is handed to `sh -c` as a single
 # line — the nested quotes collapse and the command produces no output at all, which reads as a
-# failed deploy when it is a failed quote. `gates/deploy-pc-command-center.md` D4–D7 call this.
+# failed deploy when it is a failed quote. `docs/gates/deploy-pc-command-center.md` D4–D7 call this.
 #
 #     AWS_PROFILE=baskfy-poc bash tools/deploy/verify-pc-deploy.sh <tag>
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TAG="${1:-$(cd "$ROOT" && git rev-parse --short HEAD)}"
 export AWS_PROFILE="${AWS_PROFILE:-baskfy-poc}"
-box() { bash "$ROOT/tools/deploy/box.sh" "$@" 2>/dev/null; }
+box() { bash "$ROOT/tools/deploy/retired/box.sh" "$@" 2>/dev/null; }
 
 COMPOSE='docker compose -f compose.prod.yml --env-file .env.staging.compose'
 

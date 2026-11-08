@@ -39,7 +39,7 @@ carries no price history, so the reproduction needs bars supplied from outside.
 
 | Input | Source | Status |
 |---|---|---|
-| Adjusted daily bars, 271 symbols, 2023-01-02 → 2026-08-18 (223,997 rows) | `ohlcv_daily` on the staging box via `AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh`, exported to Parquet | **supplied** |
+| Adjusted daily bars, 271 symbols, 2023-01-02 → 2026-08-18 (223,997 rows) | `ohlcv_daily` on the staging box via `AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh`, exported to Parquet | **supplied** |
 | Exchange trading calendar | `select distinct date from ohlcv_daily` on the same box — the *full* instrument set, not the 271 | **supplied** |
 | NIFTY 50 benchmark (`BASKFY_PARITY_BENCHMARK`) | not assembled | **absent** → `beta` reported unchecked |
 | Listing-date history (`BASKFY_PARITY_BARS_ARE_FULL_HISTORY`) | bars start 2023-01-02, not at listing | **absent** → `high_all_time`, `away_from_high_all_time` unchecked |

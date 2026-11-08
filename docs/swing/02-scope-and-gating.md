@@ -63,7 +63,7 @@ five conditions are kept as history in git (`1c675f4`…`beb5ff5` built against 
 each with its evidence in `docs/history/SW-FINAL-REPORT.md`:
 
 1. **SW10 green.** With the flag false a property test proves no swing code path reaches
-   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/swing/drill.py`) produces a
+   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/runs/swing/drill.py`) produces a
    simulated fill and a simulated GTT for every confirmed line and **0 orders reach a broker**.
 2. **One DRY_RUN drill morning on a real session.** On the deployed box, on a weekday, with a
    Kite login before 09:00 and `DRY_RUN=true`: the 08:50 levels, the 09:04 probe, the 09:14
@@ -74,7 +74,7 @@ each with its evidence in `docs/history/SW-FINAL-REPORT.md`:
    `docs/history/SW-FINAL-REPORT.md`. The session counter on `/swing/journal` and in the evening email
    (`sessions.required = 20`) is **information**, not a gate — it says how many mornings the
    machinery has run, nothing more.
-3. **The backtest on the page.** `tools/swing/backtest.py` has been run over the backfilled
+3. **The backtest on the page.** `tools/runs/swing/backtest.py` has been run over the backfilled
    bars and its R-distribution, win rate, expectancy, drawdown and gate-on/gate-off tables are on
    `/swing/journal` under **"Backtest, EOD approximation"** with the caveats verbatim.
 4. **Maulik's written risk decision**, in `DECISIONS-SW.md`: sleeve ₹25,00,000 (MD1),

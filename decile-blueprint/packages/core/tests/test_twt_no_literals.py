@@ -117,7 +117,7 @@ class TestTheResearchOnlyFields:
     caller, TW2's golden parameter set. After TW15.1 it equals the shipped floor. It is never
     read by the detector, the plan or a page."""
 
-    #: The directories a production reference would live in. TW2's goldens live under ``tools/twt``
+    #: The directories a production reference would live in. TW2's goldens live under ``tools/runs/twt``
     #: and the tests, which are the two places the research value is allowed to appear.
     PRODUCTION = (
         REPO / "packages" / "core" / "src",

@@ -191,7 +191,7 @@ recorded file without a request. Anything not recorded answers 404.
 
 ### The TWT backtest: `twt_backtest_diff.py` (lane `sleeve_backtests`, R8.sb1)
 
-`baskfy_worker.tasks.twt_backtest.run_twt_backtest` has no Celery task — `tools/twt/backtest.py`
+`baskfy_worker.tasks.twt_backtest.run_twt_backtest` has no Celery task — `tools/runs/twt/backtest.py`
 (`make twt-backtest`) is its caller — so `task_diff` cannot name it. `twt_backtest_diff.py` is
 `task_diff` with one seam replaced: a side runs the script's `_run` body (`py`, this file's `side`
 subcommand under `task_py`'s clock) or `rust/crates/baskfy-worker/examples/twt_backtest.rs`

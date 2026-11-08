@@ -4,7 +4,7 @@
 
 (the repository's root; plain ``python3``.) Lane ``sleeve_backtests`` (wave 6).
 
-``tools/twt/backtest.py`` (``make twt-backtest``) is the only caller of
+``tools/runs/twt/backtest.py`` (``make twt-backtest``) is the only caller of
 ``baskfy_worker.tasks.twt_backtest.run_twt_backtest``. This harness is ``task_diff.py`` with one
 seam changed — what a side runs:
 
@@ -35,7 +35,7 @@ CASES = HERE / "task_cases" / "sleeve_backtests_twt.json"
 
 
 def side_main(raw_args: str, now: str) -> int:
-    """The Python side: ``tools/twt/backtest.py``'s ``_run`` under the injected clock."""
+    """The Python side: ``tools/runs/twt/backtest.py``'s ``_run`` under the injected clock."""
     import asyncio  # noqa: PLC0415
     import datetime as dt  # noqa: PLC0415
     from decimal import Decimal  # noqa: PLC0415

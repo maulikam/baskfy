@@ -410,7 +410,7 @@ a widened one.
 2017-01-02 → 2026-09-09. It is 1.7 GB and gitignored. VBT-1's harness took the other road and
 loads the **CSV export** (`research/volume-breakout/aws/`), re-deriving `04` §1's universe itself.
 
-**Taken.** `tools/twt/twt_panel.py` reads the pickle and converts it to the frame
+**Taken.** `tools/runs/twt/twt_panel.py` reads the pickle and converts it to the frame
 `baskfy_core.twt.indicators` requires. The research package is **never imported**: `panel.pkl`
 pickles two research dataclasses (`vbt.data.Panel`, `vbt.scan.Indicators`) and a remapping
 unpickler rebinds them to plain carriers, refusing every module outside numpy and the builtins. So
@@ -434,7 +434,7 @@ the study's universe rather than the study's own, and the first difference found
 unattributable. (b) `sys.path.insert` + a plain `pickle.load` — three lines shorter and it executes
 research code to do it.
 
-**Reversal.** One module, no callers outside `tools/twt/`.
+**Reversal.** One module, no callers outside `tools/runs/twt/`.
 
 ## TW2.2 — ETFs stay as rows in the golden panel, and the difference it makes is measured at zero · ⚠ UNREVIEWED
 
@@ -504,7 +504,7 @@ grade it and the comparison would report 137 differences that are not difference
 distinguishing label, and `research/` is read-only. The absence is a limit on what TW2 can prove,
 and a limit that is written down is not a footnote.
 
-**Reversal.** One mapping in `tools/twt/twt_compare.py`.
+**Reversal.** One mapping in `tools/runs/twt/twt_compare.py`.
 
 ## TW2.5 — Breadth agrees with the study to 0.096 of a point and on every gate verdict · ⚠ UNREVIEWED
 
@@ -526,8 +526,8 @@ one that matters.
 
 ## TW2.6 — The harness modules carry a `twt_` prefix, because `tools/` is one flat namespace · ⚠ UNREVIEWED
 
-**Context.** `06` TW2 names the runner `tools/twt/goldens.py`, and the natural name for the loader
-beside it is `research_panel.py` — which is exactly what `tools/vbt/research_panel.py` is already
+**Context.** `06` TW2 names the runner `tools/runs/twt/goldens.py`, and the natural name for the loader
+beside it is `research_panel.py` — which is exactly what `tools/runs/vbt/research_panel.py` is already
 called. Both directories are put on `sys.path` by their own test module, so in a full `pytest`
 run whichever test imported first would own the name `research_panel` and the other would get the
 wrong module. `mypy` resolved it the same way and said so.
@@ -536,7 +536,7 @@ wrong module. `mypy` resolved it the same way and said so.
 and `twt_goldens.py`. The plan's literal filename is the lowest-precedence criterion in the
 charter's order, and the Goal it stands for — a runner that reproduces the study — is untouched.
 
-**Rejected.** (a) Making `tools/twt` a package and importing `twt.goldens` — it keeps the plan's
+**Rejected.** (a) Making `tools/runs/twt` a package and importing `twt.goldens` — it keeps the plan's
 names, and costs every operator invocation a `PYTHONPATH`, plus it turns every sibling directory
 under `tools/` into an importable namespace package. (b) Loading the modules by path with
 `importlib` as `test_swing_goldens.py` does for one file — five modules that import each other do
@@ -581,7 +581,7 @@ one. The classification is asserted to sum to the miss count exactly.
 **The fixtures.** The two readings over Chartink's own window are committed as gzipped stock-day
 lists (95 KB in total) with a manifest carrying the window, the counts, the miss reasons and a
 SHA-256 of each, so the recall test needs neither the 1.7 GB panel nor a running engine.
-`uv run python ../tools/twt/twt_scan.py --verify` rebuilds all four from the panel and asserts byte
+`uv run python ../tools/runs/twt/twt_scan.py --verify` rebuilds all four from the panel and asserts byte
 identity; a panel-gated test runs it. The **goldens** — the 164-trade list and the metrics — are
 byte-for-byte copies of `research/tight-close/out/`, never regenerations, and a test proves the
 copy whenever `research/` is in the checkout.
@@ -656,8 +656,8 @@ study's rounding without reproducing its float chain, and reproducing a float ch
 `04` asks for.
 
 **No tolerance was widened to accommodate any of it.** The three allowances (`0.01`, `1`, `0.01`)
-were written into `tools/twt/twt_compare.py` by the harness leaf *before* this engine existed, and
-`git diff tools/twt/` is empty. Every difference is four to eleven orders of magnitude inside its
+were written into `tools/runs/twt/twt_compare.py` by the harness leaf *before* this engine existed, and
+`git diff tools/runs/twt/` is empty. Every difference is four to eleven orders of magnitude inside its
 allowance.
 
 **Not a blocker for TW9.** `06` TW2 says a difference that cannot be explained blocks TW9. **There
@@ -875,7 +875,7 @@ the single-session reading agree on every session.
 
 ## TW4.1 — The detector's tests live in `services/api/tests`, the step's in `services/worker/tests` · ⚠ UNREVIEWED
 
-**Context.** `gates/twt-4.md` names its check commands, and five of the ten run
+**Context.** `docs/gates/twt-4.md` names its check commands, and five of the ten run
 `uv run pytest packages/core/tests services/api/tests`. The module under test is a **worker**
 task, and its sibling VB4's tests live in `services/worker/tests/test_vbt_detect.py`. Put TW4's
 tests where the sibling's are and five gate commands collect nothing, which pytest reports as
@@ -887,7 +887,7 @@ self-contained database bootstrap `packages/core/tests/test_twt_schema.py` estab
 to head, never drop, every test inside a transaction that is rolled back). The **wrapper's** one
 guarantee — a detector that raises leaves the run SUCCEEDED — is
 `services/worker/tests/test_twt_step.py`, where `PipelineRun` and the step fixtures already are
-and where `gates/twt-4.md` G6 looks for it.
+and where `docs/gates/twt-4.md` G6 looks for it.
 
 `services/api/tests` already imports `baskfy_worker` in fourteen modules, so this is the tree's
 own convention for a cross-service database test rather than a new one.
@@ -1219,12 +1219,12 @@ session can be re-counted either way.
 
 ---
 
-## TW7.1 — `tools/twt` is the sleeve's tool directory, not the goldens harness, and the scan says which · ⚠ UNREVIEWED
+## TW7.1 — `tools/runs/twt` is the sleeve's tool directory, not the goldens harness, and the scan says which · ⚠ UNREVIEWED
 
 **Context.** `docs/twt/06` § TW7 and `FIRST-LIVE-MORNING` §8 both name the sweep
-`tools/twt/sweep.py`, and TW9's `make twt-backtest` runner landed in the same directory the same
+`tools/runs/twt/sweep.py`, and TW9's `make twt-backtest` runner landed in the same directory the same
 evening. `test_twt_goldens.py::TestTheHarnessIsWhereItSaysItIs` asserted that
-`tools/twt/*.py` is **exactly** TW2's five harness modules and that exactly one function in the
+`tools/runs/twt/*.py` is **exactly** TW2's five harness modules and that exactly one function in the
 directory writes bytes. Both assertions went red the moment a second kind of tool moved in — not
 because anything about the harness changed, but because the test used "the directory" as a proxy
 for "the harness".
@@ -1241,12 +1241,12 @@ written about. `research/` remains untouchable and no test lost teeth.
 
 **Rejected.** (a) Narrowing the two scans to `HARNESS_MODULES` — cheaper, and it would stop
 asserting anything at all about the two files most likely to write somewhere careless. (b) Moving
-the sweep out of `tools/twt/` — the runbook a person reads at 15:15 gives that path literally, and
+the sweep out of `tools/runs/twt/` — the runbook a person reads at 15:15 gives that path literally, and
 a runbook made wrong to keep a test green is the wrong trade. (c) Leaving the suite red and
 attributing it — half of it is TW9's and half is TW7's, and neither module's gate can be ticked
 while it is.
 
-**Attribution.** `tools/twt/backtest.py` is **not** TW7's file. TW7 changed the test so that both
+**Attribution.** `tools/runs/twt/backtest.py` is **not** TW7's file. TW7 changed the test so that both
 new tools are accounted for; if TW9's session edits the same constants, the two edits are to the
 same three names and the later one wins.
 
@@ -1371,27 +1371,27 @@ may not read a file (law 1).
 
 ---
 
-## TW9.2 — The job is a worker task and `tools/twt/backtest.py` is its front door · ⚠ UNREVIEWED
+## TW9.2 — The job is a worker task and `tools/runs/twt/backtest.py` is its front door · ⚠ UNREVIEWED
 
-**Context.** `06` § TW9 says "`tools/twt/backtest.py` and `make twt-backtest`", and the neighbour
+**Context.** `06` § TW9 says "`tools/runs/twt/backtest.py` and `make twt-backtest`", and the neighbour
 it was modelled on splits the two: `baskfy_worker.tasks.vbt_backtest` holds VB9's job and
-`tools/vbt/backtest.py` is a *different* run (the research export, no database). Doing it VBT's way
+`tools/runs/vbt/backtest.py` is a *different* run (the research export, no database). Doing it VBT's way
 literally would give TWT two different backtests under one heading.
 
 **Taken.** One run, two names for it. `baskfy_worker.tasks.twt_backtest.run_twt_backtest` is the
 job — session in, one appended row out, importable by a test and by a future Celery task —
-and `tools/twt/backtest.py` is the terminal front door `make twt-backtest` invokes. TW2's
-reproduction over the research panel already exists as `tools/twt/twt_goldens.py` and needs no
+and `tools/runs/twt/backtest.py` is the terminal front door `make twt-backtest` invokes. TW2's
+reproduction over the research panel already exists as `tools/runs/twt/twt_goldens.py` and needs no
 second entry point, which is why TWT does not repeat VBT's split.
 
-**Note on the directory.** `tools/twt/` was TW2's harness alone until this evening. TW7's session
+**Note on the directory.** `tools/runs/twt/` was TW2's harness alone until this evening. TW7's session
 hit the same collision and **TW7.1** is the entry that resolves it: `HARNESS_MODULES` keeps TW2's
 five, `OPERATOR_TOOLS` names `backtest.py` and `sweep.py`, and `backtest.main` is on the writer
 allowlist for `--json`. Nothing here widened a pattern to silence a hit.
 
 **Rejected.** (a) `baskfy_worker.twt_cli --backtest`, which is exactly what `make vbt-backtest`
 runs — it is the closer mirror, and `twt_cli.py` was being edited by a parallel session for TW6a's
-`make twt-plan`. (b) Putting the whole job in `tools/twt/backtest.py` — a script outside the
+`make twt-plan`. (b) Putting the whole job in `tools/runs/twt/backtest.py` — a script outside the
 package that no test can import is a job nobody can assert anything about.
 
 **Reversal.** Delete the tool and point the Makefile at a `--backtest` flag on `twt_cli`.
@@ -1456,7 +1456,7 @@ the page to say it too, that is a TW8 card change and a one-line addition to `Dr
 
 **Context.** **TW2.2** measured the ETF contribution to the breadth denominator at zero on the
 study's panel and said, in the same entry, that the zero is a property of a sparse export and
-**not** of the plant, where ETFs print daily — so TW9 must not inherit it. `gates/twt-9.md` G7 is
+**not** of the plant, where ETFs print daily — so TW9 must not inherit it. `docs/gates/twt-9.md` G7 is
 that sentence as a gate.
 
 **Taken.** The run measures it. `etf_denominator_delta` adds the refused rows back, recomputes only
@@ -1698,7 +1698,7 @@ import — the same venv boundary as TW6.3.
 what `app/swing_clock.py` already does for `SWING_GTT_MISSING_AT_1515`, and writes the count into
 `tw_session.naked_at_1515` where the page's red band reads it. The four `TWT_*` names exist in
 `baskfy_worker.alerts.AlertName` with `docs/runbooks/09-twt-morning.md` behind them, and
-**`tools/twt/sweep.py` (TW7) raises the real alert from the tree that can**.
+**`tools/runs/twt/sweep.py` (TW7) raises the real alert from the tree that can**.
 
 **Why.** Two copies of the sweep would be worse than one copy and a log line: the count that
 matters is in the database either way, and the desk's route exists so a person can check it from a
@@ -1707,13 +1707,13 @@ phone rather than so a robot can page itself.
 **Rejected.** A webhook from the desk to the worker's alert sink — a new network dependency on the
 process that places orders, for a message.
 
-**Reversal.** None needed; TW7 owns `tools/twt/sweep.py` and reads the same rows.
+**Reversal.** None needed; TW7 owns `tools/runs/twt/sweep.py` and reads the same rows.
 
 ---
 
 ## TW10.1 — A parent gate re-runs its child's checks, and the tool for that lives in this repo · ⚠ UNREVIEWED
 
-**Context.** `gates/twt-root.md` R6, R7, R9 and R10 each ran the unlazy checker against a module's
+**Context.** `docs/gates/twt-root.md` R6, R7, R9 and R10 each ran the unlazy checker against a module's
 gate file with `EXPECT: /0 unchecked/`. The checker never prints that string — it prints
 `ALL MET (11 met)` or `UNMET: 3` — so none of the four could have passed. Underneath the wrong
 string sat a wrong question: the checker only re-runs gates it already believes unmet, so against a
@@ -1721,8 +1721,8 @@ finished file it executes nothing and reports that the **file** is complete. Tha
 the ledger, not about the module still being green, and a parent row exists to establish the
 second.
 
-**Taken.** `tools/gates/rerun.py` re-executes every `CHECK:` in a named gate file and verifies each
-against its own `EXPECT:`, printing one summary line (`gates/twt-6.md: 11/11 checks re-run,
+**Taken.** `tools/runs/gates/rerun.py` re-executes every `CHECK:` in a named gate file and verifies each
+against its own `EXPECT:`, printing one summary line (`docs/gates/twt-6.md: 11/11 checks re-run,
 0 failed`) that a parent's EXPECT matches. The four rows call it. It duplicates the checker's
 parsing and its EXPECT semantics deliberately — including the `i` and `m` regex flags, because
 `gate-check.mjs` compiles the same literal with `new RegExp(body, flags)` and the two must not
@@ -1731,7 +1731,7 @@ disagree about whether a gate passed.
 **It also sidesteps a bug in the checker**, which is in the skill and not in this repo:
 `args.filter((a, i) => !a.startsWith("--") && i !== tIdx + 1)` with no `--timeout` present has
 `tIdx === -1`, so the predicate drops index 0 — the only argument there is. A lone file argument
-falls back to every `gates/*.md` in the tree, and since `gates/twt-root.md` invokes the checker, it
+falls back to every `docs/gates/*.md` in the tree, and since `docs/gates/twt-root.md` invokes the checker, it
 recurses without bound — five nested levels within two minutes, on 12 Sep 2026, before it was
 killed. `--status <file>` and `--timeout N <file>` both dodge it. **Reported rather than patched:** editing a globally installed skill from inside a repo
 run is a change nobody reviewing this commit would see.
@@ -1740,7 +1740,7 @@ run is a change nobody reviewing this commit would see.
 the rows *pass* without making them *check*: four green rows asserting that four files look
 finished, which is the decoration this run has spent two commits removing.
 
-**Reversal.** Delete `tools/gates/rerun.py` and put the checker invocation back, with
+**Reversal.** Delete `tools/runs/gates/rerun.py` and put the checker invocation back, with
 `--timeout N` before the file so the argv bug does not bite. The rows' Goal is unchanged either
 way; only the strength of the evidence moves.
 
@@ -1748,17 +1748,17 @@ way; only the strength of the evidence moves.
 
 ## TW10.2 — A gate cannot be its own evidence, so the exclusion is printed rather than hidden · ⚠ UNREVIEWED
 
-**Context.** `gates/twt-10.md` G8 asserts that every gate file in this run is fully checked with
+**Context.** `docs/gates/twt-10.md` G8 asserts that every gate file in this run is fully checked with
 evidence. Its own `EVIDENCE:` line reads `pending` until it passes, so when it scanned the
 directory it counted itself and failed — for a reason with nothing to do with what it tests. G8 had
 already been repaired once for a neighbouring fault (its CHECK line contained the literal string it
 grepped for); this is the same shape one layer down.
 
-**Taken.** `tools/gates/ledger.py` reports which gate files are incomplete and takes
+**Taken.** `tools/runs/gates/ledger.py` reports which gate files are incomplete and takes
 `--exclude FILE:GATE_ID`. The exclusion is **printed in the summary line** —
-`14 files scanned, 142 gates, 0 incomplete (excluded as self-referential: gates/twt-10.md G8)` — so
+`14 files scanned, 142 gates, 0 incomplete (excluded as self-referential: docs/gates/twt-10.md G8)` — so
 a reader sees exactly what is not being asserted. It also reads an **indented** `ABANDON:` line,
-which is how this repo writes them (`gates/twt-0.md` line 79) and which `gate-check.mjs`, anchoring
+which is how this repo writes them (`docs/gates/twt-0.md` line 79) and which `gate-check.mjs`, anchoring
 at column 0, does not see; a scoped gate reads there as merely unchecked.
 
 **Rejected.** Two alternatives. Subtracting one from the file's own pending count — arithmetic that
@@ -1833,7 +1833,7 @@ value is quantised to the column's 2 dp before the patch is compared, or `250000
 **The ₹0 is untouched and is now asserted twice.** Creation still writes an explicit `Decimal("0")`
 and only an explicit `--capital` moves it; `TestTheZeroSurvives` reads the seeder's own source and
 fails if anyone ever wires the funding call into the `twt` branch unconditionally. No capital was
-set by this work. `gates/twt-root.md` R11 still reads `flag_true=0 live_orders=0 capital_seed=1`.
+set by this work. `docs/gates/twt-root.md` R11 still reads `flag_true=0 live_orders=0 capital_seed=1`.
 
 **Rejected.** The `PATCH /api/v1/twt/config` route and the `me/twt` page. They are the TW3/TW8
 shape the runbook assumes and they remain unbuilt: T3 asks for a keystroke on a box at 09:05, and
@@ -1879,7 +1879,7 @@ sweep re-arms GTT stops, so it is order flow, and a Beat entry for it would be t
 orders on a timer. The root `CLAUDE.md`'s first non-negotiable allows exactly one named
 auto-execute exception, it is the *swing* sleeve's, it is flagged, and it is Maulik's — *"An agent
 may not widen this exception, add a second one, or default the flag to true."* The sweep stays
-`POST /twt/sweep` and `tools/twt/sweep.py`, which is what the runbook §9 already tells a person to
+`POST /twt/sweep` and `tools/runs/twt/sweep.py`, which is what the runbook §9 already tells a person to
 run. `test_the_sweep_is_not_on_a_timer` makes that a check rather than a comment, asserted twice:
 no TWT entry may be named for a sweep, and none may point at a task whose name contains one.
 
@@ -1890,7 +1890,7 @@ registered and `make twt-plan` remains what it was, so nothing else changes.
 
 ## TW11.3 — Eleven root rows, nine broken checks, and two real gaps · ⚠ UNREVIEWED
 
-**Context.** `gates/twt-root.md`'s preamble diagnosed a real bug — `EXPECT: /0 unchecked/` against
+**Context.** `docs/gates/twt-root.md`'s preamble diagnosed a real bug — `EXPECT: /0 unchecked/` against
 a checker that prints `ALL MET` or `UNMET: n` — repaired four rows, and left **seven more instances
 of the identical bug** in the same file, all marked green. R0–R5 and R8. Re-running them was the
 only way to find that out.
@@ -1920,7 +1920,7 @@ classes:
    the tree that owns those files, and says that tree may overrule it.
 
 **Decision.** Repair every check to test the thing it names, re-run all eleven rows through
-`tools/gates/rerun.py`, and write the reason into the gate beside each repair rather than into this
+`tools/runs/gates/rerun.py`, and write the reason into the gate beside each repair rather than into this
 file. A repair with no reason beside it is indistinguishable next month from someone loosening a
 gate to make a module pass.
 
@@ -1936,7 +1936,7 @@ note above it; nothing about any module's code changed to make a gate pass.
 
 ## TW11.4 — A gate that emptied the developer's database, and had since TW3 · ⚠ UNREVIEWED
 
-**Context.** `gates/twt-3.md` G2 proved migration `0041_twt` round-trips by running
+**Context.** `docs/gates/twt-3.md` G2 proved migration `0041_twt` round-trips by running
 `make migrate && make downgrade && make migrate`. No `BASKFY_DATABASE_URL` is set in that CHECK, and
 the default in `services/api/src/baskfy_api/settings.py:34` is `localhost:5433/baskfy` — the
 developer's own database, the one `DESK_DATABASE_URL` and `SCREENER_DATABASE_URL` also name. The
@@ -1955,7 +1955,7 @@ executed would have passed — and the downgrade is the only thing the gate exis
 
 **Decision.** Round-trip a throwaway. `DROP DATABASE IF EXISTS baskfy_migrate_check; CREATE
 DATABASE …`, point `BASKFY_DATABASE_URL` at it for the duration, and assert the **end state** —
-`version=0041_twt tw_tables=13` — rather than a word in a log. This is the pattern `gates/twt-10.md`
+`version=0041_twt tw_tables=13` — rather than a word in a log. This is the pattern `docs/gates/twt-10.md`
 G6's drill already used for the same reason; G2 simply never adopted it.
 
 **Rejected.** Setting `BASKFY_DATABASE_URL` to `baskfy_test` instead: that is where the suites live,
@@ -1970,7 +1970,7 @@ database. **This is the only destructive CHECK found in the TWT pack**; `docker 
 baskfy_drill` in twt-10 G6 and the new `baskfy_migrate_check` both name a scratch database
 explicitly, which is the rule the rest of the pack already followed.
 
-**Reversal.** `git diff gates/twt-3.md`. Reverting restores a gate that empties your database.
+**Reversal.** `git diff docs/gates/twt-3.md`. Reverting restores a gate that empties your database.
 
 ---
 
@@ -2014,7 +2014,7 @@ and a button with no poll is a button that looks broken for the two minutes the 
 cannot be audited afterwards.
 
 **Reversal.** `alembic downgrade 0041_twt` drops the table and its index and nothing else —
-asserted against a throwaway database in `gates/twt-scan-now.md` G2a (`version=0041_twt
+asserted against a throwaway database in `docs/gates/twt-scan-now.md` G2a (`version=0041_twt
 tw_tables=13 scan=0 idx=0`). Then delete `models/twt.py`'s `TwScanRun`, `baskfy_api/twt_scan.py`,
 `baskfy_api/routers/twt.py`, `baskfy_worker/tasks/twt_scan.py`, the two routes in `app/twt_desk.py`
 and the four test files. Nothing else reads any of it. **No row of any existing table changes
@@ -2054,7 +2054,7 @@ presses.
 
 **Rejected: a second detector inside `twt_scan.py`.** A second implementation of the tight-state
 rule would drift from the first the moment a threshold moved, and the two would then disagree about
-the same session on the same page. `gates/twt-scan-now.md` G9 and three tests assert the module
+the same session on the same page. `docs/gates/twt-scan-now.md` G9 and three tests assert the module
 contains no detection of its own.
 
 **Rejected: detect "today" from the exchange calendar.** VB13.4 is the recorded cost of that: the
@@ -2220,32 +2220,32 @@ wording is true again unchanged.
 
 ## TW12.5 — The Chartink scorer is a neighbour of the goldens harness, not a sixth module of it · ⚠ UNREVIEWED
 
-**Context.** `docs/history/PLAN-SCAN-SYNC.md` leaf 6 added `tools/twt/twt_chartink_gap.py`, and
+**Context.** `docs/history/PLAN-SCAN-SYNC.md` leaf 6 added `tools/runs/twt/twt_chartink_gap.py`, and
 `test_twt_goldens.py::TestTheHarnessIsWhereItSaysItIs::test_the_five_modules_are_on_disk` went
 red — the same red TW7.1 saw when `sweep.py` and `backtest.py` moved in. Two answers were open:
-grow `HARNESS_MODULES` to six, or move the scorer out of `tools/twt/` so the harness's five stay
+grow `HARNESS_MODULES` to six, or move the scorer out of `tools/runs/twt/` so the harness's five stay
 alone in the directory.
 
 **Taken.** Neither, and TW7.1 is why: the directory is the sleeve's tool directory and the test
 names *which* file is which. `HARNESS_MODULES` still holds TW2's five; `twt_chartink_gap.py` joins
 `OPERATOR_TOOLS` with a reason of its own. The harness is defined by what it *does* — it
-reproduces the study's 164 trades against `fixtures/twt/golden_trades.csv` (`gates/twt-2.md`,
-`gates/twt-2-harness.md`) — and the scorer grades the **detector against Chartink's export** for
+reproduces the study's 164 trades against `fixtures/twt/golden_trades.csv` (`docs/gates/twt-2.md`,
+`docs/gates/twt-2-harness.md`) — and the scorer grades the **detector against Chartink's export** for
 one session. Same directory, same imports, different answer key. Calling it a sixth harness module
 would make "the harness" mean "whatever is in the folder", which is the proxy TW7.1 refused.
 
 **Rejected.** (a) `HARNESS_MODULES` → six. It is the one-line fix and it dissolves the only claim
 the class exists to make; `test_the_goldens_harness_itself_still_has_exactly_one_writer` is
 derived from `HARNESS_MODULES`, so widening it also quietly widens what the writer claim covers.
-(b) Moving the file to `tools/twt/analysis/`. The scorer is `twt_scan`, `twt_panel` and
+(b) Moving the file to `tools/runs/twt/analysis/`. The scorer is `twt_scan`, `twt_panel` and
 `twt_recall` with a different question asked of them, and it reaches them by a bare
 `sys.path.insert(parent)` — a subdirectory buys a longer import for no separation. It would also
-rewrite ten CHECK lines in a 16/16 gate, `tools/twt/twt-chartink-pull.sh`'s closing instruction,
+rewrite ten CHECK lines in a 16/16 gate, `tools/runs/twt/twt-chartink-pull.sh`'s closing instruction,
 `docs/history/PLAN-SCAN-SYNC.md` §leaf 6 and the module's own usage block: a green gate made stale to keep a
 test green is TW7.1's rejected (b) again, and the runbook loses the same way.
 
 **The property that had to survive, and does.** The assertion is still an **exact** set over the
-union, so an unnamed tenth file in `tools/twt` still fails it. `_ALLOWED_WRITERS` gained nothing:
+union, so an unnamed tenth file in `tools/runs/twt` still fails it. `_ALLOWED_WRITERS` gained nothing:
 the scorer writes no bytes — the box's bars are pulled by `twt-chartink-pull.sh` (a shell file,
 not a `*.py`), and the two AST scans over the directory pass unchanged, as does
 `_THE_ONE_WRITER`.
@@ -2262,7 +2262,7 @@ reads either name.
 2026-09-11 — one `tw_breadth_daily` row (`OPEN`, 51.1588% of 1,769 measured names), two
 `tw_signal_daily` rows (IOLCP and OPTIEMUS, both `SIGNAL`) and 58 `tw_state_daily` rows. An
 independent local run of the same detector for the same session produced 57 names
-(`gates/twt-chartink-gap.md`), so the data was right. The page still said **"Nothing has been
+(`docs/gates/twt-chartink-gap.md`), so the data was right. The page still said **"Nothing has been
 read for this strategy yet."**
 
 Two explanations were plausible and both were checked before anything was changed. **A date
@@ -2428,8 +2428,8 @@ notice. A reader that does not exist and a writer that has not run are the same 
 of them is a bug, and the page cannot tell you which. "Its `null` is still true" measured the
 sentence and not the seam.
 
-It is also not speculation in the sense TW13.1 meant. TW9 shipped the writer — `tools/twt/
-backtest.py`, `baskfy_worker.tasks.twt_backtest`, the `tw_backtest_run` table, `gates/twt-9.md`
+It is also not speculation in the sense TW13.1 meant. TW9 shipped the writer — `tools/runs/twt/
+backtest.py`, `baskfy_worker.tasks.twt_backtest`, the `tw_backtest_run` table, `docs/gates/twt-9.md`
 8/8 with the plant's own run measured at 22.17 % / -26.47 % / 169 trades. The rows have a shape,
 a producer and a page built to them. What was missing was the four lines between.
 
@@ -2477,7 +2477,7 @@ Two times in three the sentence is not what happened.
 otherwise carries one of three sentences, chosen from one aggregate over the book's own rows, so
 the answer is a measurement and not a guess. `caveats` carries `docs/twt/01` §8's four paragraphs
 **verbatim** — whitespace normalised, nothing else touched — checked against the document itself
-by `gates/twt-backtest-route.md` B3, so a caveat softened on its way to a reader fails a gate
+by `docs/gates/twt-backtest-route.md` B3, so a caveat softened on its way to a reader fails a gate
 rather than passing a review. House rule 9 makes disclaimers components rather than footers and
 `05` §3 restates it for this page by name; what the field adds is that the numbers cannot leave
 this service without the terms attached, for any reader, not only the one page that happens to
@@ -2615,7 +2615,7 @@ own delegation would be the rail authorising itself — so this entry is a recor
    the flag was named nowhere — the env line alone changed nothing, which is exactly the failure
    the comment warns about. It was caught by reading the containers' environment rather than by
    trusting the edit.
-3. `tools/deploy/ship.sh` no longer dies on `twt_execution_true=0`; it prints the sleeve's state on
+3. `tools/deploy/retired/ship.sh` no longer dies on `twt_execution_true=0`; it prints the sleeve's state on
    every deploy instead. Left as it was, every future deploy would have failed.
 
 **What this does NOT do, stated because his words imply otherwise.** It does not make the system
@@ -2685,7 +2685,7 @@ and the tests that asserted the old decision were rewritten to assert this one, 
   plan confirms something nobody could have read. A missed morning is a missed morning; the
   evening plan and the page are unchanged.
 * *Sending the 15:15 naked-GTT sweep too.* Not asked for, and a widening; the sweep stays
-  `POST /twt/sweep` / `tools/twt/sweep.py`.
+  `POST /twt/sweep` / `tools/runs/twt/sweep.py`.
 
 **How to reverse.** Operationally: remove `BASKFY_TWT_AUTO_EXECUTE` from
 `/opt/baskfy/.env.staging.compose` (or set it `false`) and `up -d twt-auto` — the runner then exits

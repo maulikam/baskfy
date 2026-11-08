@@ -30,7 +30,7 @@ Source scans (docstrings and comments stripped, so a sentence about a thing is n
 The desk's half — the flag matrix with a spy broker per sleeve, ``LIVE_NOT_BUILT``, the
 ``INTRADAY_ENABLED`` refusal, and the Hypothesis fuzz over ``POST /fno/execute`` — is
 ``kite-momentum-rebalancer/tests/test_fno_safety.py``; the paper-day drill is
-``tools/fno/drill.py``.
+``tools/runs/fno/drill.py``.
 """
 
 from __future__ import annotations
@@ -467,7 +467,7 @@ def test_the_api_router_for_fno_declares_no_order_verb() -> None:
 #: The broker adapter the gateway itself calls (``test_seven_non_negotiables`` 6b's allowance).
 PLACE_ORDER_ALLOWED = {DESK / "app/kite_client.py"}
 #: A drill that calls ``place_order`` on its own recording spy to prove the spy records.
-PLACE_ORDER_SPIES = {ROOT / "tools/friday-drill.py"}
+PLACE_ORDER_SPIES = {ROOT / "tools/runs/friday-drill/friday-drill.py"}
 
 
 def _place_order_callers(*tops: Path) -> list[str]:
@@ -534,7 +534,7 @@ def test_nothing_schedules_the_fno_execute_route() -> None:
         ROOT / "infra",
     ]
     allowed = {DESK / "app/fno_desk.py", DESK / "app/templates/fno.html",
-               ROOT / "tools/fno/drill.py"}  # fmt: skip
+               ROOT / "tools/runs/fno/drill.py"}  # fmt: skip
     route = re.compile(r"fno/execute")
     hits = [
         str(p.relative_to(ROOT))

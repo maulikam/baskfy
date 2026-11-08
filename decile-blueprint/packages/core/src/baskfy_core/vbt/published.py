@@ -6,7 +6,7 @@ that three consumers read them and none of them should be allowed to transcribe:
 
 * ``/vbt/backtest`` puts them beside the run that just finished (``05`` §2);
 * VB9's drift flag subtracts a fresh CAGR from ``CAGR_PCT`` and raises a banner past a point;
-* ``tools/vbt/reproduce.py`` and ``test_vbt_goldens.py`` compare against ``out/final_metrics.json``
+* ``tools/runs/vbt/reproduce.py`` and ``test_vbt_goldens.py`` compare against ``out/final_metrics.json``
   directly, because a test that read this module would be checking a transcription.
 
 That last point is the discipline that makes the rest safe: **the tests read the study's file and

@@ -20,7 +20,7 @@ for each open position without an exit. A verdict becomes one exit plan through 
 WHAT IT DOES NOT DO. Raise entry plans — the worker's minute builders do that, idempotently, behind
 the same `BASKFY_OPTIONS_MONITOR_ENABLED` flag (DECISIONS-OP OP9.1). Touch a gateway, a broker or
 the wall clock: its time is the tick's `exchange_timestamp`, or the time the runner hands
-`check()`, which is what makes `tools/options/replay.py` deterministic.
+`check()`, which is what makes `tools/runs/options/replay.py` deterministic.
 
 RESUME. `on_start` loads the day's open positions from the store, so a restart at 11:30 carries on
 where the last process stopped; the first reconcile brings back the morning's bars (OP9 AC).

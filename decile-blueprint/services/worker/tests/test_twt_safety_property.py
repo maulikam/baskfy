@@ -37,7 +37,7 @@ from baskfy_core.models.base import JsonObject
 from baskfy_worker.alerts import Alert, AlertName
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
-HARNESS: Final = REPO_ROOT.parent / "tools" / "twt"
+HARNESS: Final = REPO_ROOT.parent / "tools" / "runs" / "twt"
 if str(HARNESS) not in sys.path:
     sys.path.insert(0, str(HARNESS))
 

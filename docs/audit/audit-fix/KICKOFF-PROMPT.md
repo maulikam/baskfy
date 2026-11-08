@@ -37,7 +37,7 @@ docs/audit/audit-fix/STATUS.md ("needs <file>: <what>") and continue.
 Every fix ships with a test that fails on the old code. Never weaken a test; if a test pins the
 bug (csp.test.ts:54, test_api_auth.py:579) rewrite it to the spec.
 A doc that disagrees with code: `git log -S` first; a decision beats a doc; fix the doc in one line.
-Data lives on the AWS box only. Measure with `tools/deploy/box-sql.sh "<select>"`
+Data lives on the AWS box only. Measure with `tools/deploy/retired/box-sql.sh "<select>"`
 (BOX_SQL_LINES=50). Never pull a dump, extract, or snapshot to the laptop; never push data up.
 The only local DB is the throwaway test Postgres (`make up`, BASKFY_TEST_DATABASE_URL,
 `make test-db`) with synthetic fixtures. Never pass a secret through box.sh.
@@ -55,7 +55,7 @@ rows in docs/audit/audit-fix/STATUS.md (item · commit · state) and stop. No re
    **A B C D E F G**. Wait for all.
 3. Merge A→B→C→D→E→F→G into `developer` (rebase each first). Then, one at a time: `make test-db`,
    `make test`, web `vitest run`, `make lint`, desk suite. Fix breakage on `developer` directly —
-   no new lane. Then `bash tools/deploy/ship.sh`. It refuses during 09:15–15:30 IST weekdays and
+   no new lane. Then `bash tools/deploy/retired/ship.sh`. It refuses during 09:15–15:30 IST weekdays and
    18:40–21:15 IST Mon–Fri; wait, never bypass. If its verify step fails: redeploy the rollback
    tag (`push-images.sh` + `deploy-swing.sh` at that tag), fix on `developer`, ship again.
 4. `bash ops/af/smoke.sh` (lane B writes it) against staging. All lines must pass before wave 2.

@@ -38,7 +38,7 @@ from baskfy_core.twt.config import DEFAULT_TWT_CONFIG
 from baskfy_core.twt.indicators import REQUIRED_COLUMNS
 
 REPO: Final = Path(__file__).resolve().parents[4]
-HARNESS: Final = REPO / "tools" / "twt"
+HARNESS: Final = REPO / "tools" / "runs" / "twt"
 FIXTURES: Final = Path(__file__).resolve().parent / "fixtures" / "twt"
 RESEARCH_RESULTS: Final = REPO / "research" / "tight-close" / "out"
 
@@ -88,7 +88,7 @@ HARNESS_MODULES: Final[tuple[str, ...]] = (
 #: — give these paths literally. None of them is part of the goldens harness: not one grades the
 #: study's 164 trades, which is the only thing the harness is for. Where one of them reads
 #: ``research/`` it reads it and nothing else, which the writer scan below is what proves. They
-#: are named here one at a time, with a reason each, so that an unnamed file in ``tools/twt``
+#: are named here one at a time, with a reason each, so that an unnamed file in ``tools/runs/twt``
 #: still fails the assertion below. DECISIONS-TW **TW7.1**, extended by **TW12.5**.
 OPERATOR_TOOLS: Final[tuple[str, ...]] = (
     #: TW9's run of the sleeve's own engine over the plant's bars (``make twt-backtest``).
@@ -108,7 +108,7 @@ OPERATOR_TOOLS: Final[tuple[str, ...]] = (
     "twt_chartink_gap.py",
 )
 
-#: Calls that put bytes on disk. Nothing in ``tools/twt`` may write to ``research/`` — it is the
+#: Calls that put bytes on disk. Nothing in ``tools/runs/twt`` may write to ``research/`` — it is the
 #: answer key — so every writer is named, one (file, function) pair at a time.
 _WRITE_CALLS: Final[frozenset[str]] = frozenset(
     {"write_text", "write_bytes", "mkdir", "unlink", "touch", "rename", "replace"}
@@ -217,7 +217,7 @@ class TestTheHarnessIsWhereItSaysItIs:
     def test_the_five_modules_are_on_disk(self) -> None:
         """The harness's five, plus the sleeve's other tools — and **nothing else**.
 
-        Still an exact set: a file in ``tools/twt`` that nobody decided on fails here. It is a
+        Still an exact set: a file in ``tools/runs/twt`` that nobody decided on fails here. It is a
         longer set than it was because the documents that commission those tools —
         ``docs/twt/06`` for TW7's sweep and TW9's backtest runner, ``PLAN-SCAN-SYNC.md`` for
         leaf 6's Chartink scorer — give this directory as the path, beside the tools they are

@@ -3,7 +3,7 @@
 //! `TestTokenDeath` (OP14).
 //!
 //! `06` OP9's acceptance criteria, each with its test: flag off → not instantiated; the five
-//! recorded fixtures (`tools/options/fixtures`, `make_fixtures.py`'s independent answer key)
+//! recorded fixtures (`tools/runs/options/fixtures`, `make_fixtures.py`'s independent answer key)
 //! replay to exactly the expected exit; a restart at 11:30 resumes from `op_position`; a source
 //! scan finds no placing verb. The store's SQL on a real Postgres is
 //! `tests/options_confirm_db.rs::the_position_store_raises_one_exit_and_marks` (bed only).
@@ -60,7 +60,7 @@ fn repo() -> PathBuf {
 }
 
 fn fixtures() -> PathBuf {
-    repo().join("tools/options/fixtures")
+    repo().join("tools/runs/options/fixtures")
 }
 
 fn fixture(name: &str) -> Value {

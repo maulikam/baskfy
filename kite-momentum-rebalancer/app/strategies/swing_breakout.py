@@ -39,7 +39,7 @@ line, not an order, and the confirm re-reads everything. A name with no tick ins
 has no range until the candles say otherwise; the candle source is then asked at the reconcile
 moment, never on every tick.
 
-The store is a protocol, so the replay harness (`tools/swing/replay.py`) can feed a
+The store is a protocol, so the replay harness (`tools/runs/swing/replay.py`) can feed a
 recorded morning through exactly this class and assert the signals it raises, with no
 broker, no bus and no database.
 """

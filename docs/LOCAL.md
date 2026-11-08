@@ -80,7 +80,7 @@ close heavy apps during the nightly (18:40–21:15 IST) if it is running then.
 
 ## How it got here
 
-`tools/deploy/exit-aws.sh export` stopped the box's app services after the last nightly, dumped
+`tools/deploy/retired/exit-aws.sh export` stopped the box's app services after the last nightly, dumped
 Postgres with per-table row counts, packed every volume and the box's env, checksummed and
 uploaded it; `fetch` brought it to the T7 and verified sha256; `local.sh restore` restored it and
 diffed every table's row count against the box. Only then was AWS destroyed.

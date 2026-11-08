@@ -508,7 +508,7 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     # auto-execute exceptions, both flagged and both Maulik's: the swing sleeve's (SW25) and,
     # since 21 Sep 2026, TWT's morning-plan confirm (TW17) — which runs in the desk's own
     # `twt-auto` container, not on Beat, and does not include the sweep. An agent may not widen
-    # either. The sweep stays `POST /twt/sweep` and `tools/twt/sweep.py`, which is what
+    # either. The sweep stays `POST /twt/sweep` and `tools/runs/twt/sweep.py`, which is what
     # `docs/twt/FIRST-LIVE-MORNING.md` §9 already tells a person to run. TW11.
     # VB6: the plan, five minutes after the detector. The order matters and is the same argument
     # the swing pair makes at 21:00/21:05 — the plan is built from the session's signals and the

@@ -10,7 +10,7 @@ it names the file that has to say the thing and a test asserts the file says it.
 test to make a module pass — if a criterion looks wrong, settle it by the charter's precedence
 order, record it in `DECISIONS-TW.md`, continue.
 
-The gates files for this run are `gates/twt-root.md` and `gates/twt-0.md` … `gates/twt-10.md`; a
+The gates files for this run are `docs/gates/twt-root.md` and `docs/gates/twt-0.md` … `docs/gates/twt-10.md`; a
 module is finished when its gates file is fully checked **with evidence**, not when it feels done.
 
 ---
@@ -29,7 +29,7 @@ accidentally build a different one.
 - The one correction the research note needs: STRATEGY §3's "ranked by 20-day turnover" against the
   code's signal-day turnover (DECISIONS-TW TW0.2). Fix the stale half, cite the code.
 
-- **AC:** `gates/twt-0.md` fully checked — ten files present; the thirteen named thresholds all
+- **AC:** `docs/gates/twt-0.md` fully checked — ten files present; the thirteen named thresholds all
   carry their values; `02` §3 contains no session-count gate and does contain the four conditions;
   `03` names `0041_twt` and `0041` is free; `06` plans TW1–TW10 with a Goal and an AC each;
   `QUESTIONS.md` carries the four defaults; `NEEDS-MAULIK.md` has the TWT heading; no document
@@ -72,7 +72,7 @@ accidentally build a different one.
 **Goal:** the core is the study. Where it is not, the difference is named and explained, never
 averaged away.
 
-- `tools/twt/goldens.py` runs `baskfy_core.twt.backtest` over the **research panel**
+- `tools/runs/twt/goldens.py` runs `baskfy_core.twt.backtest` over the **research panel**
   (`research/volume-breakout/data/panel.pkl` via a read-only loader that converts it to the same
   frame the plant produces) with `EntryConfig.research_min_turnover_inr` [₹2 crore] and the rest of
   `04`'s defaults, and compares against `research/tight-close/out/final_trades.csv` (164 trades)
@@ -253,7 +253,7 @@ book's same-session GTT.
 - `04` §7.4 in the backtest: a fill whose session low breaches the initial stop is closed that
   session, at the stop or at the open when the open was already below it, reason `STOP_DAY0`.
 - In the live book: the GTT armed in the same request as the fill (TW6) **is** the rule, and the
-  sweep is the proof. `tools/twt/sweep.py` and the desk's 15:15 chore assert that **every** `OPEN`
+  sweep is the proof. `tools/runs/twt/sweep.py` and the desk's 15:15 chore assert that **every** `OPEN`
   position with `quantity_open > 0` has a non-null `gtt_id` before 15:30.
 - The alert `TWT_POSITION_NAKED` on any naked line at any time, and
   `TWT_GTT_MISSING_AT_1515` for one the sweep could not fix.
@@ -291,7 +291,7 @@ on it.
 
 **Goal:** a number, from the plant's own bars, beside the study's, with its drift named.
 
-- `tools/twt/backtest.py` and `make twt-backtest`: run `baskfy_core.twt.backtest` over
+- `tools/runs/twt/backtest.py` and `make twt-backtest`: run `baskfy_core.twt.backtest` over
   `ohlcv_daily` from `BacktestConfig.start` to the last published session, at the **shipped**
   `min_turnover_inr` [₹2 crore after TW15.1; TW9's first plant run used the then-shipped ₹5 crore], sized against `params.sleeve_inr`, **never** against
   `tw_config.sleeve_capital_inr`.
@@ -322,7 +322,7 @@ down before it happens.
 - **`exit_lines` never emits `SELL_AT_OPEN`** (`04` §10.2).
 - The neighbours are untouched: the weekly book, R1–R4, the swing book and VBT-1 — their suites run
   and `git diff` touches none of their rules.
-- `tools/twt/drill.py`: the full `DRY_RUN` drill — evening plan, morning plan, confirm every line,
+- `tools/runs/twt/drill.py`: the full `DRY_RUN` drill — evening plan, morning plan, confirm every line,
   a fill, a GTT, a ratchet, the sweep — with **0 orders reaching a broker**.
 - **`docs/twt/FIRST-LIVE-MORNING.md`**: the exact sequence for the first real session (Kite login
   before 09:00, the token sync, the flag, the capital setting, `/analyze`, what the plan must show,
@@ -333,7 +333,7 @@ down before it happens.
 - **AC:** the property test is green and the drill reports 0 broker orders; the auto-execute grep
   finds nothing; `exit_lines` emits no `SELL_AT_OPEN` over a generated book; both trees' suites
   pass and `make lint` is clean in both; `FIRST-LIVE-MORNING.md` exists, names every step with the
-  command that runs it, and contains the stop-the-sleeve command; `gates/twt-10.md` fully checked.
+  command that runs it, and contains the stop-the-sleeve command; `docs/gates/twt-10.md` fully checked.
 
 ---
 

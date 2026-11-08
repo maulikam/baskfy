@@ -52,7 +52,7 @@ resource "aws_sesv2_email_identity" "operator" {
 #
 # `aws_iam_access_key` writes the secret into Terraform state. That is why `versions.tf` insists
 # the state bucket is encrypted and private, and why the derived SMTP password is never printed:
-# `tools/deploy/ses-credentials.sh` computes it and writes it straight into the box's env file.
+# `tools/deploy/retired/ses-credentials.sh` computes it and writes it straight into the box's env file.
 resource "aws_iam_user" "smtp" {
   name = "baskfy-ses-smtp"
   path = "/service/"
@@ -116,6 +116,6 @@ output "ses_mail_from_records" {
 }
 
 output "ses_smtp_username" {
-  description = "The SMTP username. The password is derived from the secret and never printed — see tools/deploy/ses-credentials.sh."
+  description = "The SMTP username. The password is derived from the secret and never printed — see tools/deploy/retired/ses-credentials.sh."
   value       = aws_iam_access_key.smtp.id
 }

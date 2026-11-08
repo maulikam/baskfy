@@ -5,7 +5,7 @@
 * flag off → not instantiated (`TestTheFlag`);
 * the O1 fixture replays to `PROFIT` at the expected minute, O2's to `TIME_STOP`, O3-A's to
   `TARGET`, and the index feed dying at 14:05 with O1 open → `HARD_EXIT / FEED_LOST`
-  (`TestTheReplays` — the expectation is `tools/options/make_fixtures.py`'s independent answer key,
+  (`TestTheReplays` — the expectation is `tools/runs/options/make_fixtures.py`'s independent answer key,
   not the replay's own output);
 * a restart at 11:30 resumes from `op_position` (`TestTheRestart`);
 * a source scan finds no `place(` in the modules (`TestNothingPlaces`).
@@ -40,15 +40,15 @@ from app.strategies import nifty_options
 from app.strategies.nifty_options import NIFTY_50_TOKEN, NiftyOptionsMonitor, TrackedPosition
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-FIXTURES = ROOT / "tools" / "options" / "fixtures"
+FIXTURES = ROOT / "tools" / "runs" / "options" / "fixtures"
 
 
 def _load_harness() -> ModuleType:
-    """`tools/options/replay.py`, loaded under its own name. The swing suite imports
-    `tools/swing/replay.py` as plain `replay`; putting this one on `sys.path` under the same name
+    """`tools/runs/options/replay.py`, loaded under its own name. The swing suite imports
+    `tools/runs/swing/replay.py` as plain `replay`; putting this one on `sys.path` under the same name
     made whichever loaded second read the other's harness (found when the whole desk suite ran)."""
     spec = importlib.util.spec_from_file_location(
-        "options_replay", ROOT / "tools" / "options" / "replay.py"
+        "options_replay", ROOT / "tools" / "runs" / "options" / "replay.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

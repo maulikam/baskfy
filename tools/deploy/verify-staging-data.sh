@@ -4,7 +4,7 @@ echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/de
 # G5 — staging holds real market data and a published run.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 ID="${BASKFY_INSTANCE_ID:-i-086986250704e4392}"
-q() { BASKFY_INSTANCE_ID="$ID" bash "$ROOT/tools/deploy/box.sh" \
+q() { BASKFY_INSTANCE_ID="$ID" bash "$ROOT/tools/deploy/retired/box.sh" \
   "cd /opt/baskfy && docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T postgres psql -U baskfy -d baskfy -tAc \"$1\"" \
   2>/dev/null | tr -d ' \r\n'; }
 

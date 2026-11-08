@@ -150,7 +150,7 @@ blocker in the project.
 ## 32. Transactions cannot be synced from Kite — the API does not have them
 
 **Raised 12 Sep 2026** (leaf 2 of `docs/history/PLAN-SCAN-SYNC.md`). · **Status:** open, and it is one download.
-· **Full evidence:** `gates/kite-sync.md`, 14/14.
+· **Full evidence:** `docs/gates/kite-sync.md`, 14/14.
 
 ### What is needed
 
@@ -200,7 +200,7 @@ cannot answer the question.
 Do not hand it to an agent to load into Baskfy yet — there is nowhere to put it. Postgres has no
 transaction table (108 tables, not one is a trade), and inventing the schema under a money figure
 is the one mistake `cas_import.py`'s docstring spends a page warning about. The order is in
-`gates/kite-sync.md` §"What would make transaction sync real": the CSV, then a `broker_trade`
+`docs/gates/kite-sync.md` §"What would make transaction sync real": the CSV, then a `broker_trade`
 migration, then an importer in `services/` reusing the desk's parser and its refusal to half-parse.
 
 The desk *can* eat it today, unchanged, at `POST /tradebook` — that is how the 9,045 rows got
@@ -212,7 +212,7 @@ there. That gets you lots and realised P&L on the desk, not on the Baskfy portfo
 
 **Raised and closed 12 Sep 2026.** · **Status:** ✅ done. You ran the login; `push-images.sh` and
 `deploy-swing.sh` then took the box from `dd9cc73` to **`8b074c7`**, 25 commits, and
-`verify-swing.sh` ends `SWING OK`. `gates/deploy-pc-command-center.md` is 7/7.
+`verify-swing.sh` ends `SWING OK`. `docs/gates/deploy-pc-command-center.md` is 7/7.
 **The Portfolio Command Center is what `/portfolio/portfolios` now serves** — the marker string is
 compiled into both halves of the deployed route bundle. The original entry follows.
 
@@ -220,9 +220,9 @@ compiled into both halves of the deployed route bundle. The original entry follo
 
 > `Error when retrieving token from sso: Token has expired and refresh failed`
 
-Everything that reaches the box goes through it: `tools/deploy/box.sh` runs commands over **SSM**
+Everything that reaches the box goes through it: `tools/deploy/retired/box.sh` runs commands over **SSM**
 (docs/08 §3 — there is no SSH), and it resolves the instance id from Terraform output, which is
-also an authenticated call. `tools/deploy/push-images.sh` pushes to ECR the same way. So with an
+also an authenticated call. `tools/deploy/retired/push-images.sh` pushes to ECR the same way. So with an
 expired token there is no path to the box at all, and no agent can create one — the refresh is a
 browser login.
 
@@ -243,7 +243,7 @@ The box serves `dd9cc73`. HEAD is `3ce77de` — **24 commits**, and they are not
 | | |
 |---|---|
 | Ready | The corporate-action fix (CA1), the fees cost model, the backfill guard, the Portfolio Command Center, the risk-ceiling lock, and TWT through TW11 |
-| ⚠ **Not ready** | **The UI polish tree.** `gates/node-7.1.md`, `node-7.2.md`, `node-7.3.md` and `leaf-7.5.1-verify.md` are **4 incomplete gate files** — `docs/history/REMAINING.md` §4 says that tree still needs a dev server and Playwright in its own session. Commit `3ce77de` carries 175 lines of it because two lint errors inside those lines had `make lint` red repo-wide |
+| ⚠ **Not ready** | **The UI polish tree.** `docs/gates/node-7.1.md`, `node-7.2.md`, `node-7.3.md` and `leaf-7.5.1-verify.md` are **4 incomplete gate files** — `docs/history/REMAINING.md` §4 says that tree still needs a dev server and Playwright in its own session. Commit `3ce77de` carries 175 lines of it because two lint errors inside those lines had `make lint` red repo-wide |
 | ⚠ New behaviour on a **live auto-execute host** | TW11 adds `twt-evening` 21:20 and `twt-morning` 09:05 to Beat. Both are plan-only (`tasks/twt_evening.py`: *"Nothing here places an order"*) and the flag is false, so nothing can trade — but they are two new jobs that will start firing on the box the moment it restarts |
 
 **So the question is whether to ship the UI tree half-finished**, not whether the rest is ready.
@@ -774,7 +774,7 @@ Those were 2026-08-18 and 2026-08-21. Filling only the newer one leaves every su
 dash while `fundamental_daily` looks full. Both dates are filled, and the CLI now defaults to the
 published date and says which it picked.
 
-**Where it stands.** Measured, not recalled (`bash tools/tree3/report-numbers.sh`):
+**Where it stands.** Measured, not recalled (`bash tools/runs/tree3/report-numbers.sh`):
 
 | | 2026-08-18 (**published — what the API serves**) | 2026-08-21 (newest bars) |
 |---|---|---|
@@ -808,7 +808,7 @@ and the nightly path can now hit it. See §17 for the symptom, why the timeouts 
 fix worth making.
 
 **Commands:** `make fundamentals DATE=2026-08-18` then `make refactors DATE=2026-08-18`, or
-`bash tools/tree3/drive-fill.sh 2026-08-18` to supervise it. `docs/history/RUN-AND-TEST.md` §2 has the detail;
+`bash tools/runs/tree3/drive-fill.sh 2026-08-18` to supervise it. `docs/history/RUN-AND-TEST.md` §2 has the detail;
 `docs/DECISIONS-MERGE.md` §T3F.1–T3F.6 has the reasoning.
 
 ---
@@ -958,7 +958,7 @@ server is abandoned. Not done here on purpose: `keepalive_expiry` and per-phase 
 are both plausible and neither is *known* to address a trickle, and a speculative fix that looks
 like a fix is worse than a named open item.
 
-**What was done meanwhile:** `tools/tree3/drive-fill.sh` supervises the fill — bounds each
+**What was done meanwhile:** `tools/runs/tree3/drive-fill.sh` supervises the fill — bounds each
 invocation, restarts with `--resume`, stops rather than spins if a round makes no progress. Sound
 rather than a hack because the fill commits every 25 symbols and never refetches an archived key.
 See `docs/DECISIONS-MERGE.md` §T3F.6.
@@ -1186,7 +1186,7 @@ finds nothing and `~/.aws` does not exist.
 
 **Update, 26 Aug 2026:** Maulik logged into the AWS **console**. That is not CLI access — this
 machine still has no credentials. The AWS CLI (2.36.31) is now installed, and
-`bash tools/deploy/preflight-aws.sh` reports exactly what is missing; it currently stops at
+`bash tools/deploy/retired/preflight-aws.sh` reports exactly what is missing; it currently stops at
 "no working credentials".
 
 **Needed:**
@@ -1310,7 +1310,7 @@ Cloud console, for the `baskfy` project's Web application OAuth client.
   That check is what stops a token minted for somebody else's Google app from signing that person
   into Baskfy.
 
-**Do not set the secret through `tools/deploy/box.sh`.** Its own header says why: `ssm
+**Do not set the secret through `tools/deploy/retired/box.sh`.** Its own header says why: `ssm
 send-command` parameters are retained in command history and visible in CloudTrail. Use
 `aws ssm start-session --target i-086986250704e4392 --profile baskfy-poc` and edit
 `/opt/baskfy/.env.staging` there, the way `ses-credentials.sh` writes the SMTP password.
@@ -1474,7 +1474,7 @@ Three hosts hold credentials, and it matters which is which:
   `kite-momentum-rebalancer/.env` (gitignored at `kite-momentum-rebalancer/.gitignore:4`,
   confirmed untracked).
 - **box** — the Baskfy Phase-A EC2 box (`ap-south-1`), reached only over SSM
-  (`tools/deploy/box.sh`). Service env comes from `/opt/baskfy/.env.staging` via
+  (`tools/deploy/retired/box.sh`). Service env comes from `/opt/baskfy/.env.staging` via
   `env_file: [.env.staging]` (`decile-blueprint/infra/docker/compose.prod.yml:30`); compose
   *interpolation* values come from `/opt/baskfy/.env.staging.compose`. Both are 0600.
 - **laptop** — this machine, `decile-blueprint/.env` and root `.env.staging`
@@ -1504,7 +1504,7 @@ reports Kite as unconfigured — it works only through the M58 bridge below.
 | `BASKFY_KITE_DESK_SSH_TARGET` | box worker + api | `/opt/baskfy/.env.staging` | **SET, 16 chars** in `worker` and `api`; `UNSET` in `web` (correct) |
 | `BASKFY_KITE_DESK_SSH_KEY_PATH` | box worker | not set — pydantic default `/var/lib/baskfy/.ssh/kite-session` applies | `UNSET` in every container, **by design**. The key file exists on the box at `/opt/baskfy/secrets/ssh/kite-session`, 452 bytes, `-rw-------` uid 1001, bind-mounted read-only at `/var/lib/baskfy/.ssh` (`compose.prod.yml:48`) |
 | `BASKFY_KITE_DESK_KNOWN_HOSTS_PATH` | box worker | default `/var/lib/baskfy/.ssh/known_hosts` | `UNSET`; file present, 232 bytes, same directory. The desk's host key is **pinned**, not TOFU |
-| the desk-side `authorized_keys` line | desk | desk `~/.ssh/authorized_keys` (a backup is written beside it) | one line, `restrict,command="/home/desk/bin/emit-kite-token",from="<box ip>"` — a capability, not an account (`tools/deploy/install-kite-session.sh:8`, `docs/DECISIONS-MERGE.md` M58) |
+| the desk-side `authorized_keys` line | desk | desk `~/.ssh/authorized_keys` (a backup is written beside it) | one line, `restrict,command="/home/desk/bin/emit-kite-token",from="<box ip>"` — a capability, not an account (`tools/deploy/retired/install-kite-session.sh:8`, `docs/DECISIONS-MERGE.md` M58) |
 
 The private half was generated **on the box** and has never moved; `box.sh` refuses secrets as
 arguments because `ssm send-command` parameters are retained in CloudTrail.
@@ -1592,7 +1592,7 @@ be the known-exposed value.
 
 **Verifying a rotation without printing anything:** re-run the per-container presence check used
 to build this table —
-`AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh` with a loop over `printenv "$v" | wc -c`. It
+`AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh` with a loop over `printenv "$v" | wc -c`. It
 reports `UNSET` / `SET_EMPTY` / `SET len=N` and never the value.
 
 ### 3. `BASKFY_KITE_API_SECRET` — required or not?
@@ -1609,7 +1609,7 @@ file once it lands.
   secret; `kite_configured()` returns False without it and the login cannot complete. Consequence:
   the **desk's** `GET /callback` never fires again and the desk needs a reverse bridge to get its
   session from Baskfy.
-  **This is the live state as of now.** `gates/desk-retire-1.1.1.md` records that the Kite app's
+  **This is the live state as of now.** `docs/gates/desk-retire-1.1.1.md` records that the Kite app's
   redirect has already been changed from `https://desk.modelbasket.in/callback` to
   `https://staging.baskfy.com/api/v1/brokers/callback`. Until the secret is set on the box,
   *neither* system can obtain a session — which is why 1.1.1 is time-critical.
@@ -1652,7 +1652,7 @@ when it does not.
 5. The desk exchanges the token, updates the running process in place, and lands you on its home
    page with `logged_in=1`. `https://desk.modelbasket.in/status` should then say `"authed": true`.
 6. Baskfy borrows the access token back on its own schedule. To do it immediately:
-   `AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml exec -T worker python -m baskfy_worker.kite_session_cli pull'`
+   `AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml exec -T worker python -m baskfy_worker.kite_session_cli pull'`
 
 ### If step 3 does not happen
 
@@ -1689,7 +1689,7 @@ Only what needs your hands (SW12, 3 Sep 2026). Everything else the run decided a
 |---|---|---|---|
 | SW-1 | **`aws sso login --profile baskfy-poc`**, then the deploy commands in `docs/history/SW-FINAL-REPORT.md` §"Deploy" — **per deploy, and the login only**. Done for deploy #9 (`ed382e8`, 3 Sep 2026, SW21): you logged in, the run pushed the three images from a clean worktree and deployed from the main tree, `verify-swing.sh` green. **S4 is closed** | The box has no session an agent can open; SSO needs a browser | Nothing today — the box is on this commit. Each future deploy waits on the same one-line login |
 | SW-2 | **Confirm the sleeve.** The box's `sw_config` is seeded at ₹25,00,000 / 0.5 % (MD1/MD2, SW13-run: `sw_config_sleeve: 1`); change it on `/me/swing` (SW14, once deployed) or `PATCH /swing/config` — both audited and bounded | A sleeve of ₹0 plans nothing; a wrong one sizes every line wrong | The first plan |
-| SW-3 | ✅ **Done 14 Sep 2026 (Maulik: merge orphans, stop the old desk first).** Old desk on 65.0.226.77 stopped and disabled; final verified backup `~/baskfy-safety/desk-migration-2026-09-14/` (sha256 `508a991d…`); `box-plus-orphans` rehearsed, dry-applied and committed into the box `desk` schema — 43,506 rows, every row count and checksum matched. See DECISIONS-MERGE "D8 run". ~~**The desk-history migration — yes or no.** `tools/migrate-desk` (README there; `--fork-policy` required) moves store A (43,411 rows on 65.0.226.77) into the box's `desk` schema; it needs SSH to the old box, which agents do not have. Until it runs the desk service starts on an empty `desk` schema | D8: the file is evidence; the swing book does not need it, the weekly book's pages do | The weekly book's history on the new desk; nothing swing |
+| SW-3 | ✅ **Done 14 Sep 2026 (Maulik: merge orphans, stop the old desk first).** Old desk on 65.0.226.77 stopped and disabled; final verified backup `~/baskfy-safety/desk-migration-2026-09-14/` (sha256 `508a991d…`); `box-plus-orphans` rehearsed, dry-applied and committed into the box `desk` schema — 43,506 rows, every row count and checksum matched. See DECISIONS-MERGE "D8 run". ~~**The desk-history migration — yes or no.** `tools/runs/migrate-desk` (README there; `--fork-policy` required) moves store A (43,411 rows on 65.0.226.77) into the box's `desk` schema; it needs SSH to the old box, which agents do not have. Until it runs the desk service starts on an empty `desk` schema | D8: the file is evidence; the swing book does not need it, the weekly book's pages do | The weekly book's history on the new desk; nothing swing |
 | SW-4 | **The S2 probe morning.** One weekday: Kite login before 09:00, `BASKFY_SWING_TIMING_PROBE=true` in `.env.staging` for the worker (one line, revert after), read `docs/swing/status/S2-kite-timing.md` the same evening | Two Kite timing facts (pre-open `volume`, the forming 09:20 candle) were never observed; the 09:16 scan and the tick-built range are correct either way | Nothing — at most one Beat time moves back to 09:09 |
 | SW-5 ⚠ **WAIVED by Maulik, 5 Sep 2026** (he chose "go live fully" over rehearsing first; DECISIONS-SW SW23). Left here as the record of what was skipped, not as a blocker | ~~**The DRY_RUN drill morning**~~ — `docs/history/SW-FINAL-REPORT.md` §"The DRY_RUN drill morning", `02` §3.2 | The gate you rewrote (A11) asks for one real session under `DRY_RUN=true` before the flag | SW-7 |
 | SW-6 | **Telegram** (optional): create the bot, put `BASKFY_SWING_TELEGRAM_BOT_TOKEN` and `BASKFY_SWING_TELEGRAM_CHAT_ID` in the box's `.env.staging` (never as a `box.sh` argument), restart `desk` + `swing-monitor`. Email needs only the desk's `DESK_SMTP_*` / `DESK_NOTIFY_*` lines in `.env.staging` (`.env.example` §desk, system-only) | The 09:31 focus push; one-way, never a confirm path (MD3) | Nothing — email carries the same line |
@@ -1988,7 +1988,7 @@ Exact steps, after the deploy, in an SSM shell on the box, **not** through `box.
 4. Restart:
 
 ```
-AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml up -d desk worker beat'
+AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml up -d desk worker beat'
 ```
 
 Then `curl -fsS $DESK/status` and confirm `"dry_run": false`. Sequence with checks:
@@ -2058,7 +2058,7 @@ development database was carrying exactly that until 12 Sep 2026 — `sleeve_cap
 2500000.00`, `updated_by = test`, written 11 Sep 15:05 UTC, with `tw_config_audit` **empty**.
 
 That row no longer exists, and the reason is worth your eye more than the row was: re-running the
-TWT ledger **emptied the whole local dev database**. `gates/twt-3.md` G2 ran
+TWT ledger **emptied the whole local dev database**. `docs/gates/twt-3.md` G2 ran
 `make migrate && make downgrade && make migrate`, `make downgrade` is `alembic downgrade base`, and
 `BASKFY_DATABASE_URL` defaults to `localhost:5433/baskfy`. The gate is repaired — it round-trips a
 throwaway database now — but **it had been like that since TW3**, so any earlier ledger run did the
@@ -2095,7 +2095,7 @@ project.
 
 **The 64.9 % above reproduces exactly** — re-measured today against the same 9,254 stock-days:
 64.9 % recall at 61.5 % precision, `no_bar` **832**, `no_volume_average` **602**, look-ahead
-83.1 % at 97.8 %. Nothing here is stale. `gates/twt-chartink-gap.md` G11 is the evidence.
+83.1 % at 97.8 %. Nothing here is stale. `docs/gates/twt-chartink-gap.md` G11 is the evidence.
 
 **But it is an average over all five weekdays, and it does not describe a Friday.** Split by the
 weekday it was measured on (G12), point-in-time recall / precision is Mon 61.9/45.7 · Tue
@@ -2138,7 +2138,7 @@ needs 45 of 50. `MATRIMONY` and `AYE` — the two of your names that Chartink's 
 *not* list — the detector names anyway. Nine of its eleven misses are missing instrument-days
 (exactly the T4 gap above); the other two are `ALIVUS` at 3.092 % and `AVALON` at 3.091 % against a
 3.01 % threshold, and nobody widened it. Full table and sixteen runnable checks in
-`gates/twt-chartink-gap.md`.
+`docs/gates/twt-chartink-gap.md`.
 
 ### What this run will never ask you for
 
@@ -2165,7 +2165,7 @@ sleeve does not touch them.
 screen a person sees at `staging.baskfy.com/portfolio/portfolios` today is the pre-redesign one.
 `docs/history/GATES.md` G17 read 307 and was correct: the box is serving. It is serving the previous build.
 
-**What it blocks:** `docs/history/GATES.md` G18 and `gates/pc-integration.md` I12, and nothing else. Every gate
+**What it blocks:** `docs/history/GATES.md` G18 and `docs/gates/pc-integration.md` I12, and nothing else. Every gate
 that is about the code is green against this working tree.
 
 **What was done meanwhile:** the G18 check was repaired. It named a container called `baskfy-web`,
@@ -2196,7 +2196,7 @@ night of actions silently not applied to `close`, which is the series every fact
 blocking publication and Kite corroborated it independently. It was fetched from NSE with an
 explicit window, read by the shipped `parse_corporate_action_purpose`, upserted, and the series
 rebuilt with `reprocess_instrument` — 640 bars, one action. Our adjusted closes now match Kite's
-bar for bar. The full evidence is `gates/ca-truncation.md` and `docs/DECISIONS.md` §21.11.
+bar for bar. The full evidence is `docs/gates/ca-truncation.md` and `docs/DECISIONS.md` §21.11.
 
 **The other ~460 actions are deliberately NOT repaired**, and that is the second thing needing your
 call. Over 2026-08-01..2026-09-30 NSE holds 606 actions and we hold 146. Backfilling them applies
@@ -2212,7 +2212,7 @@ can carry real corporate actions instead of inheriting Kite's opaque adjustments
 wrong and superseded.
 
 **The command, when you want it:** build and push the Python image, then recreate the four
-services. `tools/deploy/push-images.sh` and `tools/deploy/verify-worker-image.sh` are the existing
+services. `tools/deploy/retired/push-images.sh` and `tools/deploy/verify-worker-image.sh` are the existing
 path; the verify script is what proves the running tag matches HEAD.
 
 ## AFB — rotate web secrets if `.env.local` matched staging (AUDIT 2.8)
@@ -2487,7 +2487,7 @@ session and the 18:40–21:15 nightly window:
 
     git fetch origin claude/jolly-brown-6aeyjb && git checkout claude/jolly-brown-6aeyjb
     aws sso login --sso-session baskfy
-    bash tools/deploy/ship.sh
+    bash tools/deploy/retired/ship.sh
 
 * **Why before Saturday:** the quarterly re-test's Beat fires on the first Saturday of October
   (**3 Oct, 06:00 IST**). Deployed before then, its first run includes F3's two families; after,

@@ -72,7 +72,7 @@ evening with the same prompts (every prompt is resumable). The order of value is
 | T+0:45 → 2:30 | **Wave 1.** Port the *must* scope against goldens. | **G1** at T+2:30: each lane's must-scope compiles, its golden tests pass, the lane is merged into `go/main`. |
 | T+2:30 → 4:30 | **Wave 2.** *Should* scope; API lanes wire to core; L8 runs the pipeline end-to-end; L4 starts the desk console. | **G2** at T+4:30: `cmd/api` serves the web app's must-routes on :8001 and the Playwright subset (`screens`, `portfolios`, `market`, `nav`) is green against it; `cmd/worker` completes `pipeline.nightly` in DRY_RUN against a DB copy. |
 | T+4:30 → 6:00 | **Wave 3.** *Could* scope; desk DRY_RUN parity; docs; status. | **G3** at T+6:00: `scripts/friday_drill.py`-equivalent produces the same plan from the Go desk as from Python (DRY_RUN); `docs/go-rewrite/STATUS.md` is honest and complete. |
-| T+6:00 → 7:00 | Stabilize, final merges to `go/main`, one merge of `go/main` into `developer` (adds `go/`, `tools/parity`, `tools/rewrite`; changes **nothing** under the Python trees). | **G4 is not tonight:** two shadow Fridays, Caddy cutover by route group, Python retirement. |
+| T+6:00 → 7:00 | Stabilize, final merges to `go/main`, one merge of `go/main` into `developer` (adds `go/`, `tools/parity`, `tools/runs/rewrite`; changes **nothing** under the Python trees). | **G4 is not tonight:** two shadow Fridays, Caddy cutover by route group, Python retirement. |
 
 ## How to start (Maulik)
 
@@ -81,7 +81,7 @@ cd ~/Documents/projects/baskfy
 git status                        # must be clean — commit or stash first
 brew install go sqlc golangci-lint   # once; go ≥ 1.23
 go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
-tools/rewrite/setup-worktrees.sh  # creates branch go/main + worktrees ../baskfy-wt/L0..L8
+tools/runs/rewrite/setup-worktrees.sh  # creates branch go/main + worktrees ../baskfy-wt/L0..L8
 ```
 
 Then open nine terminals, one per lane:
@@ -91,7 +91,7 @@ cd ~/Documents/projects/baskfy-wt/L3 && claude      # (L0..L8)
 ```
 
 and paste the matching `docs/go-rewrite/prompts/L<n>.md` **in full** as the first message.
-L0 is *your* terminal. Every ~90 minutes (the gates) run `tools/rewrite/merge-lane.sh L<n>`
+L0 is *your* terminal. Every ~90 minutes (the gates) run `tools/runs/rewrite/merge-lane.sh L<n>`
 for each lane that reports green in `STATUS.md`; the Cowork session can run the same
 build/test checks on the merged `go/main` and report.
 
@@ -133,5 +133,5 @@ lanes whose Python stays live longest anyway (see `02-lanes.md` §Folding).
 | `REQUESTS.md` | Cross-lane asks (a shared type, a query, an interface) — L0 answers within 15 minutes |
 | `DECISIONS-GO.md` | Judgement calls, numbered `G<lane>.<n>`, tagged `⚠ UNREVIEWED` |
 | `prompts/L0.md … L8.md` | Paste-in kickoff prompts, one per terminal, resumable |
-| `../../tools/rewrite/` | `setup-worktrees.sh`, `merge-lane.sh` |
+| `../../tools/runs/rewrite/` | `setup-worktrees.sh`, `merge-lane.sh` |
 | `../../tools/parity/` | `golden.py` — canonical JSON dumper the lanes use for goldens |

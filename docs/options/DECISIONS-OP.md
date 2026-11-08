@@ -1242,7 +1242,7 @@ OP10's to consume; change it there and here together.
 
 ## OP9.5 — The replay fixtures are priced by Black-76, and their answer key is independent of the monitor · ⚠ UNREVIEWED
 
-`tools/options/make_fixtures.py` writes five days: O1 decaying to `PROFIT`, the same day
+`tools/runs/options/make_fixtures.py` writes five days: O1 decaying to `PROFIT`, the same day
 restarted at 11:30, O1 open when the index feed stops at 14:05, O2 going nowhere to `TIME_STOP`,
 and an O3-A trend to `TARGET`. Legs are priced by `greeks.black76_price` on the spot at a flat 14 %
 vol, 1 % either side on the 0.05 tick. The expected exit is computed by `expected()` in that
@@ -1499,7 +1499,7 @@ position until a spot arrives: a stop would go unjudged. **Reversal.** Restore t
 
 ## OP13.3 — The drill is the desk's path over fixture minutes, not the tick bus · ⚠ UNREVIEWED
 
-`tools/options/drill.py` runs, per sleeve, what each process does. The plan builder's decision is
+`tools/runs/options/drill.py` runs, per sleeve, what each process does. The plan builder's decision is
 `replay_day.decide_plan` (now public), the same `decide_o*` the Beat tasks call, written as the
 worker writes it. The confirm is `execute_entry`, the POST handler, through a real `OrderGateway`
 with the sleeve's `product_gates`. Each minute after entry, `exits.evaluate` runs on the position

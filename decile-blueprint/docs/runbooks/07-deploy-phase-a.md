@@ -38,7 +38,7 @@ credentials, then prove they work before Terraform creates anything:
 
 ```bash
 aws configure sso                       # recommended; or `aws configure` for an access key
-bash tools/deploy/preflight-aws.sh
+bash tools/deploy/retired/preflight-aws.sh
 ```
 
 It is read-only and creates nothing. It exists because `terraform apply` fails *late*: it will
@@ -81,9 +81,9 @@ cp terraform.tfvars.example terraform.tfvars   # gitignored; fill in the budget 
 # Without both, terraform reports "No valid credential sources found" while `aws sts
 # get-caller-identity` works fine in the same shell — the container simply cannot see your
 # SSO token cache.
-bash ../../../tools/deploy/tf.sh init
-bash ../../../tools/deploy/tf.sh plan     # READ IT
-bash ../../../tools/deploy/tf.sh apply
+bash ../../../tools/deploy/retired/tf.sh init
+bash ../../../tools/deploy/retired/tf.sh plan     # READ IT
+bash ../../../tools/deploy/retired/tf.sh apply
 ```
 
 Read the plan. It should create **29 resources** and no more. If it proposes destroying an

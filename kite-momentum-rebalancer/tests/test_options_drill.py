@@ -1,7 +1,7 @@
 """OP13's drill as a test: a whole paper day per sleeve, and a skip day, with 0 orders to a broker.
 
 `docs/options/06` OP13 AC: "the drill prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` (and
-the O2/O3 equivalents) and the journal rows". `tools/options/drill.py` runs the plan builder, the
+the O2/O3 equivalents) and the journal rows". `tools/runs/options/drill.py` runs the plan builder, the
 confirm handler, the real gateway, the exit rules, the monitor's sweep and the ledger against
 PostgreSQL; this runs it and reads what it printed. Skipped without `BASKFY_TEST_DATABASE_URL`.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-DRILL = Path(__file__).resolve().parents[2] / "tools" / "options" / "drill.py"
+DRILL = Path(__file__).resolve().parents[2] / "tools" / "runs" / "options" / "drill.py"
 
 
 @pytest.mark.skipif(not os.environ.get("BASKFY_TEST_DATABASE_URL"),

@@ -370,7 +370,7 @@ the retired payload shape still parses out of the archive but is never fetched
   lastPrice`. The quote carries no history, so storing it verbatim into a past date's row would
   put the fetch day's price inside that date — look-ahead, forbidden by house rule 5. Verified
   against the archived bytes over 120 sampled rows of the 2026-08-18 fill (0 mismatches,
-  `tools/tree3/repricing.sh`); the largest error it avoids in that sample is **11.10%**. The EPS vintage is still the
+  `tools/runs/tree3/repricing.sh`); the largest error it avoids in that sample is **11.10%**. The EPS vintage is still the
   fetch day's and cannot be otherwise: NSE publishes no point-in-time EPS series
   (`DECISIONS-MERGE.md` §T3F.3).
 * `pb` and `div_yield` are **not in this payload** and are always NULL. They are kept as columns

@@ -36,7 +36,7 @@ scope is the directories it owns (01 §Layout). "Must" is what G1/G2 grade; "sho
 9. Tag `go/main` `G0`, write `STATUS.md` row, ping all lanes to rebase.
 
 **Waves 1–3, integrator:** answer `REQUESTS.md` within 15 min (domain additions are yours);
-run `tools/rewrite/merge-lane.sh L<n>` at every gate for every lane that reports green;
+run `tools/runs/rewrite/merge-lane.sh L<n>` at every gate for every lane that reports green;
 keep `go/main` always building; write the gate line in `STATUS.md`. Never write lane code —
 if a lane is stuck, re-scope it (fold table below), don't take over.
 

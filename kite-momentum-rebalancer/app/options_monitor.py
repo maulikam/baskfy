@@ -2,7 +2,7 @@
 
 The strategy (`app/strategies/nifty_options.py`) decides; this module is everything around it that
 touches the world — the flag, the database, the broker's quotes and the websocket — so the strategy
-can be replayed from a file (`tools/options/replay.py`).
+can be replayed from a file (`tools/runs/options/replay.py`).
 
 THE FLAG. `build_monitor` returns ``None`` when `BASKFY_OPTIONS_MONITOR_ENABLED` is false and the
 strategy class is not constructed at all (OP9 AC: "flag off → not instantiated"); `main` returns 0

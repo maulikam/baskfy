@@ -97,9 +97,9 @@ The conditions, as they now stand:
 
 1. ~~**Twenty `DRY_RUN` sessions.**~~ **Withdrawn 11 Sep 2026** — see the box above.
 2. **VB10 green.** With the flag false, a property test proves no VBT code path reaches
-   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/vbt/drill.py`) produces a
+   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/runs/vbt/drill.py`) produces a
    simulated fill and a simulated GTT for every confirmed line and **0 orders reach a broker**.
-3. **The backtest on the page.** `tools/vbt/backtest.py` has been run over the plant's own
+3. **The backtest on the page.** `tools/runs/vbt/backtest.py` has been run over the plant's own
    backfilled bars and its CAGR, drawdown, trade count, win rate, profit factor and the
    gate-on/gate-off comparison are on `/vbt/backtest`, beside the research numbers, with
    STRATEGY §5's caveats verbatim and the drift flag of `06`'s VB9.

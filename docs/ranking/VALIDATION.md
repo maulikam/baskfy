@@ -1,6 +1,6 @@
 # Ranking validation (C8) — evidence, promotion rule, statuses
 
-Contract C8 in `docs/ranking/PLAN.md`; gate `gates/ranking-2.F-validation.md` (G4, G5). Decision
+Contract C8 in `docs/ranking/PLAN.md`; gate `docs/gates/ranking-2.F-validation.md` (G4, G5). Decision
 record: "Ranking 2.F" in `docs/DECISIONS-MERGE.md`.
 
 **How this file is made.** The prose is written by hand. Every table between

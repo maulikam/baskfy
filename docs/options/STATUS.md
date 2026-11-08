@@ -21,11 +21,11 @@ uncommitted in the tree. The run ended at OP15 (the next work is OP15.4's mutati
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ✅ | `baskfy_core.options.plan` (pure: role → gate → chain → `condor.build` → costs → sizing → margin ceiling → `plan_id`, 10:15 expiry, legs wings-first) + `baskfy_worker.options.plan` (`op_session`/`op_plan`/`op_leg`, two margin-calculator reads, lapse, `OPTIONS_PLAN`); task + Beat `options-plan-o1` **dark** behind the monitor flag; 50 new tests |
 | OP7 — O2 plan builder | ✅ | `baskfy_core.options.plan_o2` (pure: role → day filters → trigger → `expiry_for_o2` → `directional.build` over the trigger minute → costs → `plan_id`, exits, `min(+30 min, 13:30)` expiry) + `baskfy_worker.options.plan_o2` (`op_session`/`op_plan`/one `op_leg`, lapse, `OPTIONS_PLAN`); **no broker call at all** (OP7.3); task + Beat `options-plan-o2` **dark** behind the monitor flag; 49 new tests |
 | OP8 — O3 plan builder | ✅ | `baskfy_core.options.plan_o3` (pure: role → setup → one-O3-a-day → slot → `expiry_setups.build` over the decision minute → costs → margin ceiling → `plan_id`, exits) + `baskfy_worker.options.plan_o3` (O3-B then O3-A each minute, the margin calculator for the hedged basket, `OPTIONS_PLAN`); task + Beat `options-plan-o3` **dark** behind the monitor flag; 65 new tests (8 on `baskfy_test`) |
-| OP9 — Desk process `options_monitor` | ✅ | `baskfy_core.options.exits.evaluate` (pure) + desk `app/strategies/nifty_options.py` (marks from depth ticks, bars from index ticks reconciled to `op_index_minute`, one EXIT plan per position), `app/options_clock.py` (loop with idle evaluation, ≤ 1 quote / 5 s fallback, new legs followed), `app/options_monitor.py` (flag-first runner, `PgPositionStore`); `tools/options/replay.py` + five priced fixtures with an independent answer key; 58 new tests |
+| OP9 — Desk process `options_monitor` | ✅ | `baskfy_core.options.exits.evaluate` (pure) + desk `app/strategies/nifty_options.py` (marks from depth ticks, bars from index ticks reconciled to `op_index_minute`, one EXIT plan per position), `app/options_clock.py` (loop with idle evaluation, ≤ 1 quote / 5 s fallback, new legs followed), `app/options_monitor.py` (flag-first runner, `PgPositionStore`); `tools/runs/options/replay.py` + five priced fixtures with an independent answer key; 58 new tests |
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ✅ | pure `baskfy_core.options.executor` (entry/exit procedure over a venue, never-naked asserted per attempt) + desk `app/options_execute.py` (gateway-backed venue, depth-ladder paper fills, `PgOptionsStore`, LIVE refused) + `app/options_desk.py` (`/nifty-options`, `/data`, execute, close) + template; the monitor's loop sweeps raised exits; 32 new tests |
 | OP11 — Journal, ledger, pauses, first-live multiplier | ✅ | pure `ledger.journal_figures` (gross, §6.1 costs, net, R, MAE/MFE from fills) + desk `app/options_ledger.py` (journal at every close, §9.1/§9.3 pauses audited, `close_now` exits, 09:00 on start) + migration `0051` (`op_position.trough_value`) + worker `OPTIONS_WEEKLY` (one line per pool, Fridays); 17 new tests |
-| OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ✅ | pure `replay_day` (Tier 1 signals, `priced_day` = the live scan → plan builder → executor → exit rules → ledger over a `ModelChain` or `StoredChain`) + `backtest_suite` (`run_tier`, ±25 % sensitivity); worker `backtest_run` → `op_backtest_run`, task `baskfy.options.backtest` (compute queue, no Beat), `tools/options/backtest.py`; 19 new tests. Days before the master are `uncalendared` (OP12.3); full backfill and Tier 3 ⛁ |
-| OP13 — Gating and safety proof | ✅ | the side door closed in the live tree (`app/options_lab.lab_enabled()`, OP13.1); gateway refusals, the 16-row four-flag AND with a spy, no second entry (desk `test_options_safety.py`); Hypothesis never-naked/exact-close/never-overnight + repo scans (core `test_options_safety_proof.py`); `tools/options/drill.py` prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` for every sleeve + a skip day; a condor-with-no-spot crash found and fixed (OP13.2); 31 new tests |
+| OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ✅ | pure `replay_day` (Tier 1 signals, `priced_day` = the live scan → plan builder → executor → exit rules → ledger over a `ModelChain` or `StoredChain`) + `backtest_suite` (`run_tier`, ±25 % sensitivity); worker `backtest_run` → `op_backtest_run`, task `baskfy.options.backtest` (compute queue, no Beat), `tools/runs/options/backtest.py`; 19 new tests. Days before the master are `uncalendared` (OP12.3); full backfill and Tier 3 ⛁ |
+| OP13 — Gating and safety proof | ✅ | the side door closed in the live tree (`app/options_lab.lab_enabled()`, OP13.1); gateway refusals, the 16-row four-flag AND with a spy, no second entry (desk `test_options_safety.py`); Hypothesis never-naked/exact-close/never-overnight + repo scans (core `test_options_safety_proof.py`); `tools/runs/options/drill.py` prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` for every sleeve + a skip day; a condor-with-no-spot crash found and fixed (OP13.2); 31 new tests |
 | OP14 — Hardening and observability | ✅ | five `baskfy-options` Prometheus rules over API gauges (`options_health`), each firing from a synthetic series; worker checks at 09:20/10:20/hard exit+3/15:35 (`OPTIONS_CHECK_FAILED`); a refused Kite token raises every exit at once; budgets measured (tick→decision p99 0.15 ms; a plan-builder minute ≤ 2.3 ms); runbook 12; 29 new tests |
 | OP15 — Verification, goldens, deploy, final report | ✅ | 47 byte-stable Go goldens (six functions); mutation re-run over 23 modules **72.0 %**, 229 survivors unjustified (OP15.4, loud); `options-monitor` in compose with every money flag pinned false; `verify-options.sh` (dev stack OK); both suites green; `docs/history/OP-FINAL-REPORT.md` |
 
@@ -54,7 +54,7 @@ blocks OP1, which is pure arithmetic over fixtures. Decisions: `DECISIONS-OP.md`
 | Item | Value |
 |---|---|
 | Branch / HEAD at start | `developer` / `6f16214` ("TWT: auto-execute is on on the box…") |
-| Others' dirty files (never committed under an OP module) | `holdings-status/` (untracked) |
+| Others' dirty files (never committed under an OP module) | `research/holdings-status/` (untracked) |
 | Alembic head | `0049_broker_trade` (50 revision files, one head; `decile-blueprint/services/api/alembic/versions`) — computed from the files, no database touched |
 | Beat inventory | 44 entries in `baskfy_worker/celery_app.py` `BEAT_SCHEDULE` (l.108): capture-kite-trades, bhavcopy-eod, refresh-reference-data, session-catch-up, purge-deleted-accounts, weekly-integrity-audit, reap-abandoned-pipeline-runs, publish-deadline-slo, kite-token-expiry, queue-backlog, dispatch-screen-alerts, sweep-webhook-deliveries, cb-eod-metrics, cb-sip-reminders, cb-dividends, cb-sync-batches, portfolio-eod-nav, swing-eod, swing-eod-plan, vbt-detect, twt-detect, twt-evening, twt-morning, vbt-evening, vbt-morning, swing-weekend, swing-premarket-levels, swing-premarket-gaps, swing-timing-probe, swing-check-monitor-started, swing-check-orders-after-cutoff, swing-check-gtt-at-1515, swing-check-detect-fresh, vbt-rescan-sweep, twt-scan-publish, vbt-check-detect-fresh, vbt-check-orders-past-expiry, vbt-check-naked-positions, vbt-check-positions-without-bars, swing-catalyst, swing-scan-sweep, kite-login-nudge, kite-login-nudge-second, cb-rebalance-notify. **No options entry exists**; OP3 adds the collector/scan/master jobs |
 | Kite token state | Dev Mac: **no session** (`kite-momentum-rebalancer/data/.kite_token.json` absent; only its `.key`). The box's token was not inspected (no deploy, no ssh in OP0) |
@@ -337,7 +337,7 @@ the two index-bar tasks. Enabling it on the box is the orchestrator's decision a
 **Run the probe on the box** (after the deploy and a Kite login that day):
 
 ```
-AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose \
+AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose \
   --env-file .env.staging.compose -f compose.prod.yml exec -T worker \
   python -m baskfy_worker.options_cli probe'
 ```
@@ -929,8 +929,8 @@ EXIT plans, and OP10's executor will send them. Every flag stays false.
 * **`app/options_monitor.py`** — `build_monitor` (flag off → not constructed), `PgPositionStore`
   (`open_positions`, `raise_exit`, `record_mark`, `index_minutes` over `public.op_*`),
   `position_from_rows`, `main()` (flag before any import of the database, the ticker or Kite).
-* **`tools/options/replay.py`** + **`make_fixtures.py`** + five fixtures under
-  `tools/options/fixtures/` with their expected exits (OP9.5).
+* **`tools/runs/options/replay.py`** + **`make_fixtures.py`** + five fixtures under
+  `tools/runs/options/fixtures/` with their expected exits (OP9.5).
 
 ### AC → test (`kite-momentum-rebalancer/tests/test_options_monitor.py` unless named)
 
@@ -1115,11 +1115,11 @@ the ledger's journal figures. So a Tier 2 or Tier 3 trade is one the paper path 
   live scan's readers; the master as the day saw it; Tier 3 minutes from `op_chain_snapshot`),
   `run_backtest` → one `op_backtest_run` row (caveats verbatim, params, sensitivity, git sha).
 * Task **`baskfy.options.backtest`** (compute queue, on demand, no Beat, no broker) and
-  **`tools/options/backtest.py`** (`--fixture` with no database; `--sleeve --tier --from --to`).
+  **`tools/runs/options/backtest.py`** (`--fixture` with no database; `--sleeve --tier --from --to`).
 * `/options/journal`'s backtest card shows each caveat sentence on its own line (`whitespace-pre-line`);
   API `GET /options/backtest` has read the rows since OP5.
 
-**Fixture run** (`tools/options/backtest.py --fixture`, four OP4 days): O2 Tier 2: 2 traded, E[R] 1.86
+**Fixture run** (`tools/runs/options/backtest.py --fixture`, four OP4 days): O2 Tier 2: 2 traded, E[R] 1.86
 (the extra O2 sentence says Tier 2 flatters O2); O3-A: 1 traded, 0.92R TARGET; O3-B: 1 traded,
 −0.36R STOP; O1-W: no signal (gap, not contained); O1-M Tier 2: `REJECTED_NO_SHORT_CALL` (OP12.6).
 Four days are a smoke test, not evidence.
@@ -1173,7 +1173,7 @@ now a test, and the drill trades a whole paper day per sleeve with **0 orders re
 * **`packages/core/src/baskfy_core/options/condor.py`**: `exit_decision` takes an unknown spot;
   `exits.evaluate` no longer raises for a condor before the first index tick (OP13.2).
 * **`replay_day.decide_plan` / `Decided`** are public (the drill decides with them).
-* **`tools/options/drill.py`**: a paper day per sleeve against PostgreSQL, plus the O1-W skip day.
+* **`tools/runs/options/drill.py`**: a paper day per sleeve against PostgreSQL, plus the O1-W skip day.
   Plan rows as the worker writes them, `execute_entry` through a real gateway over a counting broker,
   minute-by-minute `evaluate`, `raise_exit`, `run_pending_exits`, the ledger's journal (OP13.3).
 
@@ -1205,7 +1205,7 @@ Each traded line is followed by its `op_journal` row (`simulated=True`, `PAPER_O
 | no gateway import in web/API/worker options code | core `test_the_options_code_outside_the_desk_has_no_order_path` |
 | no `BASKFY_OPTIONS_*AUTO*` read anywhere | core `test_no_options_auto_execute_flag_is_read_anywhere` (+ OP2/OP5's settings scans) |
 | no scheduler or Beat entry targets `/nifty-options/execute` | core `test_nothing_schedules_the_options_execute_route`, `test_no_beat_entry_targets_an_options_order`, `test_only_the_post_route_calls_execute_entry` |
-| the drill prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` (+ O2/O3) and the journal rows | desk `tests/test_options_drill.py` runs `tools/options/drill.py` |
+| the drill prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` (+ O2/O3) and the journal rows | desk `tests/test_options_drill.py` runs `tools/runs/options/drill.py` |
 
 ### Tests (new)
 
@@ -1252,9 +1252,9 @@ instead of waiting.
 * **Desk**: `options_clock.is_token_error`, `LegQuotes.token_dead`, and
   `NiftyOptionsMonitor.token_lost`. A refused token raises `HARD_EXIT / FEED_LOST` at once (OP14.3).
 * **`docs/runbooks/12-options-health.md`**, NEEDS-MAULIK "OPT" (what the human does on token death),
-  **`tools/options/budgets.py`**.
+  **`tools/runs/options/budgets.py`**.
 
-### Budgets (measured 23 Sep 2026, this Mac, `tools/options/budgets.py`)
+### Budgets (measured 23 Sep 2026, this Mac, `tools/runs/options/budgets.py`)
 
 | Budget | Measured |
 |---|---|

@@ -97,7 +97,7 @@ which is Maulik's, not the run's.
 
 Also reused, unchanged: the gateway's three product gates and the overnight-option guard; the
 desk's `TickBus`, `BaseStrategy` and `swing_clock.py` (the desk is the clock); the swing run's
-`PgSwingStore` pattern for a desk-side store over Postgres; `tools/swing/drill.py` as the template
+`PgSwingStore` pattern for a desk-side store over Postgres; `tools/runs/swing/drill.py` as the template
 for `tools/condor/drill.py`; the alert machinery and the dark Telegram notifier; the
 `test_*_readonly.py` pattern for the web hub.
 

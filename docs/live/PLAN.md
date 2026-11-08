@@ -13,7 +13,7 @@ Decided before fan-out. Everything a leaf could get wrong about its neighbours.
 
 ### Naming
 * Module prefix **LV**; commits `LV<N>: green — …`; decisions in `docs/live/DECISIONS-LV.md` numbered
-  `LV<N>.<k>`, every entry `⚠ UNREVIEWED` until Maulik reads it; gates in `gates/live-<N>-<name>.md`.
+  `LV<N>.<k>`, every entry `⚠ UNREVIEWED` until Maulik reads it; gates in `docs/gates/live-<N>-<name>.md`.
 * New env: `BASKFY_LIVE_QUOTES` (API, default `"true"`, read-only market data; **not** a money flag).
   No other new flag. No default changes to any existing flag (non-negotiable 1).
 * New desk tables live in the **public** schema beside `tw_*`/`vb_*` (the desk's stores prefix `public.`; the `desk`
@@ -100,20 +100,20 @@ LV2 and LV3 both need `app/main.py`? No: LV3 owns it (gateway wiring); LV6 adds 
 
 ## Tree
 
-- 1 LV — live at any login time .......................... gates/live-root.md
-  - 1.0 LV0 box + account audit (read-only) .............. gates/live-0-audit.md
-  - 1.1 LV1 market data off DRY_RUN; freshness end to end . gates/live-1-market-data.md
-  - 1.2 LV2 fill reconciliation, all three sleeves ....... gates/live-2-reconcile.md
-  - 1.3 LV3 account-wide risk ledger ..................... gates/live-3-risk.md
-  - 1.4 LV4 login as the event; sleeve state; monitor reload gates/live-4-login-event.md
-  - 1.5 LV5 intraday equity bars (store, reconcile, backfill) gates/live-5-eq-bars.md
-  - 1.6 LV6 trade lifecycle, adoption, trade card ........ gates/live-6-lifecycle.md
-  - 1.7 LV7 integration: suites, lint, deploy, docs, report gates/live-7-integration.md
-  - 1.8 LV8 live scans for TWT and VBT; entries now at market (Maulik, 28 Sep) gates/live-8-live-scans.md
+- 1 LV — live at any login time .......................... docs/gates/live-root.md
+  - 1.0 LV0 box + account audit (read-only) .............. docs/gates/live-0-audit.md
+  - 1.1 LV1 market data off DRY_RUN; freshness end to end . docs/gates/live-1-market-data.md
+  - 1.2 LV2 fill reconciliation, all three sleeves ....... docs/gates/live-2-reconcile.md
+  - 1.3 LV3 account-wide risk ledger ..................... docs/gates/live-3-risk.md
+  - 1.4 LV4 login as the event; sleeve state; monitor reload docs/gates/live-4-login-event.md
+  - 1.5 LV5 intraday equity bars (store, reconcile, backfill) docs/gates/live-5-eq-bars.md
+  - 1.6 LV6 trade lifecycle, adoption, trade card ........ docs/gates/live-6-lifecycle.md
+  - 1.7 LV7 integration: suites, lint, deploy, docs, report docs/gates/live-7-integration.md
+  - 1.8 LV8 live scans for TWT and VBT; entries now at market (Maulik, 28 Sep) docs/gates/live-8-live-scans.md
 
 ## Added 28 Sep 2026 04:00 IST — LV9 and LV10 (Maulik's Q3–Q5 answers, DECISIONS-LV LV9.0)
 
-**LV9 — Qullamaggie exits on TWT and VBT (`gates/live-9-qulla-exits.md`).** The swing book's
+**LV9 — Qullamaggie exits on TWT and VBT (`docs/gates/live-9-qulla-exits.md`).** The swing book's
 `StopConfig` rule replaces TWT's 20 % high-water trail and VBT's 21-EMA exit: a third sold into
 strength between bar 3 and bar 5 after entry if green, the stop to breakeven after the partial or
 at +1R, the remainder trailing the 10-day MA (ADR ≥ 6 %) or the 20-day MA, sold at the next open on
@@ -122,7 +122,7 @@ two adapters. TWT's auto-execute sends the partial `SELL_AT_OPEN` too (TW20). Co
 gain `partial_done`, `trail`; TWT positions gain the queued-sell columns VBT already has; VBT gains
 `RAISE_GTT_STOP`; migration 0058; `ExitConfig.qulla_exits` (default true) is the one-line reversal.
 
-**LV10 — his pyramiding on all three sleeves (`gates/live-10-pyramiding.md`).** A fresh qualifying
+**LV10 — his pyramiding on all three sleeves (`docs/gates/live-10-pyramiding.md`).** A fresh qualifying
 setup in a held name is a new entry with its own size and stop, counted against slots and exposure;
 at most `max_entries_per_name` (2) open entries per name; re-entry after an exit on a new signal.
 `SizingConfig.pyramiding` (default true) per sleeve. Plan lines carry `position_id` so exits and

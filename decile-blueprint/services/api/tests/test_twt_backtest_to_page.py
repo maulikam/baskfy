@@ -5,7 +5,7 @@ THE SAME BUG, ONE ROOM ALONG
 An hour after ``GET /twt/today`` was found missing, ``GET /twt/backtest`` was found missing in
 exactly the same way: ``apps/web/src/lib/twt/fetch.ts`` has asked for it since TW8,
 ``readOrNull`` turns its 404 into ``null``, and ``null`` is the card's empty state. TW9 had
-already built the writer — ``tools/twt/backtest.py``, ``baskfy_worker.tasks.twt_backtest`` and the
+already built the writer — ``tools/runs/twt/backtest.py``, ``baskfy_worker.tasks.twt_backtest`` and the
 ``tw_backtest_run`` table, eight gates green — so the product could produce a settled result and
 still render "No completed run has been recorded yet".
 

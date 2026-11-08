@@ -73,8 +73,8 @@ whatever the client asks for, so neither key can open a shell — verified adver
 both: asking the pull key to run `id; cat .../.env` returns the token, and asking the handoff key
 the same question returns `handoff refused: nothing on stdin`.
 
-Public keys come from `tools/deploy/install-kite-session.sh` and
-`tools/deploy/install-desk-handoff.sh`, which generate each pair **on the box** and print only the
+Public keys come from `tools/deploy/retired/install-kite-session.sh` and
+`tools/deploy/retired/install-desk-handoff.sh`, which generate each pair **on the box** and print only the
 public half. There is deliberately no step that copies a private key anywhere.
 
 ## 4. `prove-live-token-pickup.py` → `~desk/bin/prove-live-token-pickup.py`, mode 0500

@@ -103,7 +103,7 @@ not a "known failure to work around" on the morning you first put ₹25 lakh beh
 docker exec baskfy-postgres psql -U baskfy -d postgres -q \
   -c "DROP DATABASE IF EXISTS baskfy_drill;" -c "CREATE DATABASE baskfy_drill;"
 
-cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/twt/drill.py \
+cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/runs/twt/drill.py \
   --database-url postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_drill
 ```
 
@@ -112,7 +112,7 @@ line, a fill, a GTT, a ratchet, the sweep. It must end with **`0 orders reached 
 Anything else and the flag does not get flipped.
 
 ⚠️ **The command above was wrong until 12 Sep 2026 and this is the corrected one.** It read
-`cd <repo root> && uv run python tools/twt/drill.py`, and there is no `pyproject.toml` at the repo
+`cd <repo root> && uv run python tools/runs/twt/drill.py`, and there is no `pyproject.toml` at the repo
 root — `uv run` there resolves a bare environment and the drill dies on
 `ModuleNotFoundError: No module named 'sqlalchemy'` before it does anything. `uv run` must be
 invoked from `decile-blueprint/`, which is where the project and its dependencies live, with the
@@ -151,7 +151,7 @@ sessions out** = the signals. Plus one `tw_breadth_daily` row.
   empty and about fifty names merely *hold* the state without entering it.
 * **0 signals AND no breadth row means it did not run.** Those are different answers and the
   funnel tells them apart. Check the worker:
-  `AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml logs --since 2h worker | grep -i twt'` `[REAL]`
+  `AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml logs --since 2h worker | grep -i twt'` `[REAL]`
 * **Fewer tight names than Chartink's live scan is expected and is not a bug.** `NEEDS-MAULIK.md`
   T4: the plant reproduces 64.9 % of Chartink's stock-days, and 832 of the misses are days on
   which Baskfy has no bar at all. Both readings are right about their own data.
@@ -225,7 +225,7 @@ The desk reads its Kite client **once, at construction** (Q-SW13-1). A login aft
 started does not reach it until it restarts.
 
 ```bash
-AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml restart desk'
+AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml restart desk'
 ```
 
 `[REAL]` Expect the container name and `Started`. Give it twenty seconds.
@@ -285,7 +285,7 @@ parameters are retained in CloudTrail):
 Then:
 
 ```bash
-AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml up -d desk worker beat'
+AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml up -d desk worker beat'
 ```
 
 `[REAL]`
@@ -579,7 +579,7 @@ curl -fsS -X PATCH $WEB/api/v1/twt/config -H "Authorization: Bearer $BASKFY_TOKE
 minutes not seconds — but it stops both this sleeve and everything else on that desk:
 
 ```bash
-AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml stop desk'
+AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml stop desk'
 ```
 
 `[REAL]` Then `curl -fsS $DESK/status` returns nothing — the vhost answers 502 — which is itself
@@ -639,7 +639,7 @@ it by hand or confirm it ran. It is idempotent and keyed on the day, so running 
 Or from the laptop:
 
 ```bash
-cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/twt/sweep.py --date <today>
+cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/runs/twt/sweep.py --date <today>
 ```
 
 `[REAL — TW7, corrected 12 Sep 2026]` ⚠️ **This command had the same fault as the drill's**: it
@@ -750,7 +750,7 @@ eighteen times a year — so most mornings are steps 1, 2 and 4, and step 2 is t
 Tap the 08:45 email. Then, because the desk caches its Kite client:
 
 ```bash
-AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml restart desk'
+AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml restart desk'
 ```
 ```bash
 curl -fsS $DESK/status
@@ -834,13 +834,13 @@ is the one place a reader looks to find out what exists.
 | **`POST $DESK/twt/halt`** | **TW6** | **BUILT to §7's four behaviours.** The third — protection is never removed — is pinned twice: directly, and through the mounted route. |
 | `GET` / `PATCH $WEB/api/v1/twt/config` | TW3/TW8 | **STILL NOT BUILT.** `baskfy_api/twt_settings.py` has `read_config` / `apply_patch` / `record_system_change` and **no `APIRouter`**; nothing mounts it. This is why the sleeve cannot be funded — NEEDS-MAULIK T3. |
 | `$WEB/me/twt` settings form | TW8 | **STILL NOT BUILT.** No `me/twt` route in the web app. The bounded settings of `02` only, when it is. |
-| `tools/twt/sweep.py` | TW7 | **BUILT.** Run it from `decile-blueprint/` — `uv run python ../tools/twt/sweep.py`. Its `build_rearm()` still returns `unavailable_rearm`, so it finds naked lines and cannot fix one; `POST $DESK/twt/sweep` can. |
-| `tools/twt/drill.py` | TW10 | **BUILT.** Run it from `decile-blueprint/` — `uv run python ../tools/twt/drill.py --database-url …`. Must end `0 orders reached a broker.` |
+| `tools/runs/twt/sweep.py` | TW7 | **BUILT.** Run it from `decile-blueprint/` — `uv run python ../tools/runs/twt/sweep.py`. Its `build_rearm()` still returns `unavailable_rearm`, so it finds naked lines and cannot fix one; `POST $DESK/twt/sweep` can. |
+| `tools/runs/twt/drill.py` | TW10 | **BUILT.** Run it from `decile-blueprint/` — `uv run python ../tools/runs/twt/drill.py --database-url …`. Must end `0 orders reached a broker.` |
 | `BASKFY_TWT_EXECUTION_ENABLED` | TW3 | **BUILT false** — `app/config.py` defaults it false and both `.env.example` files carry it. Setting it on the box is yours (T2). |
 | `TWT_EVENING`, `TWT_POSITION_NAKED`, `TWT_GTT_MISSING_AT_1515`, `TWT_ADJUSTMENT_RESET` | TW4/TW6/TW7 | **BUILT** in `baskfy_worker.alerts.AlertName`, one runbook behind all four: `decile-blueprint/docs/runbooks/09-twt-morning.md`. |
 
 **Real today:** `make test`, `make lint`, `make migrate`, `make token-sync`, the Kite login and its
-08:45 nudge, `tools/deploy/box.sh`, `curl $DESK/status`, the Kite app's GTT screen, and §7's
+08:45 nudge, `tools/deploy/retired/box.sh`, `curl $DESK/status`, the Kite app's GTT screen, and §7's
 fallbacks (b) and (c).
 
 ### 11.1 Why the half-size rule counts entries and not sessions

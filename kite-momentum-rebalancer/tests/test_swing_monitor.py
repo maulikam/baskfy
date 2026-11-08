@@ -33,9 +33,9 @@ from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup
 from baskfy_core.swing.opening_range import TriggerState
 
 ROOT = Path(__file__).resolve().parents[2]
-FIXTURES = ROOT / "tools" / "swing" / "fixtures"
-if str(ROOT / "tools" / "swing") not in sys.path:
-    sys.path.insert(0, str(ROOT / "tools" / "swing"))
+FIXTURES = ROOT / "tools" / "runs" / "swing" / "fixtures"
+if str(ROOT / "tools" / "runs" / "swing") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools" / "runs" / "swing"))
 
 import replay  # noqa: E402 - the harness under test, on the path above
 

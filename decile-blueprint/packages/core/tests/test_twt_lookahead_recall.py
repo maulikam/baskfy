@@ -8,7 +8,7 @@ first: the second is not a better reproduction, it is the *size of the look-ahea
 
 **This file needs neither the 1.7 GB panel nor a running backtest engine.** The two readings, over
 the window Chartink's export covers, are committed under ``fixtures/twt/`` as stock-day lists, and
-``tools/twt/twt_scan.py --verify`` rebuilds them from the panel byte for byte (the
+``tools/runs/twt/twt_scan.py --verify`` rebuilds them from the panel byte for byte (the
 panel-gated class at the end of this file is that check as a test). So the arithmetic that turns a
 reading into a recall number is asserted everywhere, and the reading itself is asserted wherever
 the panel is.
@@ -43,7 +43,7 @@ SLEEVE_MODULES: Final = SLEEVE_SOURCE / "twt"
 # ``tools/`` is not a package on the core's import path; the harness lives there beside the
 # repository's other operator tools so that TW2's reproduction and TW9's plant run cannot drift
 # apart by having two copies of it. Same arrangement as ``test_vbt_goldens.py``.
-sys.path.insert(0, str(REPO / "tools" / "twt"))
+sys.path.insert(0, str(REPO / "tools" / "runs" / "twt"))
 
 from twt_panel import PANEL  # noqa: E402
 from twt_recall import MissReasons, ScoreCard, score  # noqa: E402 - after the sys.path insert
@@ -306,7 +306,7 @@ class TestTheSleevesOwnReadingIsThePointInTimeOne:
         return score(self._stock_days(frame), fixture_pairs("recall_chartink"))
 
     def test_the_committed_fixtures_are_re_derivable_from_the_panel(self) -> None:
-        """``tools/twt/twt_scan.py --verify``, as a test. The fixtures are a copy of a
+        """``tools/runs/twt/twt_scan.py --verify``, as a test. The fixtures are a copy of a
         computation, and this is the check that the copy is still the computation."""
         assert verify() is True
 

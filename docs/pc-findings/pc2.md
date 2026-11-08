@@ -1,6 +1,6 @@
 # PC2 findings — the performance workspace
 
-Leaf PC2 of the Portfolio Command Center tree, 11 Sep 2026. Gates: `gates/pc2.md`, 9 of 9.
+Leaf PC2 of the Portfolio Command Center tree, 11 Sep 2026. Gates: `docs/gates/pc2.md`, 9 of 9.
 Files owned and shipped:
 
 | File | What it is |
@@ -206,7 +206,7 @@ question. The consolidation is a real piece of work, not a merge.
 ## 4. Decisions taken under the autonomy charter
 
 1. **Total-P&L attribution is computed from per-portfolio NAV series, not apportioned by weight.**
-   `gates/pc2.md` G5 asks for "share of ... total P&L". `PortfolioRowOut` has no cost basis and no
+   `docs/gates/pc2.md` G5 asks for "share of ... total P&L". `PortfolioRowOut` has no cost basis and no
    total-P&L field, so the literal reading had two honest endings: a reasoned unavailable, or a
    real computation from a series the parent can fetch. The second was taken because it is exact,
    testable and reversible (the prop is optional). Rejected: `hero.total_pnl × weight`, which

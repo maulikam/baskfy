@@ -2,7 +2,7 @@
 
 ## Branches and worktrees
 
-`tools/rewrite/setup-worktrees.sh` creates, from a clean `developer`:
+`tools/runs/rewrite/setup-worktrees.sh` creates, from a clean `developer`:
 
 - branch `go/main` — the integration branch; only L0 commits to it (via `merge-lane.sh`).
 - branches `go/L0` … `go/L8`, each checked out in `../baskfy-wt/L<n>/` (a git worktree of the

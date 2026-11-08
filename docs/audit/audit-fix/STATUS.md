@@ -115,4 +115,4 @@ Wave 2: H+I merged; D2 after ship / suites green.
 | V.1 | V | merged | done — `b02b2ff`/`8b1a132`: desk suite 2030 green; truncated web `docker build` and missing `REVALIDATE_SECRET` fixed |
 | T.1 | T | merged | done — `46a9156`: test-db 1848 passed; `make test` and `make lint` green |
 | I.7 | orch | merged | done — `77f765f`: version routes filtered on a visibility no row can hold (404 for every basket) |
-| SHIP | orch | in flight | `tools/deploy/ship.sh` from HEAD |
+| SHIP | orch | in flight | `tools/deploy/retired/ship.sh` from HEAD |

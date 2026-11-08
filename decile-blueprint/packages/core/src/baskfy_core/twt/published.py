@@ -7,7 +7,7 @@ that three consumers read them and none of them should be allowed to transcribe:
 * ``/twt/backtest`` puts the run beside the published figure (``05`` §3);
 * TW9's drift flag subtracts a fresh CAGR from :attr:`PublishedStudy.cagr_pct` and raises a banner
   past a point;
-* ``tools/twt/backtest.py`` prints the comparison from a terminal.
+* ``tools/runs/twt/backtest.py`` prints the comparison from a terminal.
 
 The discipline that makes that safe is the one ``baskfy_core.vbt.published`` established: **the
 goldens read the study's own file and this module is checked against it**

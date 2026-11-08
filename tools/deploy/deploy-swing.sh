@@ -167,7 +167,7 @@ ACCOUNT="$(aws sts get-caller-identity --query Account --output text)" \
 REG="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
 for repo in baskfy-web baskfy-py baskfy-desk; do
   aws ecr describe-images --region "$REGION" --repository-name "$repo" --image-ids "imageTag=$TAG" \
-    >/dev/null 2>&1 || { echo "$repo:$TAG is not in ECR — run tools/deploy/push-images.sh first" >&2; exit 1; }
+    >/dev/null 2>&1 || { echo "$repo:$TAG is not in ECR — run tools/deploy/retired/push-images.sh first" >&2; exit 1; }
 done
 BUCKET="${BASKFY_ARCHIVE_BUCKET:-$(cd "$BLUE/infra/terraform" && \
   docker run --rm -v "$PWD:/w" -w /w -v "$HOME/.aws:/root/.aws:ro" -e AWS_PROFILE="$PROFILE" \

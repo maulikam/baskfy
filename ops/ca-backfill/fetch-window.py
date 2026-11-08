@@ -2,7 +2,7 @@
 
 `gates/ca-backfill.md`. Run inside the worker container on the box:
 
-    AWS_PROFILE=baskfy-poc bash tools/deploy/box-python.sh worker ops/ca-backfill/fetch-window.py
+    AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box-python.sh worker ops/ca-backfill/fetch-window.py
 
 WHY THIS DOES NOT CALL apply_adjustments
 ----------------------------------------

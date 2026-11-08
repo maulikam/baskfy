@@ -1476,7 +1476,7 @@ def rearm_callable(
 ) -> Callable[[int], Awaitable[dict[str, Any]]]:
     """**The seam TW7's sweep injects.** One position id in, one plain dict out.
 
-    ``tools/twt/sweep.py`` declares ``Rearm = Callable[[PositionId], Awaitable[RearmOutcome]]``
+    ``tools/runs/twt/sweep.py`` declares ``Rearm = Callable[[PositionId], Awaitable[RearmOutcome]]``
     and ships ``unavailable_rearm`` — which refuses loudly — until this exists. It lives in the
     data-plant tree and cannot import this module, so what this returns is a **dict**, not a
     dataclass: ``{"position_id", "armed", "gtt_id", "reason"}``, exactly ``RearmOutcome``'s
@@ -1552,7 +1552,7 @@ async def sweep_naked(
 
     What is left over is ``TWT_GTT_MISSING_AT_1515``. This process cannot reach the data plant's
     alert sinks (a different venv), so the name is logged at ``error`` — the swing book's own
-    arrangement — and ``tools/twt/sweep.py`` (TW7) raises the real alert from the tree that can.
+    arrangement — and ``tools/runs/twt/sweep.py`` (TW7) raises the real alert from the tree that can.
     """
     day = session_day(now)
     before = naked_positions(store)

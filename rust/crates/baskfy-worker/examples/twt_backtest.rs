@@ -1,4 +1,4 @@
-//! `tools/twt/backtest.py`'s `_run`, in Rust — the grading entry for the TWT backtest, which has
+//! `tools/runs/twt/backtest.py`'s `_run`, in Rust — the grading entry for the TWT backtest, which has
 //! no Celery task (lane `sleeve_backtests`, wave 6; `tools/parity/twt_backtest_diff.py`).
 //!
 //! ```text

@@ -382,7 +382,7 @@ class TestTheRuleAndTheGttAreOne:
         ``fill_day_stop`` reads exactly one thing about the position — the stop resting against
         it — and that is the number the desk arms as a GTT. A line whose ``gtt_id`` is null has
         no such level at the exchange, so it has no fill-day protection at all; TW7's sweep is
-        the other half of that sentence, and ``tools/twt/sweep.py`` is where it is asserted.
+        the other half of that sentence, and ``tools/runs/twt/sweep.py`` is where it is asserted.
         """
         # The session's low is exactly ``AWKWARD_STOP``. Against that stop it is a breach;
         # against a stop one tick lower it is not, and nothing else about the bar has moved.

@@ -14,7 +14,7 @@
 //!   `bars`, wave D2, R8.20.2);
 //! * `app/options_clock.py` → [`clock`]; `app/strategies/intraday_skeleton.py` → [`intraday`];
 //! * `scripts/options_monitor_loop.py` (the container's clock) → [`monitor_loop`];
-//! * `tools/options/replay.py` (a recorded day through the monitor) → [`replay`].
+//! * `tools/runs/options/replay.py` (a recorded day through the monitor) → [`replay`].
 //!
 //! **The ticker.** This binary has no live Kite websocket (R8.0/R8.3), so the session's bus is
 //! quiet and the B10 quote fallback (`LegQuotes`) is the feed — what Python does when its

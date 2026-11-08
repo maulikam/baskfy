@@ -1,4 +1,4 @@
-"""TW7 — ``tools/twt/sweep.py``: the 15:15 chore, and the two alerts a person reacts to.
+"""TW7 — ``tools/runs/twt/sweep.py``: the 15:15 chore, and the two alerts a person reacts to.
 
 ``docs/twt/04`` §7.4 is one rule measured two ways. ``test_twt_fill_day.py`` asserts the
 backtest's half — ``STOP_DAY0``, to the tick. This file asserts the live book's half: **no open
@@ -33,7 +33,7 @@ from baskfy_worker.alerts import Alert, AlertName, Severity
 from baskfy_worker.ops import RUNBOOKS
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
-HARNESS: Final = REPO_ROOT.parent / "tools" / "twt"
+HARNESS: Final = REPO_ROOT.parent / "tools" / "runs" / "twt"
 if str(HARNESS) not in sys.path:
     sys.path.insert(0, str(HARNESS))
 
@@ -269,7 +269,7 @@ class TestTheSweepIsIdempotentAndKeyedOnTheDay:
     async def test_the_file_journal_makes_a_second_shell_idempotent_too(
         self, tmp_path: Path
     ) -> None:
-        """``uv run python tools/twt/sweep.py`` twice is two processes, so the day key has to
+        """``uv run python tools/runs/twt/sweep.py`` twice is two processes, so the day key has to
         outlive one of them."""
         desk = Desk([line(1)], refuse={1})
         recorder = Recorder()

@@ -97,7 +97,7 @@ EXPECTED_ROUTES: Final = frozenset(
 )
 
 #: The five Celery tasks the worker registers for this sleeve. ``twt_backtest`` is deliberately
-#: absent: it is a module ``tools/twt/backtest.py`` and ``make twt-backtest`` call, never a
+#: absent: it is a module ``tools/runs/twt/backtest.py`` and ``make twt-backtest`` call, never a
 #: scheduled task, and :meth:`test_no_twt_task_is_scheduled_into_an_execute_path` is the assertion
 #: that keeps it that way.
 #:

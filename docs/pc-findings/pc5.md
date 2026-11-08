@@ -1,6 +1,6 @@
 # PC5 — the momentum regime panel
 
-Leaf of `docs/PORTFOLIO-COMMAND-CENTER.md` §6. Gates: `gates/pc5.md`, 8 of 8 met.
+Leaf of `docs/PORTFOLIO-COMMAND-CENTER.md` §6. Gates: `docs/gates/pc5.md`, 8 of 8 met.
 
 **Ships:** `apps/web/src/lib/portfolio/regime.ts` (pure),
 `apps/web/src/components/portfolio/command/regime-panel.tsx`, and their two test files
@@ -250,7 +250,7 @@ entry in that test with a phrase and a reason — never a widened pattern.
 | G5 five absent figures declared with reasons | met — 6 tests (six figures, not five) |
 | G6 stale / manual / unreachable each explained | met — 8 tests |
 | G7 reasons verbatim, nothing as advice | met — 4 tests |
-| G8 lint + whole suite | met for PC5's files; three sibling failures attributed in `gates/pc5.md` |
+| G8 lint + whole suite | met for PC5's files; three sibling failures attributed in `docs/gates/pc5.md` |
 
 **G8 attribution.** `pnpm run lint` is `tsc --noEmit && eslint . && check-shadowed-routes`. It
 fails at `tsc` on five sibling files (PC2's `performance-workspace.test.tsx`; PC3's

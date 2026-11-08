@@ -2,7 +2,7 @@
 //! two books over one detection pass, the ETF-denominator counterfactual measured, one appended
 //! `tw_backtest_run` row.
 //!
-//! Python has **no Celery task** for it: `tools/twt/backtest.py` (`make twt-backtest`) calls
+//! Python has **no Celery task** for it: `tools/runs/twt/backtest.py` (`make twt-backtest`) calls
 //! `run_twt_backtest` inside one `session.begin()`. The Rust body is [`run_twt_backtest`]; the
 //! caller owns the transaction exactly as that script does. Nothing here reads `tw_config` — not
 //! the capital, not the thresholds (`03` §9): a run that passes nothing is the shipped sleeve.
@@ -53,7 +53,7 @@ pub struct TwtBacktestArgs {
     pub skip_etf_denominator: bool,
 }
 
-/// The appended row, as `tools/twt/backtest.py` reports it.
+/// The appended row, as `tools/runs/twt/backtest.py` reports it.
 #[derive(Debug, Clone)]
 pub struct TwtRun {
     /// `row.id`.
@@ -751,7 +751,7 @@ async fn compute(
 /// measure_etf_denominator=)` with `DEFAULT_TWT_CONFIG`. Inserts the row (`params`,
 /// `started_at = now`), runs, and finishes it (`stats`, `drift`, `finished_at`); on an error the
 /// row gets `error` and `finished_at` and the error is returned — the caller's transaction
-/// decides whether that survives (`tools/twt/backtest.py` rolls it back).
+/// decides whether that survives (`tools/runs/twt/backtest.py` rolls it back).
 ///
 /// # Errors
 /// Python's: `ValueError` with no bars or no equity curve, the core's, the database's.

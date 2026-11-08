@@ -199,7 +199,7 @@ rust_check() {
 }
 
 rowcounts() {
-  sed -n "/<<'SQL'$/,/^SQL$/p" "$ROOT/tools/deploy/exit-aws.sh" | sed '1d;$d' |
+  sed -n "/<<'SQL'$/,/^SQL$/p" "$ROOT/tools/deploy/retired/exit-aws.sh" | sed '1d;$d' |
     compose exec -T postgres psql -U baskfy -d baskfy -At | sed 's/|/\t/'
 }
 

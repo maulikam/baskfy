@@ -231,17 +231,17 @@ by deleting the rows it inserted (§7).
 ## 5. Commands
 
 All commands run from the repo root on the operator's machine. There is no SSH; everything goes
-through SSM (`tools/deploy/box.sh`).
+through SSM (`tools/deploy/retired/box.sh`).
 
 ```bash
 export AWS_PROFILE=baskfy-poc BASKFY_INSTANCE_ID=i-086986250704e4392
 cd /Users/maulikdave/Documents/projects/baskfy
 # push a local file to /opt/baskfy/repair/ on the box
-push()    { bash tools/deploy/box.sh "mkdir -p /opt/baskfy/repair/logs && echo $(base64 < "$1" | tr -d '\n') | base64 -d > /opt/baskfy/repair/$(basename "$1")"; }
+push()    { bash tools/deploy/retired/box.sh "mkdir -p /opt/baskfy/repair/logs && echo $(base64 < "$1" | tr -d '\n') | base64 -d > /opt/baskfy/repair/$(basename "$1")"; }
 # run a local .sql file on the box's Postgres, stopping at the first error (WRITES — operator only)
-boxpsql() { bash tools/deploy/box.sh "cd /opt/baskfy && echo $(base64 < "$1" | tr -d '\n') | base64 -d | docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T postgres psql -U baskfy -d baskfy -v ON_ERROR_STOP=1 -f -"; }
+boxpsql() { bash tools/deploy/retired/box.sh "cd /opt/baskfy && echo $(base64 < "$1" | tr -d '\n') | base64 -d | docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T postgres psql -U baskfy -d baskfy -v ON_ERROR_STOP=1 -f -"; }
 # read-only checks
-q()       { BOX_SQL_LINES=${2:-80} bash tools/deploy/box-sql.sh "$1"; }
+q()       { BOX_SQL_LINES=${2:-80} bash tools/deploy/retired/box-sql.sh "$1"; }
 ```
 
 Save each block below to a local scratch directory (for example `/tmp/repair/`) under the file
@@ -251,11 +251,11 @@ name given, then `push` it.
 
 ```bash
 # 1. nothing else heavy is running (expect: no ranking-backfill / recompute-* / ranking-repair containers)
-bash tools/deploy/box.sh "docker ps -a --format '{{.Names}} {{.Status}}' | grep -E 'ranking|recompute|backfill' || echo none; free -m; df -h /var/lib/docker | tail -1"
+bash tools/deploy/retired/box.sh "docker ps -a --format '{{.Names}} {{.Status}}' | grep -E 'ranking|recompute|backfill' || echo none; free -m; df -h /var/lib/docker | tail -1"
 # 2. no long query on the database (expect: 0 rows)
 q "select pid, now()-query_start, left(query,60) from pg_stat_activity where datname='baskfy' and state<>'idle' and pid<>pg_backend_pid()"
 # 3. running release contains f52df2c (bounded loads); expect a release at or after b87521d
-bash tools/deploy/box.sh "cd /opt/baskfy && grep -E '^BASKFY_RELEASE|TAG' .env.staging.compose | head -3"
+bash tools/deploy/retired/box.sh "cd /opt/baskfy && grep -E '^BASKFY_RELEASE|TAG' .env.staging.compose | head -3"
 # 4. calendar: 14 Sep is a holiday, 15 Sep a session
 q "select date, is_trading_day, source from trading_day where date in ('2026-09-14','2026-09-15')"
 # 5. duplicates BEFORE (expect four zeros) — query V-DUP in §6
@@ -356,7 +356,7 @@ asyncio.run(main(dt.date.fromisoformat(sys.argv[1]), dt.date.fromisoformat(sys.a
 
 ```bash
 push /tmp/repair/membership_derived.py
-bash tools/deploy/box.sh "bash /opt/baskfy/repair/capped.sh membership-derived python /repair/membership_derived.py 2026-07-01 2026-09-11; tail -60 /opt/baskfy/repair/logs/membership-derived.log"
+bash tools/deploy/retired/box.sh "bash /opt/baskfy/repair/capped.sh membership-derived python /repair/membership_derived.py 2026-07-01 2026-09-11; tail -60 /opt/baskfy/repair/logs/membership-derived.log"
 ```
 
 Expect 53 lines. Each should be `{'nifty-allcap': N, 'nse-sme-emerge': M}`, with N equal to the
@@ -530,7 +530,7 @@ echo "RECOMPUTE ALL DONE $(date '+%F %T')"
 ```bash
 push /tmp/repair/dates.txt; push /tmp/repair/recompute.sh
 # try ONE date first, synchronously (§3e rule); box.sh waits up to 30 min
-bash tools/deploy/box.sh "bash /opt/baskfy/repair/capped.sh recompute-2026-07-01 python -m baskfy_worker.factors_cli recompute --date 2026-07-01 && grep RECOMPUTED /opt/baskfy/repair/logs/recompute-2026-07-01.log && echo 2026-07-01 >> /opt/baskfy/repair/recompute.done"
+bash tools/deploy/retired/box.sh "bash /opt/baskfy/repair/capped.sh recompute-2026-07-01 python -m baskfy_worker.factors_cli recompute --date 2026-07-01 && grep RECOMPUTED /opt/baskfy/repair/logs/recompute-2026-07-01.log && echo 2026-07-01 >> /opt/baskfy/repair/recompute.done"
 ```
 
 Expect `RECOMPUTED date=2026-07-01 rows=2498` and `exit=0 oom=false`. Note the elapsed time and
@@ -540,9 +540,9 @@ instead.
 Then start the rest in the background:
 
 ```bash
-bash tools/deploy/box.sh "setsid nohup bash /opt/baskfy/repair/recompute.sh >> /opt/baskfy/repair/logs/recompute.out 2>&1 < /dev/null & echo started"
+bash tools/deploy/retired/box.sh "setsid nohup bash /opt/baskfy/repair/recompute.sh >> /opt/baskfy/repair/logs/recompute.out 2>&1 < /dev/null & echo started"
 # progress / memory, any time:
-bash tools/deploy/box.sh "tail -5 /opt/baskfy/repair/logs/recompute.out; wc -l < /opt/baskfy/repair/recompute.done; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep recompute || true"
+bash tools/deploy/retired/box.sh "tail -5 /opt/baskfy/repair/logs/recompute.out; wc -l < /opt/baskfy/repair/recompute.done; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep recompute || true"
 ```
 
 **Verify V2** after `RECOMPUTE ALL DONE`. Expect **0 rows**, meaning every date has factor rows ==
@@ -599,7 +599,7 @@ asyncio.run(main([dt.date.fromisoformat(arg) for arg in sys.argv[1:]]))
 
 ```bash
 push /tmp/repair/market_health.py
-bash tools/deploy/box.sh "bash /opt/baskfy/repair/capped.sh market-health python /repair/market_health.py 2026-07-01 2026-07-06 2026-07-08 2026-07-13 2026-07-15 2026-07-20 2026-07-22 2026-07-27 2026-07-29 2026-08-03 2026-08-05 2026-08-10 2026-08-11 2026-08-12 2026-08-13 2026-08-14 2026-08-17 2026-08-18 2026-08-19 2026-08-20 2026-08-21 2026-08-24 2026-08-25 2026-08-26 2026-08-27 2026-08-28 2026-08-31 2026-09-01 2026-09-02 2026-09-03 2026-09-04 2026-09-07 2026-09-08 2026-09-09 2026-09-10 2026-09-11; tail -40 /opt/baskfy/repair/logs/market-health.log"
+bash tools/deploy/retired/box.sh "bash /opt/baskfy/repair/capped.sh market-health python /repair/market_health.py 2026-07-01 2026-07-06 2026-07-08 2026-07-13 2026-07-15 2026-07-20 2026-07-22 2026-07-27 2026-07-29 2026-08-03 2026-08-05 2026-08-10 2026-08-11 2026-08-12 2026-08-13 2026-08-14 2026-08-17 2026-08-18 2026-08-19 2026-08-20 2026-08-21 2026-08-24 2026-08-25 2026-08-26 2026-08-27 2026-08-28 2026-08-31 2026-09-01 2026-09-02 2026-09-03 2026-09-04 2026-09-07 2026-09-08 2026-09-09 2026-09-10 2026-09-11; tail -40 /opt/baskfy/repair/logs/market-health.log"
 ```
 
 **Verify V3.** Expect 36 rows of `12`; 08-20…08-26 show `constituent_count` 0 for total-market
@@ -614,9 +614,9 @@ q "select date, count(*), string_agg(index_id||':'||constituent_count, ' ' order
 Run this only after V2 passes.
 
 ```bash
-bash tools/deploy/box.sh "setsid nohup bash /opt/baskfy/repair/capped.sh ranking-repair python -m baskfy_worker.factors_cli backfill-ranking --from 2026-07-01 --to 2026-09-11 --resume >> /opt/baskfy/repair/logs/ranking.out 2>&1 < /dev/null & echo started"
+bash tools/deploy/retired/box.sh "setsid nohup bash /opt/baskfy/repair/capped.sh ranking-repair python -m baskfy_worker.factors_cli backfill-ranking --from 2026-07-01 --to 2026-09-11 --resume >> /opt/baskfy/repair/logs/ranking.out 2>&1 < /dev/null & echo started"
 # progress (the container's own log; one line per day):
-bash tools/deploy/box.sh "docker logs --tail 3 ranking-repair 2>&1; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep ranking-repair || true"
+bash tools/deploy/retired/box.sh "docker logs --tail 3 ranking-repair 2>&1; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep ranking-repair || true"
 ```
 
 Expected progress:
@@ -632,7 +632,7 @@ Then force the one complete-but-stale day. On 09-08 the recompute added the `nif
 rows, and the desk score reads that bit.
 
 ```bash
-bash tools/deploy/box.sh "bash /opt/baskfy/repair/capped.sh ranking-0908 python -m baskfy_worker.factors_cli backfill-ranking --from 2026-09-08 --to 2026-09-08 --force; tail -3 /opt/baskfy/repair/logs/ranking-0908.log"
+bash tools/deploy/retired/box.sh "bash /opt/baskfy/repair/capped.sh ranking-0908 python -m baskfy_worker.factors_cli backfill-ranking --from 2026-09-08 --to 2026-09-08 --force; tail -3 /opt/baskfy/repair/logs/ranking-0908.log"
 ```
 
 **Check whether any other complete day needs `--force`** (expect **0 rows**). This compares the
@@ -678,7 +678,7 @@ There are no foreign keys into any of the four tables.
 
 ### Stopping safely
 
-- **Step 2:** `bash tools/deploy/box.sh "touch /opt/baskfy/repair/STOP"`. The script halts after
+- **Step 2:** `bash tools/deploy/retired/box.sh "touch /opt/baskfy/repair/STOP"`. The script halts after
   the current date. To halt immediately, run `docker stop recompute-<date>`; that date rolls back
   and is not written to `recompute.done`. To resume, `rm` the STOP file and start `recompute.sh`
   again.

@@ -1,6 +1,6 @@
 """READ-ONLY probe: did Beat stop scheduling desk collection?
 
-Run with ``tools/deploy/box-python.sh worker ops/desk-task-probe.py``.
+Run with ``tools/deploy/retired/box-python.sh worker ops/desk-task-probe.py``.
 
 Until 13 Sep 2026 ``baskfy.desk.daily`` was on Beat at 18:30 IST Mon-Fri and could not
 run: the worker image has no desk tree (NEEDS-MAULIK §33). Collection now runs in the

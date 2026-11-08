@@ -160,8 +160,8 @@ does not is a 35% gate, by 0.2 points**, and DECISIONS-VB VB2.2 measures exactly
 | | |
 |---|---|
 | `packages/core/src/baskfy_core/vbt/backtest.py` | the `Panel`, the sequencing, the statistics, the yearly table |
-| `tools/vbt/research_panel.py` | the export loader — **the same one VB9's plant run will use**, so a difference between the two runs is a difference in the data and never in the loader |
-| `tools/vbt/reproduce.py` | the comparison as a command; exits 0 on PASS, and prints where it does not |
+| `tools/runs/vbt/research_panel.py` | the export loader — **the same one VB9's plant run will use**, so a difference between the two runs is a difference in the data and never in the loader |
+| `tools/runs/vbt/reproduce.py` | the comparison as a command; exits 0 on PASS, and prints where it does not |
 | `packages/core/tests/vbt_backtest_fixtures.py` | a planted trade with its arithmetic worked by hand in the docstring |
 | `packages/core/tests/test_vbt_backtest.py` | 22 tests over that trade — runs everywhere, no export needed |
 | `packages/core/tests/test_vbt_goldens.py` | 21 tests over the real bars; **skips loudly** when the 68 MB export is absent |
@@ -479,7 +479,7 @@ than the market).
 `baskfy_worker.tasks.vbt_backtest` loads the universe and its bars from the plant, detects once,
 and runs `04` §11's engine three ways — `full`, `gate_off`, `raw_scan` — appending **one**
 `vb_backtest_run` row with `params` written on the way in and `stats`, `drift` or `error` on the
-way out. `tools/vbt/backtest.py` does the same over the research export without a database, for
+way out. `tools/runs/vbt/backtest.py` does the same over the research export without a database, for
 the moments the question is "did my change move a number".
 
 | | |
@@ -539,7 +539,7 @@ run and one failed one. VB8 shipped it because its fixtures only ever contained 
 
 ### The drill
 
-`tools/vbt/drill.py` walks a whole DRY_RUN session against a scratch Postgres it creates and
+`tools/runs/vbt/drill.py` walks a whole DRY_RUN session against a scratch Postgres it creates and
 drops: the evening plan, the morning rebuild, **a real confirm through the real gateway**, VB7's
 expiry sweep, and the counters. It exits 0 and prints `calls: 0`.
 

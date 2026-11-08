@@ -83,7 +83,7 @@ Money is `Decimal` throughout; prices are quantized at the tick (₹0.05 for lev
 papered over.
 
 - `baskfy_core/vbt/backtest.py`: the engine of `04` §11, walking the VB1 functions.
-- `tools/vbt/reproduce.py`: loads `research/volume-breakout/aws/*.csv.gz` (read-only; the export
+- `tools/runs/vbt/reproduce.py`: loads `research/volume-breakout/aws/*.csv.gz` (read-only; the export
   is not re-generated), builds the panel through the core's own universe and calendar rules, runs
   the engine, and compares against `research/volume-breakout/out/final_trades.csv` and
   `out/final_metrics.json`.
@@ -262,7 +262,7 @@ confirms it.
 
 **Goal:** a number, from the plant's own bars, beside the study's, with its drift named.
 
-- `tools/vbt/backtest.py` and a `baskfy.vbt.backtest` task on the compute queue: the `04` §11
+- `tools/runs/vbt/backtest.py` and a `baskfy.vbt.backtest` task on the compute queue: the `04` §11
   engine over the plant's `ohlcv_daily` from 2017, appended to `vb_backtest_run` with
   `source=PLANT`; `params` written on the way in, `error` on the way out.
 - The drift computation of `03` §8 and the banner of `05` §2, flagged above **1.0 CAGR point**.
@@ -294,7 +294,7 @@ confirms it.
 - **The neighbours are untouched**: the desk's weekly book and R1–R4 (`test_regime_names_do_not_collide.py`
   extended), `baskfy_core.swing` byte-identical to its state at the run's start (a hash test), and
   the swing suite and the desk suite green.
-- `tools/vbt/drill.py`: the whole DRY_RUN session end to end against Postgres — detect → evening
+- `tools/runs/vbt/drill.py`: the whole DRY_RUN session end to end against Postgres — detect → evening
   plan → confirm one of each line kind → simulated fills and GTTs → the next morning's plan →
   the third session's expiry sweep — printing the `vb_session` counters and **0 orders reaching a
   broker**.

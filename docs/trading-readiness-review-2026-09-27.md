@@ -197,7 +197,7 @@ The initial desk run, with dotenv disabled, DRY_RUN enabled and empty broker cre
 ## Status, 28 Sep 2026 — what each item became (LV pack, `docs/live/PLAN.md`)
 
 Written by the agent that executed this review under `/unlazy`; every claim below is a commit and
-a gate (`gates/live-*.md`), not a plan. `docs/live/DECISIONS-LV.md` carries the judgement calls.
+a gate (`docs/gates/live-*.md`), not a plan. `docs/live/DECISIONS-LV.md` carries the judgement calls.
 
 | Item | Became | Where |
 |---|---|---|

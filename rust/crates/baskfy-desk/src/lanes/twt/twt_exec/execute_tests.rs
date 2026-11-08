@@ -745,7 +745,7 @@ async fn test_the_sweep_records_what_it_could_not_fix() {
     assert_eq!(store.m().session(now().date_naive()).naked, 1);
 }
 
-// --- `tools/twt/sweep.py`'s `Rearm` — one position in, one outcome out ------------------------
+// --- `tools/runs/twt/sweep.py`'s `Rearm` — one position in, one outcome out ------------------------
 
 /// `rearm_callable(store, gateway, now=NOW, price_for=lambda _symbol: price)(position_id)`.
 async fn rearm_callable(

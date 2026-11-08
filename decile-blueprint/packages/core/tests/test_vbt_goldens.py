@@ -50,7 +50,7 @@ RESULTS = RESEARCH / "out"
 
 # ``tools/`` is not a package on the core's import path; the loader lives there because VB9's
 # plant run uses the same one, and a second copy under ``tests/`` would be the thing that drifts.
-sys.path.insert(0, str(REPO / "tools" / "vbt"))
+sys.path.insert(0, str(REPO / "tools" / "runs" / "vbt"))
 
 #: The study's frame: the first 200 sessions are warm-up.
 FIRST_SESSION = dt.date(2017, 10, 16)
@@ -94,7 +94,7 @@ from research_panel import load  # noqa: E402 - the sys.path insert above has to
 class Panel(Protocol):
     """What `research_panel.load` returns, stated here because mypy cannot follow it.
 
-    The loader lives in `tools/vbt/`, outside every package, and reaches this file through the
+    The loader lives in `tools/runs/vbt/`, outside every package, and reaches this file through the
     `sys.path` insert above — so its `LoadedPanel` is an untyped import and every attribute read
     would otherwise need an escape hatch (house rule 3). A structural type is the honest fix: it
     says what this test depends on, and it fails if the loader stops providing it.

@@ -127,7 +127,7 @@ published bars, and the numbers on them are exchange prices.
   on every tick; `TRIGGERED` → `sw_signal` row + a one-line `sw_plan(source=SIGNAL)` + desk
   notification. `generate_targets` returns `[]` — this strategy **never** places. Stops at
   10:45.
-- Replay harness: `tools/swing/replay.py` feeds a recorded morning (`bus.last_tick` journal, or a
+- Replay harness: `tools/runs/swing/replay.py` feeds a recorded morning (`bus.last_tick` journal, or a
   minute-candle CSV) through the strategy and asserts the signals; the pack ships one synthetic
   morning fixture.
 - **AC:** with the flag off the strategy is not instantiated (test); the replay of the fixture
@@ -171,7 +171,7 @@ published bars, and the numbers on them are exchange prices.
 
 **Goal:** a number, with its caveats, before any real money.
 
-- `tools/swing/backtest.py` + a `baskfy.swing.backtest` task (compute queue): `04` §11 over
+- `tools/runs/swing/backtest.py` + a `baskfy.swing.backtest` task (compute queue): `04` §11 over
   2017→, by setup and by year; the equity curve; the funnel; stored in `sw_backtest_run` (id,
   params, started/finished, stats JSONB) and served on `/swing/journal`'s backtest card.
 - Reuse `baskfy_core.backtest`'s costs and calendar helpers where they fit; do not fork them.

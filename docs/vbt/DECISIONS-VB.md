@@ -741,7 +741,7 @@ route as well (a documented path changed to satisfy a copy rule is over-reach, a
 
 ### VB9.1 — Two ways to re-run the study, and they answer different questions · ⚠ UNREVIEWED
 
-`06` VB9 asks for "`tools/vbt/backtest.py` **and** a `baskfy.vbt.backtest` task". Both exist and
+`06` VB9 asks for "`tools/runs/vbt/backtest.py` **and** a `baskfy.vbt.backtest` task". Both exist and
 they are not duplicates:
 
 * the **task** (`baskfy_worker.tasks.vbt_backtest`) runs over the plant's `ohlcv_daily`, appends
@@ -794,7 +794,7 @@ fixtures only ever contained runs that succeeded.
 
 VB9's acceptance asks that "the run over the full history completes on the dev box in **< 30
 minutes**". The engine half is measured: **23 seconds** for all three books over the whole
-2017–2026 history, printed by `tools/vbt/backtest.py`.
+2017–2026 history, printed by `tools/runs/vbt/backtest.py`.
 
 The plant-loaded half is **not measured**, and STATUS says so. No database this run had access to
 holds the full 4,186-name history — the test database carries fixtures — so the number that would

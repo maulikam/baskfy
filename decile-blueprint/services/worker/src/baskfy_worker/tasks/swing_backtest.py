@@ -38,7 +38,7 @@ row. A run that raises records the exception in ``error`` with ``finished_at`` s
 
 The Celery binding is in ``celery_tasks`` (``baskfy.swing.backtest``, the compute queue, no
 Beat entry: a five-minute run over nine years is something a person asks for, not a schedule).
-``tools/swing/backtest.py`` at the repo root runs this body from the command line.
+``tools/runs/swing/backtest.py`` at the repo root runs this body from the command line.
 """
 
 from __future__ import annotations

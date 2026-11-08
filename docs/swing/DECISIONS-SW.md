@@ -1083,7 +1083,7 @@ runner reads, and which configuration a run is sized and filtered with.
    is set on the task itself (`queue=QUEUE_COMPUTE`) because no `baskfy.swing.*` route exists in
    `TASK_ROUTES` — the other swing tasks are routed by their Beat entries' `options`, and this
    one has none: a five-minute run over nine years is something a person asks for, from
-   `tools/swing/backtest.py` or by name, not a schedule. Money arrives as strings and becomes
+   `tools/runs/swing/backtest.py` or by name, not a schedule. Money arrives as strings and becomes
    `Decimal` (house rule 9); `start` defaults to 2017-01-01 (`04` §11: "2017→"), `end` to today
    in IST.
 
@@ -1115,7 +1115,7 @@ the trade list, a 2,300-point equity curve, the ladder trace — which is a reco
    bucketed by one function and drawn by one component); `by_setup` and `by_year` as §10's
    statistics per group; `funnel` as the engine's counts; `equity` as `{sessions, start, end,
    low, high}` of the curve. The trade list, the curve and the ladder trace **stay on the row**:
-   the card is what a page can read, the row is what a reviewer can audit, and `tools/swing/
+   the card is what a page can read, the row is what a reviewer can audit, and `tools/runs/swing/
    backtest.py --json` prints the row.
 2. **Every stored decimal string is a `Decimal` on the card**, so the canonical encoder puts a
    number with its precision on the wire (`0.28`, not `"0.28"`, and not `0.28000000000000003`):
@@ -1150,7 +1150,7 @@ a label/value grid three rows deep).
 
 ## SW9.8 — The CLI runs the task body or the planted year, and the full-history time is an extrapolation on this machine · ⚠ UNREVIEWED
 
-**Context.** `06` SW9: "`tools/swing/backtest.py` + a `baskfy.swing.backtest` task … the run
+**Context.** `06` SW9: "`tools/runs/swing/backtest.py` + a `baskfy.swing.backtest` task … the run
 over the full history completes on the dev box in < 30 minutes." The dev database holds ten
 sessions of bars for 180 instruments and is at migration `0026` (SW0.2, SW3.3, and the
 "Not done" list on every STATUS section since); nothing on this machine can run 2017→.
@@ -1219,7 +1219,7 @@ September rehearses a Wednesday in August.
 3. **The monitor flag stays false, and the strategy is driven directly.** `BASKFY_SWING_MONITOR_ENABLED`
    is pinned `false` in the drill's environment before the desk is imported (`02` Track B: the
    flags default false and stay false), and `SwingBreakout` is constructed the way
-   `tools/swing/replay.py` constructs it — no gateway, the CSV for candles, the synthesised
+   `tools/runs/swing/replay.py` constructs it — no gateway, the CSV for candles, the synthesised
    four-ticks-a-candle tape — with **`PgSignalStore` over the desk's Postgres adapter** in
    place of the harness's list. That is the monitor process minus the flag check, the
    websocket and the Kite quote for circuit bands (the bands come from the fixture's
@@ -2202,7 +2202,7 @@ Recorded verbatim from the review session so the run and the report build on the
 | MD2 | **Risk per trade 0.5 %** (the default; ceiling 1.0 % kept, PACK.9) | unchanged code |
 | MD3 | **Notification: email through the existing mailer, one-way**, plus a **Telegram sender scaffolded dark** behind `BASKFY_SWING_TELEGRAM_BOT_TOKEN` / `BASKFY_SWING_TELEGRAM_CHAT_ID` — **never a confirm path**; a notification can only tell, never act | SW11 (`PgSignalStore.raise_signal` → notifier) |
 | MD4 | **Catalyst feed: free NSE corporate announcements**, for watchlist and EP-candidate symbols only, through the existing NSE provider and its rate limiter; store headline + timestamp + filing URL; auto-fill `sw_watch.catalyst`; link out rather than reproduce the text; add an **earnings-date flag** from the results calendar; single-tenant own-use — recorded as a **Track C §7 amendment** (news is not redistributed; it is a link on one person's watchlist) | SW11B (new module before SW12) |
-| MD5 | **S2 timing probe:** `tools/swing/kite_timing_probe.py` as a one-shot Beat task at 09:04 IST on weekdays, gated by `BASKFY_SWING_TIMING_PROBE=true`, self-disabling after one good run, writing `docs/swing/status/S2-kite-timing.md`; Maulik logs in to Kite before 09:00. Meanwhile the gap scan moves to **09:16** defensively and the opening range becomes **tick-based** (the candle source stays as the cross-check) | SW11 |
+| MD5 | **S2 timing probe:** `tools/runs/swing/kite_timing_probe.py` as a one-shot Beat task at 09:04 IST on weekdays, gated by `BASKFY_SWING_TIMING_PROBE=true`, self-disabling after one good run, writing `docs/swing/status/S2-kite-timing.md`; Maulik logs in to Kite before 09:00. Meanwhile the gap scan moves to **09:16** defensively and the opening range becomes **tick-based** (the candle source stays as the cross-check) | SW11 |
 | MD6 | **SIGNAL sizing is fixed at confirm time, in SW10:** `POST /swing/execute` re-derives the account context under a row lock on the day's `sw_session` (open exposure at cost + every line already CONFIRMED/SENT/FILLED today + cash), re-sizes the line against the rung's exposure ceiling, the position count and the per-session entry cap, and refuses with `EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP` instead of sending; a SIGNAL plan's size is a preview, the confirm path is the gate; the monitor also re-reads context per trigger so the page shows the size that will be sent; a property test over sequences of confirms; the drill must show 25 %, not 34 % | SW10 (after SW9.5) |
 | MD7 | **SW9.5 first.** `07-primary-source-corrections.md` is executed as its own commit before SW10 is finished, because it changes numbers SW10's tests pin (stop ≤ 1 ADR, 3 new entries a session, `min(rung, cap)` positions, the 15 %/10 % drawdown lock-out, the 10-day-over-20-day index rule) | SW9.5 |
 | MD8 | **Execution flag.** Maulik's answer, verbatim: *"Okay, potato would be required. We'll go live right away."* The run reads this as intent to go live as soon as possible. **It changes nothing in this run:** `BASKFY_SWING_EXECUTION_ENABLED` stays false (kickoff constraint; charter: a Track B flag flip is never autonomous), and `docs/swing/02` §3 still gates the flip on its checklist — twenty paper sessions, the backtest reviewed, the sleeve and risk written here (MD1/MD2 — done), first sessions at half risk. Only Maulik can amend §3 and only his hand flips the flag in the desk `.env`. The word "potato" is not understood and is asked about in the next review batch | NEEDS-MAULIK, SW12 report |
@@ -2779,7 +2779,7 @@ session where nothing met the bar, while `_detect_swing` calls `write_market_row
 triggers and yesterday's gate, stamped yesterday**, on a page that looked perfectly current.
 
 Proved by `services/api/tests/test_sleeve_read_contract.py::TestTheReadersDate` (Agent C's audit,
-`gates/sleeve-read-contract.md` C1) and fixed by `baskfy_api.swing.latest_detected_date`, which
+`docs/gates/sleeve-read-contract.md` C1) and fixed by `baskfy_api.swing.latest_detected_date`, which
 reads `max(sw_market_daily.date)` and falls back to the setup date only for a book with no market
 row at all. This is not an invention: it is the rule `baskfy_api.vbt._latest_breadth`
 (`vb_breadth_daily`) and `baskfy_api.twt._latest` (`tw_breadth_daily`) already follow — **key the
@@ -2794,7 +2794,7 @@ something, which is a different and still-useful question. The monitor's own clo
 (`max(sw_signal.session_date)`) and the market page's (`max(sw_market_daily.date)`) are unchanged.
 
 **Reversal.** Point `setups()` back at `latest_setup_date`. Full record and runnable checks:
-`gates/sleeve-contract-fixes.md` F1, and `docs/DECISIONS-MERGE.md` SRC-F.
+`docs/gates/sleeve-contract-fixes.md` F1, and `docs/DECISIONS-MERGE.md` SRC-F.
 
 ### SW-OV4 — the feed's symbol set widened to VBT and TWT SIGNAL names (25 Sep 2026) ⚠ UNREVIEWED
 

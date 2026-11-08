@@ -223,7 +223,7 @@ and after a fill runs the exit engine every tick to the sleeve's hard exit.
   `op_index_minute` at each checkpoint (A4); calls the plan builders; after `OPEN`, subscribes the
   legs and marks them (quote fallback ≤ 1 call / 5 s, the swing B10 pattern); `exits.evaluate` per
   tick → an exit plan handed to OP10's executor. `app/options_clock.py`.
-- `tools/options/replay.py` — a recorded day (minute CSV + snapshot series) through the process,
+- `tools/runs/options/replay.py` — a recorded day (minute CSV + snapshot series) through the process,
   asserting every plan and exit decision.
 - **AC:** flag off → not instantiated; the O1 fixture replays to `PROFIT` at the expected minute;
   O2's fixture to `TIME_STOP`; O3-A's to `TARGET`; the index feed dying at 14:05 with O1 open →
@@ -260,7 +260,7 @@ exits run under the same confirm; everything is flat by its hard exit; nothing r
 
 **Goal:** the page shows what the data can honestly support, per sleeve, tier by tier.
 
-- India VIX daily history into `index_snapshot_daily`; `tools/options/backtest.py --sleeve --tier
+- India VIX daily history into `index_snapshot_daily`; `tools/runs/options/backtest.py --sleeve --tier
   --from --to` and the worker task on the compute queue; `op_backtest_run`; cards with caveats from
   the row.
 - Tier 1 all sleeves with ±25 % sensitivity on each threshold; Tier 2 all sleeves with `04` §13.2's
@@ -289,7 +289,7 @@ reaching a broker**.
   *in the live tree*, not by touching `frozen/`; record the choice).
 - Source scans (docstrings stripped): no gateway import in web/API/worker options code; no
   `BASKFY_OPTIONS_*AUTO*` read anywhere; no scheduler or Beat entry targets `/nifty-options/execute`.
-- `tools/options/drill.py`: a full paper day per sleeve against Postgres, and a skip day.
+- `tools/runs/options/drill.py`: a full paper day per sleeve against Postgres, and a skip day.
 - **AC:** all green; the drill prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` (and the
   O2/O3 equivalents) and the journal rows; desk suite green.
 

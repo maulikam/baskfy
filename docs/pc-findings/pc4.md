@@ -1,6 +1,6 @@
 # PC4 — the rebalance preview drawer
 
-**Leaf of** `docs/PORTFOLIO-COMMAND-CENTER.md` §6. **Gates:** `gates/pc4.md`.
+**Leaf of** `docs/PORTFOLIO-COMMAND-CENTER.md` §6. **Gates:** `docs/gates/pc4.md`.
 **Owns:** `apps/web/src/lib/portfolio/rebalance-preview.ts`,
 `apps/web/src/components/portfolio/rebalance/*`, and the two test files.
 **Mounted nowhere.** The parent wires it; the contract is §3 below.
@@ -72,7 +72,7 @@ Against that, the brief's list for this drawer splits cleanly:
 * Step 5 is gated on an explicit acknowledgement on step 4 ("I will enter these myself at my
   broker"), and **any exclusion withdraws an acknowledgement already given** — an acknowledgement
   of a different plan is not an acknowledgement of this one.
-* `gates/pc4.md` G4 greps the whole directory for an order route and expects zero hits.
+* `docs/gates/pc4.md` G4 greps the whole directory for an order route and expects zero hits.
 
 ---
 

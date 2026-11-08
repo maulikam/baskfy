@@ -20,7 +20,7 @@ plant — Python 3.12 uv workspace + TypeScript/Next.js, PostgreSQL 16 + Timesca
 placed an order and never will) and `kite-momentum-rebalancer/` (the live momentum execution
 desk — FastAPI + Kite Connect on NSE cash equities; the only thing here that can place an
 order). They share `packages/core` — factors, scoring, basket construction. `frozen/strangle/`
-is a frozen options lab: no refactors, no deletions, no lint fixes. `gates/` holds
+is a frozen options lab: no refactors, no deletions, no lint fixes. `docs/gates/` holds
 feature-gate briefs; `docs/` holds the merge record (00–08, `DECISIONS-MERGE.md`).
 
 ## Hard rules (from CLAUDE.md — read it for the full set)

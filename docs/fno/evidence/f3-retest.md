@@ -1,6 +1,6 @@
 # F3 — the EOD re-test of the daily rules (F3-3)
 
-Run 28 Sep 2026 14:25 IST by `tools/fno/f3_retest.py` over 1165 archived F&O bhavcopies, 2022-01-03 → 2026-09-22, through `NSEProvider.fo_bhavcopy` from the local archive. Rules and numbers: `docs/fno/04` §11 with `F3Config`'s defaults (pivot 60/3, trend 20, weekly 5, distance 1.0 %, wing 2.0 %, decay 80 %, cut 2.0x, buffer 0.10 %, add at 20 %). One lot per entry, one add; R = net P&L per unit ÷ the spread's max loss per unit; costs are the research's index-option costs per leg per crossing.
+Run 28 Sep 2026 14:25 IST by `tools/runs/fno/f3_retest.py` over 1165 archived F&O bhavcopies, 2022-01-03 → 2026-09-22, through `NSEProvider.fo_bhavcopy` from the local archive. Rules and numbers: `docs/fno/04` §11 with `F3Config`'s defaults (pivot 60/3, trend 20, weekly 5, distance 1.0 %, wing 2.0 %, decay 80 %, cut 2.0x, buffer 0.10 %, add at 20 %). One lot per entry, one add; R = net P&L per unit ÷ the spread's max loss per unit; costs are the research's index-option costs per leg per crossing.
 
 ## What this cannot test — read first
 

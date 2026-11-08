@@ -1,6 +1,6 @@
 """READ-ONLY probe: is the box's Kite access token present and unexpired?
 
-Run with ``tools/deploy/box-python.sh worker ops/kite-token-state.py``.
+Run with ``tools/deploy/retired/box-python.sh worker ops/kite-token-state.py``.
 
 Decrypts the stored blob and applies :meth:`AccessToken.is_expired` — the same accessor the Kite
 adapter uses. It makes **no network call**, places no order and writes nothing: `AccessTokenStore`

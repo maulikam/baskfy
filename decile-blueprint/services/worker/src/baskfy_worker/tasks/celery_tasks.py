@@ -1496,7 +1496,7 @@ def options_backtest_task(
     """OP12: one sleeve at one tier over ``[date_from, date_to]``, appended to ``op_backtest_run``.
 
     On demand only (no Beat entry) and on the compute queue: a person asks for a run, from
-    ``tools/options/backtest.py`` or by name. Reads stored bars, the master and (Tier 3) stored
+    ``tools/runs/options/backtest.py`` or by name. Reads stored bars, the master and (Tier 3) stored
     chain minutes; makes no Kite call and reaches no broker, so no flag gates it.
     """
     start = dt.date.fromisoformat(date_from)
@@ -1870,7 +1870,7 @@ def swing_backtest_task(
     """SW9: run `04` §11 over ``start..end`` and store the run in ``sw_backtest_run``.
 
     No Beat entry — a run over nine years is something a person asks for, from
-    ``tools/swing/backtest.py`` or by name — and the compute queue, because it is a few minutes
+    ``tools/runs/swing/backtest.py`` or by name — and the compute queue, because it is a few minutes
     of Polars over every bar since 2017 and must not sit in front of an alert. ``start``
     defaults to `04` §11's 2017; ``end`` to today in IST. Money arrives as strings so it can be
     ``Decimal`` all the way (house rule 9). The body owns its commits (``run_checkpointed``) so

@@ -1,6 +1,6 @@
 """Create the **Bonds** portfolio and file `SGBDE31III` into it, through the audited routes.
 
-    AWS_PROFILE=baskfy-poc bash tools/deploy/box-python.sh api ops/bonds-portfolio/file-the-bond.py
+    AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box-python.sh api ops/bonds-portfolio/file-the-bond.py
 
 THIS SCRIPT WRITES. Everything else in `ops/` is a read; this one is the exception, and it is the
 parent's to run, once, **after the deploy that carries the tier-4 symbol bridge** (without it the

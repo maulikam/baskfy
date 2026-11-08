@@ -24,7 +24,7 @@
 
 The pure properties (never naked over fill scripts, exact exits, no position past E-1 15:00) and
 the source scans are `decile-blueprint/packages/core/tests/test_fno_safety_proof.py`; the drill is
-`tools/fno/drill.py`.
+`tools/runs/fno/drill.py`.
 """
 from __future__ import annotations
 

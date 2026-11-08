@@ -1,6 +1,6 @@
 """A sleeve's options backtest over stored days, written to ``op_backtest_run`` (OP12).
 
-``docs/options/06`` OP12: "``tools/options/backtest.py --sleeve --tier --from --to`` and the worker
+``docs/options/06`` OP12: "``tools/runs/options/backtest.py --sleeve --tier --from --to`` and the worker
 task on the compute queue; ``op_backtest_run``; cards with caveats from the row." The computation is
 ``baskfy_core.options.backtest_suite.run_tier`` — the live scan, plan builders, executor, exit rules
 and ledger, day by day; this module only reads the days and writes the row.

@@ -2,7 +2,7 @@
 
 Judgement calls made while executing `docs/trading-readiness-review-2026-09-27.md` under the
 autonomy charter (root CLAUDE.md). Every entry is **⚠ UNREVIEWED** until Maulik reads it. Plan and
-contract: `docs/live/PLAN.md`; gates: `gates/live-*.md`.
+contract: `docs/live/PLAN.md`; gates: `docs/gates/live-*.md`.
 
 ## LV0.1 — Scope of this run: the review's steps 1–4 are built; step 5 is handed back as questions (27 Sep 2026) · ⚠ UNREVIEWED
 

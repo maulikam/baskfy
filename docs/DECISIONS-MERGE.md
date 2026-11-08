@@ -580,7 +580,7 @@ returned and parsed on the first live call, against URL shapes written from docu
 before fetched. Recorded because the screener's own `CLAUDE.md` flagged all five as unverified and
 the honest outcome is that four fifths of the guesswork was right.
 
-Verification is repeatable: `tools/verify-nse.py`, which drives `NSEProvider` itself rather than
+Verification is repeatable: `tools/runs/verify-nse/verify-nse.py`, which drives `NSEProvider` itself rather than
 reimplementing its fetch, so the cookie priming, throttle, retry and circuit breaker are all under
 test. The dated note is `decile-blueprint/reconciliation/NSE-ENDPOINTS.md`.
 
@@ -4347,7 +4347,7 @@ A plan whose ownership table has holes produces either a merge conflict or a sil
 
 **A bug in the gates runner itself.** `~/.claude/skills/unlazy/scripts/gate-check.mjs:23` drops its
 first positional argument when no `--timeout` flag is present, so `gate-check.mjs <one-file>`
-resolves to an empty list and falls back to globbing **every** `gates/*.md` in the repo —
+resolves to an empty list and falls back to globbing **every** `docs/gates/*.md` in the repo —
 executing and flipping boxes in files the caller does not own. It flipped 22 boxes across nine
 gate files whose leaves had not started, and 4 more in a later sweep; all 26 were reset with their
 evidence. Workaround for the run: always pass `--timeout` **before** the path. The shared script
@@ -4679,7 +4679,7 @@ stays; only the chrome loses it. `src/lib/__tests__/nav.test.ts` asserts the cou
 
 ## HOME2 — trending is computed on request, not from an EOD snapshot ⚠ UNREVIEWED
 
-**Context.** SC9's ranking layer had never been built. `gates/trending-root.md` planned it as a
+**Context.** SC9's ranking layer had never been built. `docs/gates/trending-root.md` planned it as a
 pure domain module plus a persisted `cb_trending_snapshot` written by a Celery Beat task
 (migration 0020). The home surface needs the ranked lists; it does not need the table.
 
@@ -4706,7 +4706,7 @@ ranking over a smaller floor (the number would not be one this product could sta
 
 **Reversal.** Delete the router and its mount, remove `/cb/trending` from `EXPECTED_PATHS`, and
 regenerate the client. The pure module has no callers of its own and can stay for the snapshot
-tree. `gates/trending-root.md` G5/G6/G9 — migration, Beat task, end-to-end job proof — remain open
+tree. `docs/gates/trending-root.md` G5/G6/G9 — migration, Beat task, end-to-end job proof — remain open
 and unclaimed; that file's counts (LISTS=9 POP=3) match what was built here.
 
 ## HOME3 — signing in still lands on `/build`, not `/home` ⚠ UNREVIEWED
@@ -4860,7 +4860,7 @@ is 30, but httpx applies `read` **per socket read**, not per request: a peer tha
 mid-response, or trickles, is never timed out and the retry budget is never reached. Diagnosed to
 that point and no further — no packet capture was taken.
 
-**Taken, to deliver.** `tools/tree3/drive-fill.sh` supervises the fill: it bounds each invocation
+**Taken, to deliver.** `tools/runs/tree3/drive-fill.sh` supervises the fill: it bounds each invocation
 with `timeout`, re-runs with `--resume`, and stops rather than spins if a round makes no progress.
 This is sound rather than a hack only because of how the fill is built — resume skips stored
 symbols, the archive never refetches a key it holds, and each batch of 25 is committed — so a
@@ -5322,7 +5322,7 @@ explicit removal), the SCP snapshot, and `delete-account-assignment` for the SSO
 3. **The SSM agent registers before cloud-init finishes.** `docker compose version` printed
    nothing, the clock read UTC and `/opt/baskfy/READY` was absent — all of which reads as a failed
    bootstrap and none of which was. `cloud-init status --wait` is now the first thing
-   `tools/deploy/box.sh` runs, and the runbook says so.
+   `tools/deploy/retired/box.sh` runs, and the runbook says so.
 
 **Secrets discipline for the box, recorded because it is easy to get wrong later.** The database
 password and JWT secret are generated **on the instance** and never leave it — not via SSM
@@ -5727,7 +5727,7 @@ rendered rather than rendered dead.
 **Not tagged `⚠ UNREVIEWED`, deliberately.** This is not an agent's judgement call under the
 autonomy charter; it is a direct instruction from Maulik on 27 Aug 2026, written down in
 `docs/history/FLOW-REFINE-PROMPT.md` at the repo root. It is recorded here because it **reverses G1 of
-`gates/marketing-flow-refresh.md`** and reverses half of **MKT1** above, and a gate that quietly
+`docs/gates/marketing-flow-refresh.md`** and reverses half of **MKT1** above, and a gate that quietly
 disagrees with the code is worse than no gate.
 
 **Context.** Maulik reviewed the rendered "From intent to result" section and rejected it on four
@@ -6641,7 +6641,7 @@ mechanical repair.
 ## T7-D8 — `/build/[id]` opens on the ranked table, behind `NEXT_PUBLIC_SCREEN_DEFAULT_VIEW` ⚠ UNREVIEWED
 
 **12 Sep 2026.** Recorded late: the code and its tests landed with the Tree 7 UI-polish leaves, and
-`gates/leaf-7.3.1-default-view.md` G5 asked for this entry and never got it. The gate was left
+`docs/gates/leaf-7.3.1-default-view.md` G5 asked for this entry and never got it. The gate was left
 honestly unchecked, which is the only reason the gap was still findable. The decision below is the
 one the code already implements; nothing is being changed here except the record.
 
@@ -6659,7 +6659,7 @@ environment variable must not silently decide what the page opens on.
 
 **Scope, and this is the part that matters.** Only the *editor's* default moves. `/discover`,
 `/basket/[slug]` and the build-list cards stay basket-first and none of them reads the flag;
-`gates/leaf-7.3.1-default-view.md` G4 is the assertion that keeps it that way. The Basket view
+`docs/gates/leaf-7.3.1-default-view.md` G4 is the assertion that keeps it that way. The Basket view
 stays one tap from the table, with its sizing controls and its "Save as basket" action intact — the
 change is which of the two is on top, not which of the two exists.
 
@@ -6678,7 +6678,7 @@ restores the Tree 6 rendering rather than merely being read.
 
 **12 Sep 2026.** Maulik said he does not hold PKTEA; the box held 147 shares of it,
 `kind=CAPITAL`, `added=2026-09-10`, in a group he had made that evening (`Swing Manual`, id 6).
-Investigated as Leaf 1 of `docs/history/PLAN-SCAN-SYNC.md`. Gates: `gates/pktea-phantom.md`, 14/14.
+Investigated as Leaf 1 of `docs/history/PLAN-SCAN-SYNC.md`. Gates: `docs/gates/pktea-phantom.md`, 14/14.
 
 **Context — and the row was never wrong.** PKTEA is in no seeder, no fixture and not in the
 regression corpus; the seeder does not reference `portfolio_holding` at all. The row was true on
@@ -6805,11 +6805,11 @@ route was added or removed.
 
 ## SRC-F — five of Agent C's six writer/reader disagreements, closed; the sixth named ⚠ UNREVIEWED
 
-**Context.** `gates/sleeve-read-contract.md` (Agent C, 12 Sep 2026) proved six places where a
+**Context.** `docs/gates/sleeve-read-contract.md` (Agent C, 12 Sep 2026) proved six places where a
 sleeve's writer and its reader do not compute the session, or the tenant, with the same function
 — the general case of the `/twt` bug where 58 `tw_state_daily` rows sat under a page saying
 nothing had been read. Agent F fixed five and left the sixth red on purpose. The full record,
-with a runnable check per row, is `gates/sleeve-contract-fixes.md`.
+with a runnable check per row, is `docs/gates/sleeve-contract-fixes.md`.
 
 **Taken.**
 
@@ -6866,7 +6866,7 @@ three `error.tsx` files. Nothing here migrates data, adds a route or changes a s
 
 ## §P — pinned-wrong-behaviour sweep (Agent P, 12 Sep 2026) ⚠ UNREVIEWED
 
-Full record and runnable checks: `gates/pinned-wrong-behaviour.md` (11/11).
+Full record and runnable checks: `docs/gates/pinned-wrong-behaviour.md` (11/11).
 
 **P.1 — Taken.** Three passing tests that asserted wrong behaviour were fixed **functionality
 first, test second**: the `/me/swing` ceiling refusal no longer prints
@@ -7029,7 +7029,7 @@ check that catches a route typo before staging. `// @ts-expect-error` — house 
 
 **What happened.** Three packaging defects, one root cause and one consequence.
 
-`tools/deploy/push-images.sh` explained `NEXT_PUBLIC_DESK_URL` in a seven-line comment placed
+`tools/deploy/retired/push-images.sh` explained `NEXT_PUBLIC_DESK_URL` in a seven-line comment placed
 *inside* the `docker build` continuation chain. `\`-newline is spliced away before tokenizing, so
 an indented `#` line mid-chain does not comment one argument out — it ends the command there. The
 web build ran with no build context and no `NEXT_PUBLIC_DESK_URL`, died under `set -e`, and the
@@ -7121,7 +7121,7 @@ relaxed — it had not; `lib/api/config.ts` still throws.
 bare `vitest run` is development.
 
 **The production path is right and was checked**, because the alternative reading (the feed
-hard-codes the wrong origin) would be a real defect: `tools/deploy/push-images.sh` passes
+hard-codes the wrong origin) would be a real defect: `tools/deploy/retired/push-images.sh` passes
 `NEXT_PUBLIC_SITE_URL=https://${HOSTNAME_PUBLIC}` as a build arg, and `requiredPublicUrl` throws
 rather than falling back when `NODE_ENV=production`. There is no path on which a shipped feed
 carries a `localhost` guid.
@@ -7676,7 +7676,7 @@ outside them was reformatted.
 
 ## Ranking 2.C — worker: desk score in the nightly, ranking backfill · Phase 2 wave 2 · ⚠ UNREVIEWED
 
-Gate: `gates/ranking-2.C-worker.md`. Files: `baskfy_worker/tasks/{desk_score,ranking,factors}.py`,
+Gate: `docs/gates/ranking-2.C-worker.md`. Files: `baskfy_worker/tasks/{desk_score,ranking,factors}.py`,
 `baskfy_worker/{ranking_backfill,orchestrator,engine,factors_cli}.py`,
 `services/worker/tests/test_ranking_worker.py`.
 
@@ -7782,7 +7782,7 @@ Removing `select_portfolio` and the C5 types reverts to Phase 1.4.
 Contracts C3/C4/C7 in `docs/ranking/PLAN.md`. Files: `baskfy_core/{screen_definition,
 ranking_engine,nse_momentum,screener,ranking_presets}.py`, the TS zod mirror, JSON schema and
 corpus, `packages/core/tests/{test_ranking_engine,test_nse_momentum,test_ranking_frame_query}.py`,
-`tests/fixtures/legacy-screen-sql-999bf37.json`. Gate: `gates/ranking-2.D-engine.md`.
+`tests/fixtures/legacy-screen-sql-999bf37.json`. Gate: `docs/gates/ranking-2.D-engine.md`.
 `ranking_engine.py` and `nse_momentum.py` cite this entry by name.
 
 **2D.1 Scope default split.** `ScreenDefinition.ranking_scope` defaults to `filtered_results`
@@ -7855,7 +7855,7 @@ in `_rankable_factor` and the Zod refine.
 ## Ranking 2.F — validation simulator (`ranking_validation`, C8) · Phase 2 wave 3 · ⚠ UNREVIEWED
 
 Contract C8 in `docs/ranking/PLAN.md`. File: `baskfy_core/ranking_validation.py` (pure) and
-`packages/core/tests/test_ranking_validation.py`. Gate: `gates/ranking-2.F-validation.md`.
+`packages/core/tests/test_ranking_validation.py`. Gate: `docs/gates/ranking-2.F-validation.md`.
 
 **2F.1 Choices.** (a) NAV is a unitless float index from 1.0 with fractional shares. It compares
 rankings, not rupees, so house rule 9 does not apply. (b) Holds, exits and entries come from
@@ -7915,7 +7915,7 @@ data, entry 25 ≡ entry 20, base turnover is about 3.7 a year, IS covers only 2
 
 ## Ranking 2.G — API: ranking engine route-through, provenance, explain, selection (C6) · Phase 2 wave 3 · ⚠ UNREVIEWED
 
-Gate: `gates/ranking-2.G-api.md`. Files: `baskfy_api/{screen_ranking,screener,schemas}.py`,
+Gate: `docs/gates/ranking-2.G-api.md`. Files: `baskfy_api/{screen_ranking,screener,schemas}.py`,
 `routers/{screens,meta}.py`, `services/api/tests/{test_api_meta_ranking,
 test_api_screens_explain_selection,test_ranking_screener_db}.py`.
 
@@ -7939,7 +7939,7 @@ Reverse: each is one branch in `screen_ranking.py` with its named test.
 
 ## Ranking 2.H — web: Ranking, Factor Ranges and Market Regime sections (C3) · Phase 2 wave 4 · ⚠ UNREVIEWED
 
-Gate: `gates/ranking-2.H-web.md` G1–G2. Files: `apps/web/src/components/screens/{ranking-section,factor-ranges,draft-number-input}.tsx`, `apps/web/src/lib/screens/ranking.ts`.
+Gate: `docs/gates/ranking-2.H-web.md` G1–G2. Files: `apps/web/src/components/screens/{ranking-section,factor-ranges,draft-number-input}.tsx`, `apps/web/src/lib/screens/ranking.ts`.
 
 **2H.1 Validate before patching.** The editor's URL state (`decodeState`) silently discards a
 definition the schema refuses, so each new control runs `ScreenDefinitionSchema` first
@@ -8122,7 +8122,7 @@ then migrate**.
    expected under this policy, and the other 17 tables verify clean.
 5. **Tool path note:** `migrate_desk.py` treats `parents[2]` of itself as the repo root; staged at
    `/d8/tools/` that resolved to `/` and the archive rail refused (correctly). Staged under
-   `/d8/repo/tools/migrate-desk/` instead — the rail was not bypassed.
+   `/d8/repo/tools/runs/migrate-desk/` instead — the rail was not bypassed.
 
 ## Screens: a live price overlay, not intraday screens (21 Sep 2026) · ⚠ UNREVIEWED
 
@@ -8454,7 +8454,7 @@ The trading-readiness review of 27 Sep 2026 (`docs/trading-readiness-review-2026
 executed as its own pack. Its judgement calls are numbered in **`docs/live/DECISIONS-LV.md`** (LV0.1 scope;
 LV1.1 market data is `BASKFY_LIVE_QUOTES`, not `DRY_RUN` — which amends "Screens: a live price overlay"
 above: the overlay no longer goes dark under a rehearsal flag on a process with no execute route).
-Plan and contract: `docs/live/PLAN.md`; gates: `gates/live-*.md`.
+Plan and contract: `docs/live/PLAN.md`; gates: `docs/gates/live-*.md`.
 
 ## LAYA-OFF — the Laya sidecar is removed, by Maulik's instruction in session (28 Sep 2026) ✅ decided by Maulik
 
@@ -8515,7 +8515,7 @@ Mac); **on demand**, not always on; **Tailscale** for remote access; **AWS torn 
 work on removing everything from aws"*; and *"no need to wait for nightly run on aws, lets do that
 here in mac tonight"*.
 
-- `tools/deploy/exit-aws.sh export` ran at 16:01 IST after the close: the box's thirteen app
+- `tools/deploy/retired/exit-aws.sh export` ran at 16:01 IST after the close: the box's thirteen app
   services stopped (and stay stopped), Postgres dumped (`-Fc`, 3.5 GB → 471 MB) with a row count
   per table, every Docker volume but pgdata, all of `/opt/baskfy` and every container's log packed,
   sha256'd, uploaded; `fetch` verified all fifteen files. Bundle, S3 mirror, images, Route 53

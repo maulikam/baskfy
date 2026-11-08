@@ -3,7 +3,7 @@
     "Give a button to resync so it resyncs everything if any data is pending, so I don't have to
      come to this machine."
 
-Today repairing a data gap means an AWS SSO login, ``tools/deploy/box.sh``, and knowing which of
+Today repairing a data gap means an AWS SSO login, ``tools/deploy/retired/box.sh``, and knowing which of
 four backfills to run. This module is the half of that button which *finds* the work.
 ``baskfy_worker.tasks.resync`` is the half that does it.
 

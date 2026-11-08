@@ -936,7 +936,7 @@ class TestRearmAndSweep:
 
 
 class TestTheSeamTw7Injects:
-    """``tools/twt/sweep.py``'s ``Rearm`` — one position in, one outcome out."""
+    """``tools/runs/twt/sweep.py``'s ``Rearm`` — one position in, one outcome out."""
 
     def test_the_callable_answers_the_shape_rearm_outcome_is_built_from(self) -> None:
         store = MemoryStore()

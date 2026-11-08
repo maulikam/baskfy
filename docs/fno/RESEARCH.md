@@ -164,7 +164,7 @@ capital locked in delivery. Rejected.
 
 ## D — Hedging the equity books (not tested)
 
-Your holdings (`holdings-status/holdings.csv`, 20 names) contain **no F&O stock**. Covered calls
+Your holdings (`research/holdings-status/holdings.csv`, 20 names) contain **no F&O stock**. Covered calls
 are therefore impossible, and any hedge would be an index proxy. It could not be tested here: the
 bhavcopy has no small-cap index series, and hedging crosses the wall between books (`02` Track C
 §7). It is QUESTIONS Q5, not a sleeve.

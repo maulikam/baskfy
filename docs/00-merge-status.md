@@ -10,7 +10,7 @@ that culture continues here.
 
 **Screen MTF allocation (4 Nov 2026).** Equal gross position value. The silent 5% cash holdback is gone. Preview and confirm share one plan. Unverified leverage is not guessed. A rejected buy does not hide the ones that landed.
 
-**Ranking Phase 2 (14 Sep 2026).** All 51 leaf gates across `gates/ranking-2.[A-H]-*.md` are met.
+**Ranking Phase 2 (14 Sep 2026).** All 51 leaf gates across `docs/gates/ranking-2.[A-H]-*.md` are met.
 Root: G1–G4 met (leaf sweep ALL MET; Python suite 8990 passed + desk suite 2066 passed + lint
 green; every brief item mapped in `docs/ranking/PLAN.md`'s brief-coverage table). G5/G6 are
 pending the backfill result — see `NEEDS-MAULIK.md` §35 for the three-release deploy, the
@@ -700,7 +700,7 @@ numbers is hidden rather than drawn as dashes.
 
 ## Tree 5 — Existential (23 Aug 2026)
 
-Priority audit from Maulik's brief. Gates in `gates/tree5-existential.md`.
+Priority audit from Maulik's brief. Gates in `docs/gates/tree5-existential.md`.
 
 | Item | State | Evidence |
 |---|---|---|
@@ -783,10 +783,10 @@ this change. That baseline: **16 failed / 27 passed** over the same specs.
 
 | Failure | Verdict | How it was settled |
 |---|---|---|
-| `accessibility.spec` × 4 | **pre-existing** | Fails identically in the baseline. The dark footer's `#6f6f6f` on `#141414` misses 4.5:1 (13 nodes) plus one focusless scrollable region — vaaya-redesign debt. `gates/leaf-7.5.1-verify.md` G5 was already "pending" |
+| `accessibility.spec` × 4 | **pre-existing** | Fails identically in the baseline. The dark footer's `#6f6f6f` on `#141414` misses 4.5:1 (13 nodes) plus one focusless scrollable region — vaaya-redesign debt. `docs/gates/leaf-7.5.1-verify.md` G5 was already "pending" |
 | `static-generation.spec` × 15 | **pre-existing, and vacuous** | Reads `.next/prerender-manifest.json` — the *dev server's* directory, 0 routes — while the suite builds into `.next-e2e`, 22 routes. Every assertion in that file has passed or failed for the wrong reason since `BASKFY_WEB_DIST_DIR` was introduced. **Fixed here**, because it is the check that proves the `marketing/routes.ts` edit did not break SSG |
 | `market.spec` × 7 | **pre-existing** | The baseline fails **nine**, a superset. The `<h1>` reads "Mood · Market — NIFTY 500" where the test wants "Market Health — NIFTY 500" (the Tree-6 rename); "History" heading gone; `getByLabel("Search")` now matches the shell's command-palette button as well as the listings input. A login gate cannot rewrite a heading |
-| `nav.spec`, `screens.spec` | **pre-existing** | Both specs already signed themselves in, so the suite-wide session changed nothing for them. `view-mode-basket` is `aria-pressed="false"`; `filter-chip-bar` is absent. `gates/leaf-7.5.1-verify.md` G4 was already "pending" |
+| `nav.spec`, `screens.spec` | **pre-existing** | Both specs already signed themselves in, so the suite-wide session changed nothing for them. `view-mode-basket` is `aria-pressed="false"`; `filter-chip-bar` is absent. `docs/gates/leaf-7.5.1-verify.md` G4 was already "pending" |
 | `critical-journeys` backtest | **pre-existing** | Fails identically in the baseline (6-minute timeout). Consistent with the standing open item: until a real backfill has run, every queued backtest fails |
 | `explore-handoff` hand-off | **pre-existing** | Fails identically in the baseline |
 | `instrument.spec` 404 → 200 | **pre-existing** | Fails identically in the baseline |
@@ -959,7 +959,7 @@ alongside the change.
 
 `docs/history/baskfynavrefactorreport.md` §F11's open item — "full ⌘K search deferred", item 5 on that report's
 own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M46–M46.7, all ⚠ UNREVIEWED. Gates:
-`gates/tree3-catalog-search.md` — 26 of 26 met, ledger in the file, one ABANDON line for the half
+`docs/gates/tree3-catalog-search.md` — 26 of 26 met, ledger in the file, one ABANDON line for the half
 of `pnpm run lint` this sitting does not own.
 
 Written and committed as M40, then renumbered: `## M40 — the palette is the broker screen's`
@@ -1104,8 +1104,8 @@ repeated-baskets problem is a six-basket catalogue, not a rendering bug.
 ## The landing flow diagram was rebuilt in normal flow, and lost its cost box (27 Aug 2026)
 
 **Maulik's instruction, not an agent judgement** — written down in `docs/history/FLOW-REFINE-PROMPT.md` at the
-repo root, gated by `gates/marketing-flow-responsive.md`, recorded as **MKT3** in
-`docs/DECISIONS-MERGE.md`. It **reverses G1 of `gates/marketing-flow-refresh.md`**, which is why
+repo root, gated by `docs/gates/marketing-flow-responsive.md`, recorded as **MKT3** in
+`docs/DECISIONS-MERGE.md`. It **reverses G1 of `docs/gates/marketing-flow-refresh.md`**, which is why
 that file now carries a superseded banner instead of quietly disagreeing with the code.
 
 He reviewed the rendered "From intent to result" section and rejected it on four counts. All four
@@ -1359,7 +1359,7 @@ rather than carrying an access token into the desk's token file. Two delivery pa
 
 Baskfy still borrows the access token back through M58's unchanged pull. Full record in
 `docs/DESK-LOGIN-DECISION.md` §9, `docs/DECISIONS-MERGE.md` 1.1.5, `tools/deploy/desk/README.md`,
-and the morning runbook in `NEEDS-MAULIK.md` §30. Gates: `gates/desk-retire-1.1.5.md`, 7 of 7.
+and the morning runbook in `NEEDS-MAULIK.md` §30. Gates: `docs/gates/desk-retire-1.1.5.md`, 7 of 7.
 
 Why the *request* token and not the access token: the deployed desk caches its Kite client
 (`app/main.py:99`) and the order gateway captures `kite().kc`, so a file write is invisible to the
@@ -1562,7 +1562,7 @@ house rule 3 bans `# type: ignore`, so the gate is green with no escape hatch. 5
 **Verified before the commit, on this machine, 4 Sep 2026.** `make lint` clean over 535 source
 files (0 eslint errors; the one `react-hooks/incompatible-library` warning on `data-table.tsx` is
 pre-existing). Screener suite exit 0. Desk suite **1,773 passed, 17 skipped, 12 subtests**, 76 s.
-Web **128 files, 2,169 tests passed**, 27 s — which also refreshed `gates/leaf-7.5.1-verify.md`
+Web **128 files, 2,169 tests passed**, 27 s — which also refreshed `docs/gates/leaf-7.5.1-verify.md`
 G1, whose evidence line had been left behind by a failing run.
 
 ### NOT done — the honest part
@@ -1752,7 +1752,7 @@ proposed lines. Three separate Laya questions and filing-attachment facts (D10) 
 
 `docs/trading-readiness-review-2026-09-27.md` executed as a pack under `/unlazy`: `docs/live/PLAN.md`
 (contract, tree, status log), `docs/live/DECISIONS-LV.md` (every call, all ⚠ UNREVIEWED),
-`gates/live-*.md` (the ledger), `docs/live/AUDIT-2026-09-27.md` (the read-only box audit).
+`docs/gates/live-*.md` (the ledger), `docs/live/AUDIT-2026-09-27.md` (the read-only box audit).
 
 **What the audit found (LV0).** The API's DRY_RUN was already false on the box, so the review's
 first hypothesis for "yesterday's prices" does not hold. The desk is live with swing and TWT
@@ -1824,7 +1824,7 @@ happens on the first weekday with a Kite session before 09:15 after LV2 is deplo
 
 Maulik's method, coded as sleeve F3 of the F&O book on his three answers (a credit spread with a
 far wing; auto-exit under `BASKFY_FNO_F3_AUTO_EXIT`, default false, his hand; NIFTY weekly,
-BANKNIFTY monthly). F3-0…F3-5 green (`docs/fno/F3-PLAN.md`, `gates/f3-*.md`); paper only, both F3
+BANKNIFTY monthly). F3-0…F3-5 green (`docs/fno/F3-PLAN.md`, `docs/gates/f3-*.md`); paper only, both F3
 flags false. The EOD re-test says the daily half alone loses after costs (NIFTY −0.021R,
 BANKNIFTY −0.020R); the intraday half — his edge — is untestable from a closing file and the
 paper period is its test. F3-6 deployed it and backfilled the index history on the box. F3-7

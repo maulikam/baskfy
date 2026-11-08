@@ -508,7 +508,7 @@ really a 500. `test_explore_http.py` asserts at the boundary instead.
 - Signing in still lands on `/build`, not `/home` — thirteen Playwright specs wait on `/build`
   and this sitting could not run Playwright. `docs/DECISIONS-MERGE.md` HOME3 has the exact edit list.
 - The persisted trending snapshot: migration 0020, `cb_trending_snapshot`, the Beat task
-  `baskfy.cb.compute_trending`. `gates/trending-root.md` G5/G6/G9, unclaimed.
+  `baskfy.cb.compute_trending`. `docs/gates/trending-root.md` G5/G6/G9, unclaimed.
 - The Playwright nav spec was extended for `/home` (landing, wordmark, `/dashboard`→Market) but
   **not executed** — the browser suite needs the app, the API and a database that other sessions
   held throughout. The spec walks `PRIMARY_NAV`, so the new destination is covered structurally.

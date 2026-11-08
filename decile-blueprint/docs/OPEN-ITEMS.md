@@ -448,6 +448,6 @@ this is the same list, in full, and it remains the honest record of what has nev
   same URL answers in 0.3s. `call_with_retry` is bounded correctly, so the hang is inside a single
   `client.get`: httpx applies its `read` timeout **per socket read**, not per request, so a peer
   that goes silent mid-response is never timed out. The backfill works around it with
-  `tools/tree3/drive-fill.sh` (bounded rounds, `--resume`); **the nightly has no such supervisor.**
+  `tools/runs/tree3/drive-fill.sh` (bounded rounds, `--resume`); **the nightly has no such supervisor.**
   The fix is a total-request deadline around `NSEProvider._fetch`, with a test that a trickling
   server is abandoned. `NEEDS-MAULIK.md` §17, `DECISIONS-MERGE.md` §T3F.6.

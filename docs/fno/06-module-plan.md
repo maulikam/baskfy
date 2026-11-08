@@ -166,7 +166,7 @@ exits all happen.
 
 ## F3 — the directional index credit spread (Maulik, M.5, 28 Sep 2026; `F3-PLAN.md`)
 
-Seven leaves, each with a gates file under `gates/f3-*.md`: **F3-0** the design, the decision
+Seven leaves, each with a gates file under `docs/gates/f3-*.md`: **F3-0** the design, the decision
 record and the plan; **F3-1** the pure core (`baskfy_core.fno.directional`, `F3Config`, `04`
 §11); **F3-2** migration 0059, `fo_index_daily` and its Kite history job, `NIFTY BANK` minutes;
 **F3-3** the EOD re-test of the daily half on the option bhavcopies, with its stated limits;

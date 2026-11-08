@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# RETIRED 6 Nov 2026: all AWS accounts closed; Baskfy runs locally (tools/deploy/local.sh).
+echo "$(basename "$0"): retired — AWS accounts closed 6 Nov 2026; use tools/deploy/local.sh" >&2; exit 1
+# One command to put HEAD on the box.
+#
+#     bash tools/deploy/retired/ship.sh
+#
+# It builds and pushes the three images, ships compose, migrates, restarts every service, and
+# then VERIFIES — because a deploy that does not check itself is a deploy you find out about on
+# Monday. Every step is idempotent; re-running after a failure is safe.
+#
+# WHAT IT WILL NOT DO, and none of these is an oversight:
+#   * It never sets `tw_config.sleeve_capital_inr` or `BASKFY_TWT_EXECUTION_ENABLED`.
+#     `docs/twt/02` §3: "never … in any circumstance." Those are yours. (Both were set on
+#     18 Sep 2026 on Maulik's instruction — DECISIONS-TW TW16 — by hand on the box, not by this
+#     script, which still sets neither.)
+#   * It never places an order. Nothing it runs can reach `OrderGateway.place`.
+#   * It does not reconcile holdings or file anything into a portfolio. That is
+#     `ops/bonds-portfolio/file-the-bond.py`, run deliberately and separately, because it moves
+#     real positions.
+#   * `deploy-swing.sh` refuses during market hours and inside the 18:40-21:15 nightly window.
+#     Those guards are the point; do not add a flag to skip them.
+set -euo pipefail
+# AWS CLI v2 pipes any output to a TTY through `less`. On 29 Sep 2026 a deploy sat at a pager's
+# ":" for twenty minutes, mid-seed, with every service still on the old image. Never page.
+export AWS_PAGER=""
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+export AWS_PROFILE="${AWS_PROFILE:-baskfy-poc}"
+TAG="$(git rev-parse --short HEAD)"
+
+step() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
+die()  { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+
+step "0. who am I, and is the session alive"
+# The single most common reason this fails. The token dies daily and the refresh needs a browser,
+# so no script can clear it for you -- but it can tell you in one line instead of failing deep
+# inside a docker build twenty minutes later.
+aws sts get-caller-identity --query Account --output text >/dev/null 2>&1 || die \
+  "AWS session is dead. Run:  aws sso login --sso-session baskfy    then re-run this script."
+echo "   account $(aws sts get-caller-identity --query Account --output text)"
+
+step "1. what is about to ship"
+echo "   tag $TAG  ($(git log -1 --format=%s | cut -c1-72))"
+DIRTY="$(git status --porcelain | grep -v '^??' || true)"
+if [ -n "$DIRTY" ]; then
+  # Not fatal: push-images.sh builds from a clean worktree of HEAD by design, so uncommitted work
+  # is excluded rather than smuggled in. Say so, because "I fixed it and deployed" with the fix
+  # still uncommitted is a genuinely confusing half hour.
+  echo "   note: uncommitted changes exist and will NOT be in the image (built from HEAD):"
+  echo "$DIRTY" | sed 's/^/     /' | head -10
+fi
+
+step "2. build and push the three images"
+bash tools/deploy/retired/push-images.sh
+
+step "3. ship compose, migrate, restart"
+bash tools/deploy/deploy-swing.sh
+
+step "4. verify"
+bash tools/deploy/verify-swing.sh || die "verify-swing failed -- the box is up but not right."
+# OP15: the options book — every money flag false in desk and options-monitor, no auto-execute.
+bash tools/deploy/verify-options.sh || die "verify-options failed -- the box is up but not right."
+# FO12: the F&O book — every FO money flag false in desk and fno-monitor, no auto-execute name.
+bash tools/deploy/verify-fno.sh || die "verify-fno failed -- the box is up but not right."
+OUT="$(bash tools/deploy/verify-pc-deploy.sh "$TAG")"
+echo "   $OUT"
+# THE TWT SLEEVE IS LIVE SINCE 18 Sep 2026, SO THIS NO LONGER ASSERTS ITS FLAG IS FALSE.
+#
+# It used to die unless the box read `twt_execution_true=0`. Maulik funded the sleeve (₹25 lakh)
+# and instructed the flip in session that morning — `docs/twt/DECISIONS-TW.md` TW16. Leaving the
+# assertion would have killed every deploy from then on, and the honest fix is to check what this
+# script is actually for (the three images are pinned and the fifteen services are up — twt-auto joined 22 Sep 2026, options-monitor 23 Sep 2026, fno-monitor 25 Sep 2026, session-supervisor 28 Sep 2026; laya removed 28 Sep 2026) and to
+# PRINT the sleeve's state rather than demand one value of it. A flag that changed without a
+# decision is still visible — it is on the line below, every deploy.
+case "$OUT" in
+  *"pins=3"*"running=15"*) ;;
+  *) die "post-deploy check failed: $OUT" ;;
+esac
+case "$OUT" in
+  *"twt_execution_true=0"*) TWT_STATE="TWT execution OFF" ;;
+  *) TWT_STATE="TWT execution ON — confirmed lines reach the broker (TW16)" ;;
+esac
+case "$OUT" in
+  *"twt_auto_true=1"*) TWT_STATE="$TWT_STATE; TWT AUTO-EXECUTE ON — twt-auto confirms the 09:15 MORNING plan (TW18)" ;;
+  *) TWT_STATE="$TWT_STATE; TWT auto-execute off" ;;
+esac
+
+printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, fifteen services up (desk-daily joined 13 Sep 2026, twt-auto 22 Sep 2026, options-monitor 23 Sep 2026, fno-monitor 25 Sep 2026, session-supervisor 28 Sep 2026; laya removed 28 Sep 2026 — Maulik), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
+echo "  rollback: the tag lines in /opt/baskfy/.env.staging.compose back to the previous sha, then 'up -d'."

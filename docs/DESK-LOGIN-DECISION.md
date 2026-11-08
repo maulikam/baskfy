@@ -354,7 +354,7 @@ way, and the safety rail settles it outright.
 4. **Tomorrow morning, after the desk's login**, confirm the bridge still feeds Baskfy:
 
    ```
-   AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose \
+   AWS_PROFILE=baskfy-poc bash tools/deploy/retired/box.sh 'cd /opt/baskfy && sudo docker compose \
      --env-file .env.staging.compose -f compose.prod.yml exec -T worker \
      python -m baskfy_worker.kite_session_cli pull'
    ```

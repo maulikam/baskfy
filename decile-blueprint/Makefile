@@ -172,7 +172,7 @@ twt:           ## TW4: detect three-weeks-tight state and signals for one date: 
 	$(UV) python -m baskfy_worker.twt_cli $(if $(DATE),--date $(DATE),) $(if $(SESSIONS),--sessions $(SESSIONS),) $(if $(FORCE),--force,)
 
 twt-backtest:  ## TW9: re-run the study over the plant's bars: make twt-backtest [START=2017-10-16] [DATE=2026-09-09] [SLEEVE=1000000] [JSON=out/twt.json]
-	$(UV) python ../tools/twt/backtest.py $(if $(START),--start $(START),) $(if $(DATE),--end $(DATE),) $(if $(SLEEVE),--sleeve $(SLEEVE),) $(if $(JSON),--json $(JSON),)
+	$(UV) python ../tools/runs/twt/backtest.py $(if $(START),--start $(START),) $(if $(DATE),--end $(DATE),) $(if $(SLEEVE),--sleeve $(SLEEVE),) $(if $(JSON),--json $(JSON),)
 
 twt-plan:      ## TW6: build the sleeve's plan for one session (places nothing): make twt-plan DATE=2026-09-10 [SOURCE=EVENING|MORNING]
 	$(UV) python -m baskfy_worker.twt_cli --plan $(or $(SOURCE),EVENING) $(if $(DATE),--date $(DATE),)

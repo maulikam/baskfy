@@ -44,14 +44,14 @@ Decided BEFORE fan-out. Everything a leaf could get wrong about its neighbors:
 ## Tree
 
 - 1 Ranking engine
-  - 1.1 Phase 1 — expose + semantics .......... `gates/ranking-1.1.md`
+  - 1.1 Phase 1 — expose + semantics .......... `docs/gates/ranking-1.1.md`
     - 1.1.1 Registry: path/trend/participation keys + preference metadata
     - 1.1.2 ScreenDefinition modes/scopes + screener ordering
     - 1.1.3 Desk score adapter (same `score()`) + explainability DTO
-  - 1.2 Explainability UI + rank history ...... `gates/ranking-1.2.md`
-  - 1.3 Research candidates (ATR, slope, …) .. `gates/ranking-1.3.md`
-  - 1.4 Portfolio-aware selection ............. `gates/ranking-1.4.md`
-  - 1.5 Presets + validation harness .......... `gates/ranking-1.5.md`
+  - 1.2 Explainability UI + rank history ...... `docs/gates/ranking-1.2.md`
+  - 1.3 Research candidates (ATR, slope, …) .. `docs/gates/ranking-1.3.md`
+  - 1.4 Portfolio-aware selection ............. `docs/gates/ranking-1.4.md`
+  - 1.5 Presets + validation harness .......... `docs/gates/ranking-1.5.md`
 
 ## Status log
 
@@ -270,16 +270,16 @@ defaults for entry/retention (from the grid's best OOS-stable cell).
 
 ## Phase-2 tree and waves
 
-- 2 Ranking engine, complete ................................ `gates/ranking-2.md`
-  - 2.A Stored factors (core factors, registry, model, 0046) . `gates/ranking-2.A-factors.md` — wave 1
-  - 2.B Desk SCORE service + table (0047) ..................... `gates/ranking-2.B-desk-score.md` — wave 1
-  - 2.E Portfolio selection core ............................. `gates/ranking-2.E-selection.md` — wave 1
-  - 2.C Worker: nightly wiring, rank persistence, backfill .... `gates/ranking-2.C-worker.md` — wave 2
-  - 2.D Ranking engine + definition + screener SQL + presets . `gates/ranking-2.D-engine.md` — wave 2
-  - 2.F Validation harness + evidence ....................... `gates/ranking-2.F-validation.md` — wave 3
-  - 2.G API ................................................. `gates/ranking-2.G-api.md` — wave 3
-  - 2.H Web ................................................. `gates/ranking-2.H-web.md` — wave 4
-  - 2.I Integration, docs, deploy, box backfill ............. `gates/ranking-2.md` (root) — wave 5
+- 2 Ranking engine, complete ................................ `docs/gates/ranking-2.md`
+  - 2.A Stored factors (core factors, registry, model, 0046) . `docs/gates/ranking-2.A-factors.md` — wave 1
+  - 2.B Desk SCORE service + table (0047) ..................... `docs/gates/ranking-2.B-desk-score.md` — wave 1
+  - 2.E Portfolio selection core ............................. `docs/gates/ranking-2.E-selection.md` — wave 1
+  - 2.C Worker: nightly wiring, rank persistence, backfill .... `docs/gates/ranking-2.C-worker.md` — wave 2
+  - 2.D Ranking engine + definition + screener SQL + presets . `docs/gates/ranking-2.D-engine.md` — wave 2
+  - 2.F Validation harness + evidence ....................... `docs/gates/ranking-2.F-validation.md` — wave 3
+  - 2.G API ................................................. `docs/gates/ranking-2.G-api.md` — wave 3
+  - 2.H Web ................................................. `docs/gates/ranking-2.H-web.md` — wave 4
+  - 2.I Integration, docs, deploy, box backfill ............. `docs/gates/ranking-2.md` (root) — wave 5
 
 File ownership: A owns `factors.py`, new `factors_ranking.py`, `precision.py`, `models/facts.py`,
 `factor_registry.py`, `ranking_research.py`, migration 0046, factor tests, docs/04. B owns
@@ -293,7 +293,7 @@ statuses. G owns `services/api/**` + `packages/api-client/openapi.json` + `gener
 
 ## Phase 2 — brief coverage
 
-Root gate G4 (`gates/ranking-2.md`), written 2026-09-14 against the working tree on `developer`.
+Root gate G4 (`docs/gates/ranking-2.md`), written 2026-09-14 against the working tree on `developer`.
 Path keys: `core/` = `decile-blueprint/packages/core/src/baskfy_core/`, `core-t/` =
 `decile-blueprint/packages/core/tests/`, `api/` = `decile-blueprint/services/api/src/baskfy_api/`,
 `api-t/` = `decile-blueprint/services/api/tests/`, `web/` = `decile-blueprint/apps/web/src/`,
@@ -323,7 +323,7 @@ a VALIDATION.md section. "Partial" says what is missing.
 | 18 | Same desk service (the book's `score()`, no second formula) | `core/desk_score_service.py` `score_day`, `DESK_SCORE_VERSION`; `core/desk_config.py` `DeskConfig`; `decile-blueprint/services/worker/src/baskfy_worker/orchestrator.py` `run_compute_desk_score_step` | `core-t/test_desk_score_service.py::test_score_day_equals_the_books_path_row_for_row`; `kite-t/test_desk_score_parity.py::test_score_day_is_the_desks_score_row_for_row`; `kite-t/test_desk_config_parity.py`; 2.B G1–G3; 2.C G3 | met |
 | 19 | Families + family weights | `core/factor_registry.py` `WeightFamily`; `core/screen_definition.py` `FamilyWeights`; `core/ranking_engine.py` `family_shares`, `effective_weights`; `web/components/screens/ranking-section.tsx` (`family_weights`) | `core-t/test_ranking_engine.py::test_three_correlated_momentum_terms_split_momentums_share`, `test_explicit_family_weights_are_scale_free`; 2.A G5; 2.D G3; 2.H G1 | met |
 | 20 | Ablation protocol (base vs base + one factor, costs, buffer, IS/OOS, promotion rule) | `core/ranking_validation.py` `simulate_monthly_rebalance`, `summary_row`; `rv/run_validation.py` `main`; `rv/render_validation.py` | 2.F G1–G5; `rv/test_runner_uses_core.py`; VALIDATION.md §1–§5 | **partial**. The window starts 2018-03, not C8's 2013-01. `rs_persist_126` is not testable because the export has no NIFTY 500 levels, and `nse_momentum_score` is not testable because membership starts at 2021-08. Mean max-sector weight is empty because the export has no sector membership (VALIDATION.md §3.2–§3.4) |
-| 21 | Implementation order 1–5 | This file: "Tree" (Phase 1, 1.1–1.5) and "Phase-2 tree and waves" (waves 1–5) | Waves 1–4 committed (9fd9f08, 4033355, ef78783, 403e6fa, f52df2c). `gates/ranking-2.md` G1–G3, G5, G6 open | **partial**. Wave 5 (root) is not done. 2.C G5 has one red that already failed on HEAD: the `test_swing_scan_now` login race, awaiting Maulik. 2.G G5 is pending, and the staging deploy and box backfill (G6) are not done |
+| 21 | Implementation order 1–5 | This file: "Tree" (Phase 1, 1.1–1.5) and "Phase-2 tree and waves" (waves 1–5) | Waves 1–4 committed (9fd9f08, 4033355, ef78783, 403e6fa, f52df2c). `docs/gates/ranking-2.md` G1–G3, G5, G6 open | **partial**. Wave 5 (root) is not done. 2.C G5 has one red that already failed on HEAD: the `test_swing_scan_now` login race, awaiting Maulik. 2.G G5 is pending, and the staging deploy and box backfill (G6) are not done |
 
 Totals: 21 rows, 17 met, 4 partial, 0 not done (rows 3 and 8 moved to met, and row 1 narrowed, on 2026-09-14).
 

@@ -2,7 +2,7 @@
  "what": "The stock-days the tight-close scan is true on, inside the window Chartink's own export covers, under each of the two weekly readings -- plus Chartink's own rows over the same window. TW2's recall measurement scores these against each other without needing the 1.7 GB panel or a running core.",
  "source_panel": "research/volume-breakout/data/panel.pkl",
  "source_chartink": "research/tight-close/chartink_backtest.csv",
- "rebuild": "uv run python ../tools/twt/twt_scan.py --verify",
+ "rebuild": "uv run python ../tools/runs/twt/twt_scan.py --verify",
  "window": {
   "first": "2026-01-21",
   "last": "2026-09-09"

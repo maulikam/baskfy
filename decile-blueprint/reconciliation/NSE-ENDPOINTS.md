@@ -1,6 +1,6 @@
 # NSE endpoints — verified against the live archive
 
-**Verified 22 Aug 2026** by `tools/verify-nse.py`, run through `NSEProvider` itself so the cookie
+**Verified 22 Aug 2026** by `tools/runs/verify-nse/verify-nse.py`, run through `NSEProvider` itself so the cookie
 priming, the token-bucket throttle, the retry policy and the circuit breaker were all exercised —
 not around them. Every fetch was archived by the provider's own archive path before it was parsed,
 which is what `docs/09` requires and what makes the parse reproducible without re-fetching.

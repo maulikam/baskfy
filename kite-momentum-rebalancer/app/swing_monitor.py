@@ -12,7 +12,7 @@ strategy **never** places. Stops at `monitor_close`."
 
 This module is everything around the strategy that touches the world: the flag, the database,
 the broker's candles and the websocket. The strategy itself (`app/strategies/swing_breakout.py`)
-touches none of them, which is what lets `tools/swing/replay.py` drive it with a CSV.
+touches none of them, which is what lets `tools/runs/swing/replay.py` drive it with a CSV.
 
 THE FLAG
 --------

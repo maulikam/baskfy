@@ -119,13 +119,13 @@ matters is a floor. (DECISIONS-TW **TW0.5**.)
 with its evidence in `docs/history/TW-FINAL-REPORT.md`:
 
 1. **TW10 green.** With the flag false, a property test proves no TWT code path reaches
-   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/twt/drill.py`) produces a
+   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/runs/twt/drill.py`) produces a
    simulated fill, a simulated GTT and a simulated ratchet for every confirmed line, and
    **0 orders reach a broker**.
 2. **A green tree.** Both suites pass — `decile-blueprint`'s and the desk's — and the weekly book,
    R1–R4, the swing book and VBT-1 still run. This is the condition Maulik named on 11 Sep, and it
    is checkable rather than felt: `make test` and `make lint` in both trees.
-3. **The backtest on the page.** `tools/twt/backtest.py` has been run over the plant's own
+3. **The backtest on the page.** `tools/runs/twt/backtest.py` has been run over the plant's own
    backfilled bars and its CAGR, drawdown, trade count, win rate, profit factor and the
    gate-on/gate-off comparison are on `/twt/backtest`, beside the research numbers, with `01` §8's
    caveats **verbatim** and the drift flag of `06`'s TW9.

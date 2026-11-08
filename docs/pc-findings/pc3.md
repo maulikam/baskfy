@@ -1,6 +1,6 @@
 # PC3 — the portfolio detail workspace: what was built, what was found, and how to wire it in
 
-**Leaf:** PC3 of the Portfolio Command Center tree. **Gates:** `gates/pc3.md`, 10 of 10.
+**Leaf:** PC3 of the Portfolio Command Center tree. **Gates:** `docs/gates/pc3.md`, 10 of 10.
 **Owns:** `decile-blueprint/apps/web/src/lib/portfolio/detail-tabs.ts` and
 `decile-blueprint/apps/web/src/components/portfolio/detail/` (new directory, tests included).
 **Nothing else was touched.** The existing `components/portfolio/detail-*.tsx` are the parent's
@@ -173,5 +173,5 @@ statistics job, not a number assembled in a component.
 
 ## 5. Gate ledger
 
-All ten met, evidence in `gates/pc3.md`. 167 tests in
+All ten met, evidence in `docs/gates/pc3.md`. 167 tests in
 `src/components/portfolio/detail/__tests__/`, nine files.

@@ -8,7 +8,7 @@ import { POST_META as POSTS } from "@/lib/marketing/post-meta";
  * It is configuration, not a constant: since `2e4437e` `lib/site.ts` reads
  * `NEXT_PUBLIC_SITE_URL` and *refuses to guess* in production, falling back to
  * `http://localhost:3000` only outside it — which is what a bare `vitest run` is. So this file
- * configures the origin the way the production build does (`tools/deploy/push-images.sh` passes
+ * configures the origin the way the production build does (`tools/deploy/retired/push-images.sh` passes
  * it as a build arg) and asserts the literal permalink, rather than reading `SITE_URL` back out
  * of the module under test and agreeing with it about anything. A guid is a reader's permanent
  * key for an item; one that says `localhost` files the post under an address nobody can reach.

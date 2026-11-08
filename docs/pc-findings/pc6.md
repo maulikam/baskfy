@@ -2,7 +2,7 @@
 
 **Leaf of** `docs/PORTFOLIO-COMMAND-CENTER.md` §6. **Owns** `src/lib/portfolio/manage.ts`,
 `src/components/portfolio/manage/*`, `src/lib/portfolio/__tests__/manage.test.ts` and this file.
-**Gates:** `gates/pc6.md`, 9 of 9. **Nothing is mounted into a page** — the prop contract is §4.
+**Gates:** `docs/gates/pc6.md`, 9 of 9. **Nothing is mounted into a page** — the prop contract is §4.
 
 ---
 
@@ -158,7 +158,7 @@ element was focused when `open` became true, so any button works.
 ## 5. Not done, and deliberately
 
 - **Nothing is mounted.** No `page.tsx`, `command-center-screen.tsx` or `fetch.ts` was touched;
-  `gates/pc-integration.md` owns the wiring.
+  `docs/gates/pc-integration.md` owns the wiring.
 - **Screen-driven allocations** are not offered in the drawer — they need the screen catalogue, a
   rank buffer and an allocation preview, which is the full planner at `/portfolios/[id]/sleeves`.
   The drawer adds a manual slice and links to the planner.

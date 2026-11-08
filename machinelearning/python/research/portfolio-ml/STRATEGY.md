@@ -16,19 +16,19 @@ scan — does **not** work for 2–4-week swing trades on NSE: across four barri
 (out-of-sample AUC 0.53–0.60, top-20-a-day hit rate 4–7 points above the base rate) and reliably
 **unable to pay for itself** — the top-20's mean trade return beats the universe by ~0.1–0.4 % and a
 0.5 % round trip eats it in all but the widest geometry's best years (§2). The same machinery pointed at a different
-question — *which of today's ~1,200 liquid names will touch 2× within 250 sessions?* — carries a
-real, persistent edge: AUC 0.60–0.69 **in every test year 2020–2025**, and through signal-year 2024 the
-model's top 20 double at **1.6–2.5× the universe's rate** (34 % of picks touch 2×, 22 % still hold it at
-12 months, against 17 % / 10 % for an equal-weight universe); signal-year 2025 is 1.0×. A monthly-tranche
-book of the top 20 investable names (≥ ₹50, ≥ ₹5 cr/day) returns **35.7 % CAGR, −22 % max drawdown,
-Sharpe 2.0** from Jan 2020 to 6 Nov 2026 (32.7 % / −22 % / 1.8 measured from Jan 2021, once the book is
-fully loaded), against 23.9 % / −23 % for the universe equal-weight, 33.1 % / −31 % for a naive 12-1
-momentum top-20, and 20.3 % / −44 % for NIFTY Smallcap 250 (§4). The honest caveats: the whole test
-window is a small-cap bull market with one bear year; the model's favourite features are *high
-volatility, low price, young listing, illiquidity* — lottery traits punished in signal-years 2024
-(unfiltered top-20: −11 % over 12 months, universe 0 %) and 2025 (−9 % vs +3 %); the export carries no
-fundamentals, promoter holding, delivery % or market cap; and the ranking is a candidate generator, not
-a portfolio. §6 lists what has to be true before this becomes a sleeve.
+question — *which of today's ~1,200 liquid names will touch 2× within 250 sessions?* — ranks doublers
+better than chance in all twelve walk-forward years, 2014–2025: AUC 0.58–0.80, and the top 20 double at
+1.6–6.9× the base rate in ten of them (0.9× in 2019, 1.0× in 2025). **It is not a return edge in a bad tape.**
+The top-20's 12-month mean beat the universe in 8 of 12 signal years; in the four where the universe was
+flat or down (2018, 2019, 2024, 2025) it lagged by 10–12 points, and its worst point was deeper than the
+universe's in all twelve. The monthly-tranche book of the top 20 investable names (≥ ₹50, ≥ ₹5 cr/day)
+returns **24.6 % CAGR, −36.8 %, Sharpe 1.6** from 2014 with skip-held (top-10 28.1 % / −34.7 % / 1.7),
+against 15.9 % / −44.6 % for investable equal-weight and 16.3 % / −60.8 % for Smallcap 250. The Jan 2020 →
+Nov 2026 window alone gives 35.7 % / −22 % / 2.0 without skip-held: use the longer number. **Every figure here
+is on survivors only** (§6): the plant holds no name that has since delisted, which flatters the cheap,
+volatile names this model favours, and flatters the older years most. So this is the upper end of what the
+ranking could have done, not a clean test. The export also carries no fundamentals, promoter holding,
+delivery % or market cap, and the ranking is a candidate generator, not a portfolio.
 
 **Numbers refreshed 9 Nov 2026** on the export through 6 Nov 2026 (bars and index history from 2011; the
 10 Sep export started in 2017, so training has ~100k more rows per fold). Against 10 Sep: investable
@@ -97,6 +97,25 @@ the test year); test on every universe row of year Y whose 12-month path is comp
 | 2023 | 205,200 | 30.7 % | **51.9 %** | 47.4 % | 57.7 % | +85 % | +57 % | 33 % / 19 % | 0.653 |
 | 2024 | 244,129 | 8.0 % | **16.4 %** | 13.6 % | 19.7 % | **−11 %** | −1 % | 5 % / 2 % | 0.658 |
 | 2025 (→ Nov) | 288,789 | 5.5 % | **5.4 %** | 6.8 % | 8.5 % | **−8 %** | +3 % | 2 % / 3 % | 0.601 |
+
+**Twelve years, survivors only** (`explore_multibagger.py --first-test-year=2014`, `out/from2014/`; 300 rounds, 256-session purge, stride 5 as above; 2014's fold trains on 7,665 rows):
+
+| Signal year | base | AUC | top-20 hit | top-decile hit | top-20 / universe 12m mean | top-20 / universe 12m median | worst point: top-20 / universe |
+|---|---|---|---|---|---|---|---|
+| 2014 | 19.1 % | 0.577 | 30.6 % | 28.1 % | +51 / +30 % | +33 / +17 % | −20 / −18 % |
+| 2015 | 4.6 % | 0.712 | 11.6 % | 11.3 % | +8 / +5 % | −5 / −1 % | −32 / −27 % |
+| 2016 | 13.5 % | 0.692 | 34.8 % | 30.5 % | +57 / +34 % | +46 / +25 % | −23 / −17 % |
+| 2017 | 10.3 % | 0.737 | 26.5 % | 25.2 % | +20 / +7 % | −2 / −2 % | −28 / −23 % |
+| 2018 | 1.1 % | 0.795 | 7.6 % | 4.8 % | **−28 / −16 %** | −38 / −20 % | −48 / −35 % |
+| 2019 | 4.7 % | 0.586 | 4.2 % | 4.4 % | **−16 / −4 %** | −33 / −11 % | −58 / −42 % |
+| 2020 | 39.2 % | 0.690 | 61.3 % | 60.1 % | +111 / +78 % | +78 / +55 % | −22 / −17 % |
+| 2021 | 17.3 % | 0.692 | 42.6 % | 34.4 % | +50 / +19 % | +27 / +5 % | −23 / −22 % |
+| 2022 | 12.0 % | 0.682 | 23.9 % | 21.5 % | +34 / +24 % | +10 / +14 % | −29 / −22 % |
+| 2023 | 30.7 % | 0.653 | 51.9 % | 47.4 % | +85 / +57 % | +56 / +39 % | −19 / −12 % |
+| 2024 | 8.0 % | 0.658 | 16.4 % | 13.6 % | **−11 / −1 %** | −26 / −8 % | −40 / −29 % |
+| 2025 (→ Nov) | 5.5 % | 0.601 | 5.4 % | 6.8 % | **−8 / +3 %** | −17 / −7 % | −34 / −27 % |
+
+The four bold years are the universe's flat or falling years, and the top-20 lags by 10–12 points in each. That is the signature of high-beta names, not of a stock-picking edge that holds up when small caps fall.
 
 **Signal-year 2025 is the newest walk-forward year and the price-only model showed no edge there**
 (investable top-20 hit 4.5 % vs 5.4 % base, −2.2 % vs +3.9 %). It is out of sample for training, but the
@@ -172,6 +191,26 @@ quartile / decile (33.1 % / 34.9 %, drawdown slightly *worse*). All 13 variants 
 with −20 to −29 % drawdowns. The ranking's information content sets the outcome; how the list is sliced
 does not. That is the argument for §6.1–6.3 over any further tuning.
 
+**The book from 2014 (PM0.4, survivors only; investable; `run_longrun.py`, `out/from2014/`).** Skip-held top-10 28.1 % / −34.7 % / 1.70; top-20 24.6 % / −36.8 % / 1.61; rebuy top-20 25.5 % / −43.3 % / 1.38; investable equal-weight 15.9 % / −44.6 % / 0.97; Smallcap 250 16.3 % / −60.8 %.
+
+| Calendar year | top-10 skip (ret / DD / Sharpe) | top-20 skip | investable EW | Smallcap 250 |
+|---|---|---|---|---|
+| 2014 | +32 / −7 / 2.5 | +30 / −6 / 2.5 | +25 / −7 / 2.2 | +67 / −9 / 2.7 |
+| 2015 | +23 / −13 / 1.2 | +13 / −11 / 0.8 | +5 / −12 / 0.3 | +9 / −15 / 0.4 |
+| 2016 | +2 / −13 / 0.1 | +6 / −12 / 0.4 | +3 / −15 / 0.2 | −1 / −23 / 0.0 |
+| 2017 | +83 / −6 / 4.8 | +67 / −5 / 4.6 | +51 / −6 / 3.5 | +55 / −8 / 3.1 |
+| 2018 | −4 / −15 / −0.3 | −11 / −19 / −1.0 | −15 / −24 / −1.1 | −27 / −36 / −1.7 |
+| 2019 | −4 / −17 / −0.4 | 0 / −13 / 0.0 | −1 / −15 / −0.1 | −9 / −22 / −0.6 |
+| 2020 | +48 / −30 / 1.8 | +40 / −30 / 1.7 | +26 / −36 / 0.9 | +24 / −44 / 0.7 |
+| 2021 | +104 / −7 / 4.5 | +82 / −8 / 4.0 | +52 / −9 / 2.7 | +60 / −9 / 2.7 |
+| 2022 | +10 / −14 / 0.6 | +17 / −14 / 1.1 | +3 / −18 / 0.2 | −5 / −27 / −0.2 |
+| 2023 | +67 / −6 / 4.6 | +68 / −6 / 4.5 | +49 / −8 / 3.6 | +47 / −11 / 3.1 |
+| 2024 | +48 / −13 / 2.3 | +45 / −12 / 2.3 | +28 / −10 / 1.4 | +26 / −13 / 1.1 |
+| 2025 | −9 / −17 / −0.6 | −5 / −15 / −0.4 | −4 / −19 / −0.3 | −7 / −24 / −0.4 |
+| 2026 (→ 6 Nov) | +6 / −11 / 0.7 | −2 / −12 / −0.3 | 0 / −11 / 0.0 | +6 / −16 / 0.3 |
+
+The sideways years (2015–16) favour the book. In the bear (2018–19) it loses less than Smallcap 250 and about as much as investable equal-weight. Its maximum drawdown from 2014 is −35 to −37 %, against −22 % in the 2020 → 2026 window: that shorter figure is not the one to plan on.
+
 **Skip-held (PM0.2b, 6 Nov scores, investable, Jan 2020 → Nov 2026; `explore_cadence.py`).** A name held by any of the last 12 tranches is not eligible. Rebuy → skip: top-10 35.9 % / −19.5 % / 1.86 → 35.6 % / −19.7 % / 2.16, 346 → 574 names; top-20 35.7 % / −22.0 % / 1.98 → 33.8 % / −18.1 % / 2.14, 564 → 927 names. Top-10 2022 +12 → +11 %, 2025 −5 → −8 %; top-20 2022 +10 → +17 %, 2025 −9 → −5 %. Sharpe rises in both, but CAGR falls and the top-10's drawdown and bad years do not improve, so the 10 Sep result (33.6 → 36.9 %, −21.6 → −17.0 %) **did not replicate as a gain in return or in losses**. `skip_held` stays off by default.
 
 **Entry cadence (PM0.3b, all with skip-held).** Monthly top-10 35.6 % / −19.7 % / 2.16; monthly top-20 33.8 % / −18.1 % / 2.14; fortnightly top-5 33.9 % / −17.5 % / 2.11; weekly top-2 32.3 % / −17.3 % / 2.04; every-2-sessions top-1 32.3 % / −21.5 % / 2.07; daily top-1 34.1 % / −18.1 % / 2.19. Median pick +15 to +21 %, 490–949 names. One band, cadence does not matter, and no cell is picked from it.
@@ -179,8 +218,7 @@ does not. That is the argument for §6.1–6.3 over any further tuning.
 **What is flattering about this test and should be said plainly:** the window is Jan 2020 → Nov 2026
 — the COVID crash is only 3/12 invested, and the universe equal-weight itself compounded at 23.9 %.
 There is **one** real bear year for small caps (2022) and one correction (2024-25) in the out-of-sample
-set. 2018–19 are in training only (the label needs a year to resolve and the features a year to warm
-up), so the model has never been *tested* on a 2018-type year where 1 % of names doubled.
+set. 2014–19 are now tested (above), on survivors only.
 
 ## 5. Features (95), all at the close of t from data ≤ t — `portfolioml/features.py`
 
@@ -201,6 +239,8 @@ Everything is `float32`; `name_features` runs in six instrument chunks and the w
 
 ## 6. Open items, in the order they matter
 
+**First: the data is survivors only.** All 4,893 instruments with bars still trade in 2026; `delisted_on` is never set, and no name in the universe in any year 2012–2026 later disappears. Hit rates and returns are flattered, most for old years and for the cheap, volatile names the model favours; nothing here can be read as a clean test until delisted names and their last prints are in the panel (NSE's bhavcopy archive has them; a new data module). The same applies to PM4's gate.
+
 1. **Fundamentals are the missing half.** The export has none; `fundamental_daily` in the plant has
    M-cap and P/E from Aug 2025 only (status page, Tree 3). Maulik's own multibagger criteria —
    revenue/EPS compounding, D/E, ROE/ROCE, promoter holding — are the features most likely to fix
@@ -215,8 +255,7 @@ Everything is `float32`; `name_features` runs in six instrument chunks and the w
    bhavcopy archive on the box has delivery data (VBT KICKOFF).
 4. **Delisted/suspended lines** are carried at last close in the book; count them and decide
    (likely: mark at zero after 60 sessions without a bar).
-5. **A 2018-type year is untested.** Re-run when the plant has 2011→ bars (D5 backfill) so 2013
-   and 2018 become test folds.
+5. **2018-type years, tested on survivors only.** Signal-year 2018 (1.1 % base): AUC 0.795, top-20 hit 7.6 %, yet −28 % vs −16 % over 12 months. 2019: AUC 0.586, hit below base, −16 % vs −4 %. The ranking finds doublers in a bear market and its picks still fall further than the universe. Re-run once delisted names are in.
 6. **Hold longer without a longer label — "re-rank, don't sell".** When a tranche turns 12 months
    old, keep every name still in the top quartile of that day's ranking and replace only the rest.
    Winners compound for years, losers leave; turnover falls below 1/12 a month. Needs the daily

@@ -1,12 +1,13 @@
 """Walk-forward lambdarank on the multibagger label. Per test year: does the top of the list
 double more often than the universe, and what does holding it 12/24 months return?
 
-usage: python explore_multibagger.py data/dataset_mb_u100_h250.parquet [years...]"""
+usage: python explore_multibagger.py data/dataset_mb_u100_h250.parquet [years...] [--first-test-year=2014]"""
 
 from __future__ import annotations
 
 import sys
 import time
+from pathlib import Path
 
 import lightgbm as lgb
 import numpy as np
@@ -59,7 +60,7 @@ def target(df: pl.DataFrame, kind: str) -> np.ndarray:
     return np.select([r >= 1.0, r >= 0.5, r >= 0.0], [3, 2, 1], 0).astype(np.int8)
 
 
-def main(path: str, years: list[int], kind: str = "touch") -> None:
+def main(path: str, years: list[int], kind: str = "touch", first_test_year: int = 2020) -> None:
     tag = path.split("dataset_")[1].replace(".parquet", "") + f"_{kind}"
     horizon = int(tag.split("_h")[1].split("_")[0])
     lf = pl.scan_parquet(path)
@@ -68,7 +69,9 @@ def main(path: str, years: list[int], kind: str = "touch") -> None:
     cols += [c for c in BASELINES.values() if c not in cols]
     univ = lf.filter(pl.col("universe")).select(cols).collect()
     lab = univ.filter(pl.col("label").is_not_null())
-    years = years or sorted({d.year for d in sessions if d.year >= 2020})
+    years = years or sorted({d.year for d in sessions if d.year >= first_test_year})
+    out_dir = "out" if first_test_year >= 2020 else f"out/from{first_test_year}"
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
     rows, imps = [], []
     for y in years:
         t = time.time()
@@ -92,10 +95,10 @@ def main(path: str, years: list[int], kind: str = "touch") -> None:
         for name, col in BASELINES.items():
             desc = name not in ("bl_small_turnover", "bl_far_from_ath")
             rows.append({"geometry": tag, "year": y, "train_rows": 0, "test_rows": test.shape[0], "ranker": name, **summarize(test, col, desc)})
-        test.select("instrument_id", "date", "score").write_parquet(f"out/mb_scores_{tag}_{y}.parquet")
+        test.select("instrument_id", "date", "score").write_parquet(f"{out_dir}/mb_scores_{tag}_{y}.parquet")
     out = pl.DataFrame(rows)
-    out.write_csv(f"out/multibagger_{tag}.csv")
-    pl.concat(imps).write_csv(f"out/multibagger_{tag}_importance.csv")
+    out.write_csv(f"{out_dir}/multibagger_{tag}.csv")
+    pl.concat(imps).write_csv(f"{out_dir}/multibagger_{tag}_importance.csv")
     print(out.group_by("ranker").agg(pl.col("auc").mean(), pl.col("base").mean(), pl.col("top20_hit").mean(), pl.col("topdec_hit").mean(),
                                      pl.col("top20_fwd_mean").mean(), pl.col("univ_fwd_mean").mean(), pl.col("top20_fwd_median").mean(),
                                      pl.col("univ_fwd_median").mean()).sort("ranker"))
@@ -103,4 +106,5 @@ def main(path: str, years: list[int], kind: str = "touch") -> None:
 
 if __name__ == "__main__":
     kind = next((a.split("=")[1] for a in sys.argv if a.startswith("--target=")), "touch")
-    main(sys.argv[1], [int(a) for a in sys.argv[2:] if a.isdigit()], kind)
+    first = next((int(a.split("=")[1]) for a in sys.argv if a.startswith("--first-test-year=")), 2020)
+    main(sys.argv[1], [int(a) for a in sys.argv[2:] if a.isdigit()], kind, first)

@@ -19,3 +19,7 @@ hit 4.5 % vs 5.4 %) and fails it; PM4 AC1 now requires both years (Maulik, 9 Nov
 **Live expectation is set from 2025 until PM4 passes, not from the 2020–25 average.** Signal-year 2025 is the
 newest walk-forward year and the price-only model showed no edge there: top-20 hit 4.5 % vs 5.4 % base, −2.2 % vs
 +3.9 %. The folds are out of sample for training, but the design was chosen with 2025 visible (10 Sep export).
+
+**Did the edge exist before 2020?** On survivors-only data the ranking did (AUC 0.58–0.80, 2014–19), the return edge only in rising years: top-20 lagged the universe by 12 points in signal-years 2018 and 2019, as it did by 10–11 in 2024 and 2025.
+
+⚠️ **The whole panel is survivors only** (4,893 instruments, none delisted): every number here and PM4's gate are upper bounds until delisted names are added.

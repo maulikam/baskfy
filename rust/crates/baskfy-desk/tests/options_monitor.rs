@@ -1036,7 +1036,7 @@ fn compose_runs_it_from_the_desk_block_with_money_flags_false() {
     let own = block(&text, "  options-monitor:", 2);
     assert!(
         own.iter()
-            .any(|l| l.trim() == "command: [options-monitor-loop]")
+            .any(|l| l.trim() == "command: [baskfy-desk, service, options-monitor-loop]")
     );
     let env = service_env(&text, "options-monitor");
     let get = |k: &str| env.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());

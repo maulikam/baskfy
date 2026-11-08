@@ -471,7 +471,7 @@ impl OrderGateway {
         }
         self.limits.order_slot().await; // layer 4: rate limits
         let tag = intent::kite_tag(&cid);
-        if let Some(store) = &self.intents {
+        if let Some(store) = self.intents.as_ref().filter(|_| !gates.dry_run) {
             // Layer 5: committed before the broker can hear of it, or not sent at all.
             let reserved = store
                 .reserve(&NewIntent {
@@ -528,8 +528,6 @@ impl OrderGateway {
         if gates.dry_run {
             let oid = format!("DRY-{cid}");
             self.sent.lock().await.insert(cid.clone(), oid.clone());
-            self.settle_intent(&cid, intent::DRY_RUN, Some(&oid), None)
-                .await?;
             let mut rec = dict([
                 ("event", s("dry_run")),
                 ("symbol", s(symbol)),

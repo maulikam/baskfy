@@ -860,7 +860,10 @@ async fn an_order_with_no_client_id_still_journals_the_key_it_used() {
 
 mod shim {
     use super::*;
-    use baskfy_desk::lanes::exec_core::desk::{DeskGateway, DeskParts, SharedRisk, ShimGateway};
+    use baskfy_desk::lanes::exec_core::desk::{
+        DeskGateway, DeskParts, SharedRisk, ShimGateway, SiblingSpec,
+    };
+    use baskfy_desk::lanes::exec_core::intent;
     use baskfy_desk::settings::{Settings, SharedSettings};
     use baskfy_desk::storage::{Db, DbConfig};
 
@@ -884,6 +887,38 @@ mod shim {
         };
         let cell = Arc::new(SharedRisk::of(risk, settings, clock(), db));
         DeskGateway::build_with_risk(parts, cell).unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_sleeve_gateway_obeys_the_pause() {
+        let bed = Bed::new();
+        let gw = desk(&bed, settings(), risk().await).await;
+        let sibling = gw
+            .sibling(SiblingSpec {
+                gates: Arc::new(|| gates(false, false, false)),
+                journal_path: bed.dir.path().join("sleeve.jsonl"),
+                stop_band: None,
+                coverage: None,
+            })
+            .unwrap();
+        let db = Db::open(DbConfig {
+            backend: "sqlite".to_owned(),
+            schema: String::new(),
+            database_url: String::new(),
+            db_path: bed.dir.path().join("desk.db"),
+        })
+        .await
+        .unwrap();
+        intent::set_paused(&db, clock().time(), true, "deploy")
+            .await
+            .unwrap();
+        let out = Gateway::place(&sibling, buy("RELIANCE")).await.unwrap();
+        assert_eq!(out.get("status"), Some(&PyValue::Str("BLOCKED".to_owned())));
+        intent::set_paused(&db, clock().time(), false, "")
+            .await
+            .unwrap();
+        let out = Gateway::place(&sibling, buy("RELIANCE")).await.unwrap();
+        assert_ne!(out.get("status"), Some(&PyValue::Str("BLOCKED".to_owned())));
     }
 
     async fn risk() -> Arc<RiskManager> {

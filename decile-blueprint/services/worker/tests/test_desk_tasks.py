@@ -143,7 +143,7 @@ def test_the_desk_image_runs_the_collection() -> None:
     assert match is not None, "compose.prod.yml lost the desk-daily service"
     body = match.group(1)
     assert "<<: *desk" in body
-    assert "command: [desk-daily-loop]" in body
+    assert "command: [baskfy-desk, service, desk-daily-loop]" in body
 
 
 def test_the_celery_names_refuse_rather_than_collect() -> None:

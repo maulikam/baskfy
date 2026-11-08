@@ -184,5 +184,5 @@ class TestTheContainerRunsThisModule:
         assert match is not None
         body = match.group(1)
         assert "<<: *desk" in body
-        assert "command: [desk-daily-loop]" in body
+        assert "command: [baskfy-desk, service, desk-daily-loop]" in body
         assert "healthcheck:" in body and "disable: true" in body

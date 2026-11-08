@@ -8700,3 +8700,7 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 ## RELEASE-2026-11-08 ⚠ UNREVIEWED
 - Merged Cursor WIP, order-path and Rust migrations. Removed `KiteConnect::post_form`; the guard test is unchanged. Both margin calculator POSTs now share one private helper, so the adapter has one `Method::POST`.
 - Reverse: redeploy a prior image only with `api-invest` stopped and its Caddy routes absent; `_sqlx_migrations` is additive and Alembic's table is untouched.
+
+## LOCAL-FLAGS-2026-11-08
+- Maulik, in session: "every auto-execute and execution flag false this should be true". Local deployment only, through `money.on` in the local home; six named flags. Code defaults, intraday and options stay false. Reverse: empty `money.on`, then `local.sh up`.
+- Sleeve gateways (`DeskGateway::sibling`) lacked the intent store, so they ignored the pause and had no durable intent. Fixed before the flags went on.

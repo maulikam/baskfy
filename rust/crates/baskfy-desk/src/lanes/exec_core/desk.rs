@@ -385,7 +385,11 @@ impl DeskGateway {
                 ids: self.parts.ids.clone(),
                 limits: None,
             },
-        )?;
+        )?
+        .with_intents(Arc::new(DbIntentStore::new(
+            self.parts.db.clone(),
+            self.parts.clock.clone(),
+        )));
         Ok(ShimGateway::new(
             Arc::new(core),
             self.parts.settings.clone(),

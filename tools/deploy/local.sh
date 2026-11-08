@@ -68,6 +68,17 @@ pipeline_guard() {
 # Every name that can let an order out. Matched by shape, so a flag added later is caught too.
 MONEY='(EXECUTION_ENABLED|AUTO_EXECUTE|AUTO_EXIT|_AUTO|CARRY_ENABLED|INTRADAY_ENABLED|OPTIONS_ENABLED)='
 
+# Execution/auto flags Maulik turned on for this Mac (8 Nov 2026), one name per line in money.on.
+# Only these six may appear; code defaults, intraday and options stay false.
+MONEY_ON_ALLOWED=" BASKFY_SWING_EXECUTION_ENABLED BASKFY_SWING_AUTO_EXECUTE BASKFY_TWT_EXECUTION_ENABLED BASKFY_TWT_AUTO_EXECUTE BASKFY_VBT_EXECUTION_ENABLED BASKFY_FNO_F3_AUTO_EXIT "
+money_on() {
+  local n; [ -s "$HOME_DIR/money.on" ] || return 0
+  for n in $(cat "$HOME_DIR/money.on"); do
+    [[ "$MONEY_ON_ALLOWED" == *" $n "* ]] || die "money.on: $n may not be turned on here"
+    echo "$n"
+  done
+}
+
 stage() {
   mkdir -p "$HOME_DIR/box"
   [ -s "$HOME_DIR/pipeline.tag" ] || echo "$PIPE_TAG" > "$HOME_DIR/pipeline.tag"   # pin on first use
@@ -103,6 +114,7 @@ BASKFY_LLM_URL=http://host.docker.internal:11434/v1
 BASKFY_LLM_MODEL=qwen3:8b
 BASKFY_LLM_TIMEOUT_S=20
 EOF
+      for _n in $(money_on); do echo "$_n=true"; done
       # Image tags only interpolate compose; kept out of the containers' env_file so a new app
       # image does not change the pipeline services' config and recreate them.
       if [ "$f" = .env.staging.compose ]; then printf '%s\n' "BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG" "BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG" \
@@ -132,7 +144,6 @@ services:
   ingest-worker: {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   beat:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   migrate:       {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
-  seed:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
 EOF
   render_rust
 }
@@ -224,9 +235,10 @@ rowcounts() {
 # DRY_RUN=false is the chosen state (DRY-LIVE), so it is reported loudly, not failed.
 verify() {
   local bad=0 c svc d live=""
+  local on; on="$(money_on | paste -sd '|' -)"; on="${on:-__none__}"
   for c in $(docker ps -q --filter "label=com.docker.compose.project=$P"); do
     svc="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")"
-    if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$'; then
+    if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$' | grep -vE "^($on)=true$"; then
       echo "  ^ in $svc"; bad=1; fi
     d="$(docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | tail -1 | cut -d= -f2- || true)"
     [ -n "$d" ] || continue
@@ -237,7 +249,8 @@ verify() {
     fi
   done
   [ "$bad" = 0 ] || { echo "✗ a money flag is not false, or a service is live while dry_run=true" >&2; return 1; }
-  echo "✓ every execution/auto flag false"
+  if [ "$on" = __none__ ]; then echo "✓ every execution/auto flag false"
+  else echo "⚠ execution/auto flags ON (money.on): ${on//|/ }; every other money flag false"; fi
   if [ -n "$live" ]; then
     printf '\033[1;31m⚠ LIVE: DRY_RUN=false in%s — a confirmed /execute places REAL orders on Zerodha\033[0m\n' "$live"
   else echo "✓ DRY_RUN=true on every order-capable service (api: false, LOCAL-1)"; fi

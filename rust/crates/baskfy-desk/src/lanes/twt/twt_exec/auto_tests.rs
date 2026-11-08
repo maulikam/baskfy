@@ -466,7 +466,9 @@ fn service_env(text: &str, service: &str) -> Vec<(String, String)> {
 #[test]
 fn test_compose_runs_it_from_the_desk_block_with_the_flag_named_false() {
     let text = repo_file("deploy/compose.prod.yml");
-    assert!(text.contains("  twt-auto:\n    <<: *desk\n    command: [twt-auto-loop]"));
+    assert!(text.contains(
+        "  twt-auto:\n    <<: *desk\n    command: [baskfy-desk, service, twt-auto-loop]"
+    ));
     let env = service_env(&text, "twt-auto");
     let get = |k: &str| env.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
     assert_eq!(
@@ -480,7 +482,7 @@ fn test_compose_runs_it_from_the_desk_block_with_the_flag_named_false() {
         "{env:?}"
     );
     // The desk's own flag only: the api/worker/beat block does not name it.
-    let common = block(&text, "x-python-image: &python-image", 0);
+    let common = block(&text, "x-baskfy-rs: &rs", 0);
     assert!(
         !common
             .iter()

@@ -577,11 +577,11 @@ class TestTheLoop:
 
     def test_compose_runs_it_from_the_desk_block_with_the_flag_named_false(self) -> None:
         text = COMPOSE.read_text(encoding="utf-8")
-        assert "  twt-auto:\n    <<: *desk\n    command: [twt-auto-loop]" in text
+        assert "  twt-auto:\n    <<: *desk\n    command: [baskfy-desk, service, twt-auto-loop]" in text
         compose = yaml.safe_load(text)
         env = compose["services"]["twt-auto"]["environment"]
         assert env["BASKFY_TWT_AUTO_EXECUTE"] == "${BASKFY_TWT_AUTO_EXECUTE:-false}"
         assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-false}"  # DECISIONS-MERGE DRY-LIVE
         # The desk's own flag only: the api/worker/beat block does not name it.
-        common = compose["x-python-image"].get("environment", {})
+        common = compose["x-baskfy-rs"].get("environment", {})
         assert "BASKFY_TWT_AUTO_EXECUTE" not in common

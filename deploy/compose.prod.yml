@@ -19,8 +19,11 @@
 # file deliberately excludes — appeared in `ps` as part of the deployment.
 name: baskfy-staging
 
-x-python-image: &python-image
-  image: ${BASKFY_PY_IMAGE:-baskfy-py:local}
+x-baskfy-rs: &rs
+  image: ${BASKFY_RS_IMAGE:-baskfy-rs:local}
+  entrypoint: [baskfy-rs-entrypoint]
+  working_dir: /desk
+  labels: {baskfy.runtime: rust}
   restart: unless-stopped
   # Relative to THIS file, always. The first version pointed at ../../../.env.staging, which is
   # correct only when the compose file is read from `infra/docker/` inside a checkout — on the box
@@ -215,7 +218,7 @@ services:
       #
       # It was missing from this block entirely, and the block's own note above is why that was
       # invisible: the web service takes no `env_file:`, so a value present in `.env.staging`
-      # reaches the python services and never reaches Next. `.env.staging.example` already said
+      # reaches the backend services and never reaches Next. `.env.staging.example` already said
       # "Runtime (web container): REVALIDATE_SECRET must be non-empty in production/staging" — the
       # instruction was written and the wiring to honour it was not, so a box pulling an image
       # built after 2e4437e would come up serving 500 on every page while `docker compose ps`
@@ -225,7 +228,7 @@ services:
       # Google sign-in (M46). Both values, because this container runs the OAuth code exchange.
       #
       # THEY HAVE TO BE LISTED HERE. This service is the one that does NOT take `env_file:
-      # [.env.staging]` — the python services get that through the `x-python-image` anchor, and
+      # [.env.staging]` — the backend services get that through the `x-baskfy-rs` anchor, and
       # this block is the whole of the web container's environment. A value added to
       # `.env.staging` and nowhere else reaches the API and never reaches Auth.js, which fails as
       # "Google sign-in is misconfigured" on a box where the setting is visibly present.
@@ -249,19 +252,8 @@ services:
       api: {condition: service_started}
 
   api:
-    <<: *python-image
-    command:
-      - uvicorn
-      - baskfy_api.app:get_app
-      - --factory
-      - --host=0.0.0.0
-      - --port=8000
-      # One worker. Phase A is one user (§2), the workload is IO-bound against Postgres, and a
-      # second worker would double the connection pool for no measurable gain. Phase B scales by
-      # task count, not by process count.
-      - --workers=1
-      - --proxy-headers
-      - --forwarded-allow-ips=*
+    <<: *rs
+    command: [baskfy-api, --host, 0.0.0.0, --port, "8000"]
     expose: ["8000"]
     healthcheck:
       # `/health` is at the app root, NOT under API_PREFIX, and it deliberately does not
@@ -278,48 +270,19 @@ services:
   # cannot starve compute". Phase A runs both roles, still split, so the split is exercised long
   # before it matters.
   worker:
-    <<: *python-image
-    command:
-      - celery
-      - -A
-      - baskfy_worker.celery_app:app
-      - worker
-      - -Q
-      - compute,backtest,default
-      - -l
-      - info
-      - --concurrency=2
+    <<: *rs
+    image: ${BASKFY_RS_PIPELINE_IMAGE:-${BASKFY_RS_IMAGE:-baskfy-rs:local}}
+    command: [baskfy-worker, serve, --queues, "compute,backtest,default"]
 
   ingest-worker:
-    <<: *python-image
-    command:
-      - celery
-      - -A
-      - baskfy_worker.celery_app:app
-      - worker
-      - -Q
-      - ingest
-      - -l
-      - info
-      # One. Kite's floor is ~3 req/s and the providers rate-limit themselves; extra concurrency
-      # here only queues up behind the same limiter while holding more connections.
-      - --concurrency=1
+    <<: *rs
+    image: ${BASKFY_RS_PIPELINE_IMAGE:-${BASKFY_RS_IMAGE:-baskfy-rs:local}}
+    command: [baskfy-worker, serve, --queues, ingest]
 
   beat:
-    <<: *python-image
-    command:
-      - celery
-      - -A
-      - baskfy_worker.celery_app:app
-      - beat
-      - -l
-      - info
-      # Explicit, and on a volume. Beat defaults to `./celerybeat-schedule` in the working
-      # directory, which is root-owned in this image — it crash-looped on EACCES until this was
-      # added. Persisting it also matters on its own: a Beat that loses this file treats every
-      # schedule as never-run and re-fires the whole nightly chain on the next restart.
-      - --schedule=/var/lib/baskfy/celerybeat-schedule
-      - --pidfile=
+    <<: *rs
+    image: ${BASKFY_RS_PIPELINE_IMAGE:-${BASKFY_RS_IMAGE:-baskfy-rs:local}}
+    command: [baskfy-worker, beat, --serve]
     volumes:
       - baskfy-beat:/var/lib/baskfy
     # Celery's own docs: exactly one Beat, ever. Two would double every scheduled job — including
@@ -331,10 +294,14 @@ services:
   # The merged operator console — weekly momentum book and swing book — on the same Postgres
   # (schema `desk`, DESK_DB_BACKEND=postgres) and the same Kite token store as api/worker/beat.
   # Reached only through Caddy at desk.<host>, behind the desk's own basic auth (DESK_PASSWORD;
-  # app/core/websec.py). `x-python-image` is not reused: the env file and the token volume are
+  # app/core/websec.py). `x-baskfy-rs` is not reused: the env file and the token volume are
   # shared, the image and the command are not.
   desk: &desk
-    image: ${BASKFY_DESK_IMAGE:-baskfy-desk:local}
+    image: ${BASKFY_RS_IMAGE:-baskfy-rs:local}
+    entrypoint: [baskfy-rs-entrypoint]
+    working_dir: /desk
+    labels: {baskfy.runtime: rust}
+    command: [baskfy-desk, --host, 0.0.0.0, --port, "8420"]
     restart: unless-stopped
     env_file: [.env.staging]
     volumes:
@@ -354,7 +321,7 @@ services:
       # with two `Kite` objects, and Kite's read caps are per API key — so without this each held
       # its own spacers and the two could together exceed the 1 req/s quote cap. With it, both
       # queue behind one departure clock per endpoint family under `baskfy:ratelimit:kite:*`, in
-      # the same Redis the api and the worker already use (the `*python-image` anchor above).
+      # the same Redis the api and the worker already use (the `*rs` anchor above).
       #
       # DELIBERATELY NOT A `depends_on`. The desk degrades to per-process spacers when Redis does
       # not answer, logs it, and retries once a minute — whereas a `service_healthy` condition
@@ -419,7 +386,7 @@ services:
       # TW16 / TW17 follow-up (Maulik, in session, 21 Sep 2026: "fix the execution flag in compose
       # too"). The desk is the only process that reads BASKFY_TWT_EXECUTION_ENABLED — it is what
       # `/twt/execute` and `twt-auto` consult before reaching a broker — and until today it was
-      # named only in the `x-python-image` block above (api, worker, beat), never here. So the
+      # named only in the `x-baskfy-rs` block above (api, worker, beat), never here. So the
       # value Maulik set in `.env.staging.compose` on 18 Sep never reached this container, and
       # every confirmed TWT line journalled `simulated=true`. Same interpolation as the anchor's
       # line, so both read the one value `--env-file .env.staging.compose` supplies; default false.
@@ -480,19 +447,19 @@ services:
       postgres: {condition: service_healthy}
 
   # The opening-range monitor as its own process (docs/swing/06 SW6): the image's
-  # `swing-monitor-loop` sleeps until 09:14 IST on a weekday, runs `python -m app.swing_monitor`,
+  # `swing-monitor-loop` sleeps until 09:14 IST on a weekday, runs `baskfy-desk service swing-monitor`,
   # and sleeps to the next weekday. With BASKFY_SWING_MONITOR_ENABLED=false (the default above)
   # the monitor exits 0 without constructing the strategy and the loop idles — so this service
   # can exist before the flag does. Same image, same env, same read-only token, no port.
   swing-monitor:
     <<: *desk
-    command: [swing-monitor-loop]
+    command: [baskfy-desk, service, swing-monitor-loop]
     expose: []
     healthcheck:
       disable: true
 
   # TW17 (Maulik, in session, 21 Sep 2026) — the TWT morning auto-execute. `twt-auto-loop`
-  # (scripts/twt_auto_loop.py) runs `python -m app.twt_auto` at 09:15:10 IST on a weekday, or at
+  # runs `baskfy-desk service twt-auto` at 09:15:10 IST on a weekday, or at
   # once if the container starts inside 09:15-09:35, then sleeps to the next weekday. Unless
   # DRY_RUN is false AND BASKFY_TWT_EXECUTION_ENABLED AND BASKFY_TWT_AUTO_EXECUTE are true (not
   # the defaults above), the module exits 0 without reading a plan, so this service can exist
@@ -500,13 +467,13 @@ services:
   # or missing one is refused. Same image, same env, same read-only token, no port.
   twt-auto:
     <<: *desk
-    command: [twt-auto-loop]
+    command: [baskfy-desk, service, twt-auto-loop]
     expose: []
     healthcheck:
       disable: true
 
   # LV4 (docs/live/PLAN.md, 28 Sep 2026) — the session supervisor. `session-supervisor-loop`
-  # (scripts/session_supervisor_loop.py) ticks every ten seconds 08:30-15:50 IST on a weekday:
+  # ticks every ten seconds 08:30-15:50 IST on a weekday:
   # a Kite token arriving is the event — the risk ledger is seeded from holdings and the
   # reconciler runs once; in session the reconciler runs every tick (the broker's order book,
   # GTT list and holdings against every sleeve's book; fills booked, stops re-sized, issues
@@ -519,26 +486,26 @@ services:
   # Same image, same env, same read-only token.
   session-supervisor:
     <<: *desk
-    command: [session-supervisor-loop]
+    command: [baskfy-desk, service, session-supervisor]
     expose: []
     healthcheck:
       disable: true
 
   # OP15 (docs/options/06) — the options book's session monitor. `options-monitor-loop`
-  # (scripts/options_monitor_loop.py) starts `python -m app.options_monitor` at 09:14 IST on a
+  # starts `baskfy-desk service options-monitor` at 09:14 IST on a
   # weekday, at once if the container starts mid-session (it resumes from op_position), and again
   # if it crashes inside the session. With BASKFY_OPTIONS_MONITOR_ENABLED=false (the default above)
   # the module exits 0 without building anything and the loop idles. It holds no gateway: it
   # raises exit plans, and its sweep closes them through the desk's gateway under every flag.
   options-monitor:
     <<: *desk
-    command: [options-monitor-loop]
+    command: [baskfy-desk, service, options-monitor-loop]
     expose: []
     healthcheck:
       disable: true
 
   # FO12 (docs/fno/06) — the F&O book's monitor. `fno-monitor-loop` (scripts/fno_monitor_loop.py)
-  # starts `python -m app.fno_monitor` at 09:14 IST on a weekday, at once if the container starts
+  # starts `baskfy-desk service fno-monitor` at 09:14 IST on a weekday, at once if the container starts
   # inside the day's window (09:14-23:30: the book is marked after the F&O bhavcopy), and again if
   # it crashes inside it (restart resume from fo_position). With BASKFY_FNO_MONITOR_ENABLED=false
   # (the default above) the module exits 0 without building anything and the loop idles. It never
@@ -546,20 +513,20 @@ services:
   # which stays PAPER while OPTIONS_ENABLED is pinned "false".
   fno-monitor:
     <<: *desk
-    command: [fno-monitor-loop]
+    command: [baskfy-desk, service, fno-monitor-loop]
     expose: []
     healthcheck:
       disable: true
 
   # Same-day fill capture (NEEDS-MAULIK §33, Maulik 13 Sep 2026). Beat used to fire
-  # `baskfy.desk.daily` / `baskfy.desk.autorun` on the baskfy-py worker, whose image does
+  # `baskfy.desk.daily` / `baskfy.desk.autorun` on the worker, whose image does
   # not contain the desk tree, so both entries failed every weekday. This service is the
   # same image as `desk`, no port, collection-only: `scripts.daily` at 18:30 IST Mon–Fri
   # and `scripts.autorun` at 18:50. A sibling of `swing-monitor` rather than a lifespan
   # task on the console, so a hung collection cannot take `/analyze` with it.
   desk-daily:
     <<: *desk
-    command: [desk-daily-loop]
+    command: [baskfy-desk, service, desk-daily-loop]
     expose: []
     healthcheck:
       disable: true
@@ -569,44 +536,10 @@ services:
   # A profile rather than a `depends_on`, because a migration that runs on every container restart
   # is a migration that runs during an outage, on a box that is already unhappy.
   migrate:
-    <<: *python-image
+    <<: *rs
     profiles: [tools]
     restart: "no"
-    working_dir: /repo/services/api
-    command: [alembic, upgrade, head]
-    depends_on:
-      postgres: {condition: service_healthy}
-
-  # One-shot, and the step this file was missing. Run it after `migrate`, before traffic:
-  #     docker compose -f infra/docker/compose.prod.yml run --rm seed
-  #
-  # WHY THIS EXISTS (M48)
-  # A migrated database is an *empty* database. Every table that holds reference data — `plan`,
-  # `cb_collection`, universes, the factor registry — is populated by `baskfy_api.seed`, and
-  # nothing in the deploy sequence ran it. The visible result on 27 Aug 2026 was `/pricing`
-  # rendering its preamble and no plan cards at all (`GET /plans` returned `{"data":[]}`), and
-  # `/discover/collections` rendering an empty directory. Both read as broken pages; both were an
-  # empty table under a working page.
-  #
-  # `seed all` is idempotent by design (house rule 7: "re-running any day's job produces identical
-  # rows"), so running it on every deploy is safe and is the intended habit. A profile rather than
-  # a `depends_on` for the same reason `migrate` is one.
-  seed:
-    <<: *python-image
-    profiles: [tools]
-    restart: "no"
-    working_dir: /repo/services/api
-    # `reference`, not `all`. `all` additionally loads the 271-row reference export from
-    # `tests/fixtures/`, which is **deliberately not in the production image** — it is a test
-    # answer key of random-walk bars, and shipping it to a box that holds real closes would be
-    # worse than not seeding at all. On the box it fails outright:
-    #     FileNotFoundError: reference-screen-export-2026-08-18.csv not found
-    #
-    # `reference` is the branch that holds the data a deployment actually needs and cannot derive:
-    # the exchange, the index definitions, the three plans, the example screens, the curated
-    # managers and the collection shelves. Everything else — bars, factors, baskets — comes from
-    # the pipeline against real data, which is where it should come from.
-    command: [python, -m, baskfy_api.seed, reference]
+    command: [baskfy-worker, migrate, up]
     depends_on:
       postgres: {condition: service_healthy}
 

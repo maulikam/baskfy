@@ -2514,3 +2514,5 @@ session and the 18:40–21:15 nightly window:
 - **`go/`:** empty; remove it with `rmdir go`.
 - **Red test:** `nothing_in_the_kite_adapter_can_reach_an_order` fails because of the direct-Kite Screen Invest path.
 - **Advisories ignored in `rust/deny.toml`:** RUSTSEC-2025-0141, RUSTSEC-2026-0194, -0195, -0391, -0398, -0403. Each needs a dependency bump.
+
+## Portfolio-ML (PM0) — fresh export ✅ done 9 Nov 2026 by an agent; data through 6 Nov 2026.

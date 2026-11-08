@@ -29,7 +29,10 @@ expiry-day setups — scans + paper, OP0–OP15, **not started**; the kickoff pr
 [`options/KICKOFF-PROMPT.md`](options/KICKOFF-PROMPT.md)), and
 [`vbt/`](vbt/) (VBT-1, the volume-breakout sleeve, VB0–VB10 — the strategy is
 [`research/volume-breakout/STRATEGY.md`](../research/volume-breakout/STRATEGY.md) and the pack is
-VB0-green).
+VB0-green), and [`portfolio-ml/`](portfolio-ml/) (MB, a LightGBM 2×-in-12-months ranker, PM0–PM9,
+read-only — the research is
+[`machinelearning/python/research/portfolio-ml/STRATEGY.md`](../machinelearning/python/research/portfolio-ml/STRATEGY.md);
+opened 9 Nov 2026, PM0 green).
 
 ## The one-paragraph version
 

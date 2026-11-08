@@ -41,3 +41,6 @@ services:
   options-monitor:
     <<: *rs
     command: [baskfy-desk, service, options-monitor-loop]
+  migrate:
+    <<: *rs
+    command: [baskfy-worker, migrate, up]

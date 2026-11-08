@@ -38,3 +38,19 @@ __pycache__/
 # rebuilt from the repo on demand, so tracking it would put a large derived artifact — and a fresh
 # merge conflict on every run — into a repo whose history is the thing being preserved (D2).
 graphify-out/
+
+# RH3
+/data/
+/Claude outputs/
+.claude/settings.local.json
+.pnpm-store/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/
+**/.next/
+**/node_modules/
+rust/target/
+*.tgz
+*.lock-*
+coverage.json

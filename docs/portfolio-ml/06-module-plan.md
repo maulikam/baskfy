@@ -15,7 +15,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 **Goal:** quarterly results as the market saw them, stamped by filing date.
 - Table `fundamental_pit(instrument_id, period_end, filed_on, period_type, revenue, ebitda, pat, eps_diluted, total_debt, total_equity, cfo, capex, shares_outstanding, source, PRIMARY KEY(instrument_id, period_end, filed_on))`. Standalone and consolidated kept apart (`period_type`); consolidated preferred where both exist.
 - Source: NSE corporate filings — financial results (XBRL) via the NSE provider; BSE as fallback. Backfill 2017→ resumable; nightly step picks up new filings.
-- Features (`baskfy_core.mb.fundamentals`, pure): TTM revenue/PAT growth (yoy), EBITDA and PAT margin and their 4q change, D/E, ROCE (EBIT / (equity+debt)), CFO/PAT, EPS growth, sales acceleration. Joined to a session by **`filed_on` ≤ date** (never `period_end`). Asserted by a look-ahead test.
+- Features (`portfolioml/fundamentals.py`, pure; ingest in Rust, `crates/providers` + `baskfy-worker fundamentals_pit`): TTM revenue/PAT growth (yoy), EBITDA and PAT margin and their 4q change, D/E, ROCE (EBIT / (equity+debt)), CFO/PAT, EPS growth, sales acceleration. Joined to a session by **`filed_on` ≤ date** (never `period_end`). Asserted by a look-ahead test.
 - AC1 `test_mb_fundamentals_no_lookahead.py`: a feature at date *d* changes only when a filing with `filed_on ≤ d` exists. AC2 coverage report: share of universe rows with a TTM figure, by year (expect > 85 % from 2019). AC3 idempotent re-ingest.
 
 ## PM2 — Shareholding pattern, point-in-time
@@ -33,7 +33,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 
 ## PM4 — The re-run (the gate for everything after)
 **Goal:** one number decides. Rebuild features with PM1–PM3, same walk-forward, same book.
-- AC1 For **each** of signal-years **2024 and 2025** (complete 12-month paths only): investable top-20 12-month mean return ≥ investable universe's **and** top-20 hit rate ≥ 1.5× the investable universe's. Price-only on the 6 Nov 2026 export: 2024 +5.1 % vs +0.6 %, 18.8 % vs 7.5 % (2.5×), passes; 2025 −2.2 % vs +3.9 %, 4.5 % vs 5.4 % (0.8×), fails.
+- AC1 For **each** of signal-years **2024 and 2025** (complete 12-month paths only): investable top-20 12-month mean return ≥ investable universe's **and** top-20 hit rate ≥ 1.5× the investable universe's. Price-only on the 6 Nov 2026 export: 2024 +5.1 % vs +0.6 %, 18.8 % vs 7.5 % (2.5×), passes; 2025 −2.2 % vs +3.9 %, 4.5 % vs 5.4 % (0.8×), fails. The same two tests must also pass on **pooled 2024+2025** picks.
 - AC2 No year's AUC falls below the price-only model's by more than 0.02.
 - AC3 STRATEGY §3/§4 regenerated; feature importance shows fundamentals/shareholding/mcap in the top 12.
 - If AC1 fails: record it, keep the price-only model as the sleeve's model, and PM5–PM9 proceed with the better of the two. A negative result is a result.
@@ -44,7 +44,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 ## PM6 — Nightly scorer
 **Goal:** `mb_score_daily` for the last completed session, every night.
 - Schema per BASKFY-INTEGRATION (`mb_model`, `mb_score_daily`). Task `mb-score` **post-publish** (cannot fail the night); task `mb-train` first Saturday of each quarter: refit on every completed label, store the model file, diff the new ranking against the previous model's on the same day, refuse to publish if Spearman < 0.7 without an operator ack.
-- Law 1: `baskfy_core.mb.model.score(booster, frame)`; the Booster is loaded in `services/mb`. **Date:** last completed session (data-date-clocks skill); never label a figure live.
+- Law 1: `baskfy-core` stays pure, the worker does I/O. Scoring is `portfolioml/model.py`, a Python worker task (PM6.1), which is handed a loaded Booster. **Date:** last completed session (data-date-clocks skill); never label a figure live.
 - AC1 idempotent night. AC2 `test_mb_purity.py`. AC3 the Python worker runs it (DECISIONS PM6.1 — Rust port deferred; options recorded).
 
 ## PM7 — Pages

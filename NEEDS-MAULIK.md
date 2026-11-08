@@ -2522,3 +2522,4 @@ session and the 18:40–21:15 nightly window:
 - **Needed:** ship an image with `db/migrations/0002_fundamental_pit.sql` (additive), then in the worker container `baskfy-worker fundamentals_pit backfill` (resumable; `--limit N` / `--symbols A,B` to start small).
 - **Why:** PM1 AC2 (coverage) and PM4 need the data. About 2,660 names × ~32 requests ≈ 85k requests, ~24 h at the 1 req/s NSE limit, shared with the nightly's NSE calls.
 - **Done meanwhile:** code, tests, and a 3-name end-to-end run against a throwaway database. The agent did not touch the running stack.
+- **When:** start it right after a nightly publish, outside 18:40–21:15 IST. It shares NSE's rate limit with nightly step 6, which already stalls every ~600 requests.

@@ -98,6 +98,11 @@ the test year); test on every universe row of year Y whose 12-month path is comp
 | 2024 | 244,129 | 8.0 % | **16.4 %** | 13.6 % | 19.7 % | **−11 %** | −1 % | 5 % / 2 % | 0.658 |
 | 2025 (→ Nov) | 288,789 | 5.5 % | **5.4 %** | 6.8 % | 8.5 % | **−8 %** | +3 % | 2 % / 3 % | 0.601 |
 
+**Signal-year 2025 is the newest walk-forward year and the price-only model showed no edge there**
+(investable top-20 hit 4.5 % vs 5.4 % base, −2.2 % vs +3.9 %). It is out of sample for training, but the
+design was chosen with it visible, so no year here is a clean holdout. Live expectation is set from 2025 until
+PM4 passes, not from the 2020–25 average.
+
 Three things to read off this table:
 
 1. **The ranking edge is persistent; the top-20 edge is not.** AUC ≥ 0.60 in every year, including the

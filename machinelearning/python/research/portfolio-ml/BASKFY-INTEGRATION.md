@@ -17,16 +17,16 @@ schedules an order from an MB score.
 
 | Piece | Location | Notes |
 |---|---|---|
-| labels, features, cross-sectional ranks, tranche book | `packages/core/src/baskfy_core/mb/` ← `portfolioml/{labels,features,tranches}.py` unchanged | pure: frames in, frames out; `test_mb_purity.py` copies `test_vbt_purity.py` |
-| model fit / predict | `baskfy_core/mb/model.py` | takes a `lightgbm.Booster` **object** in; never reads a path. Loading the file is the service's job |
-| data loading, Postgres, model files on disk | `services/mb/` (Python worker task) | reads `ohlcv_daily`, `instrument`, `index_snapshot_daily`; writes `mb_score_daily`, `mb_model` |
+| labels, features, cross-sectional ranks, tranche book, point-in-time features | `machinelearning/python/research/portfolio-ml/portfolioml/` | pure: frames in, frames out; only `panel.py` reads disk. Python `baskfy_core` is legacy since RF3 |
+| model fit / predict | `portfolioml/model.py` | takes a `lightgbm.Booster` **object** in; never reads a path |
+| NSE fetch, parsing, Postgres writes (PM1 →) | Rust: `crates/providers` (`nse.rs`, `nse_results.rs`), `baskfy-worker` (`tasks/clis/`), `db/migrations/` | law 1: `baskfy-core` stays pure, the worker does I/O |
 | nightly task | `mb-score` after `publish` (post-publish, cannot fail the night, like VBT's) | ~30 s for features, ~1 s to score |
 | retrain task | `mb-train`, Beat: first Saturday of each quarter | walk-forward refit on every completed 12-month label; model file versioned, previous ranking diffed before publish |
 
 **New dependency: `lightgbm`** — outside `docs/02-tech-stack-adr.md`'s locked stack (house rule 1).
 Why: tabular ranker, 300 trees, trains in a minute on the Mac; the alternatives in the stack (none)
 do not do this. Scoring needs only the model file and the feature frame. Record in
-`docs/DECISIONS-MERGE.md` before it enters `packages/core`.
+`docs/DECISIONS-MERGE.md` before it enters the worker.
 
 **Rust rewrite:** `baskfy-core` is the port target and LightGBM has no first-class Rust. Options,
 cheapest first: (a) keep `mb-score` as a Python worker task — the plan already keeps Python workers
@@ -65,7 +65,7 @@ a night rewrites identical rows (rule 7).
 
 ## What this pass did not do
 
-- No code in `packages/core`, no migration, no task, no page. The research pack is the deliverable.
+- At the time of this note: no migration, no task, no page. The research pack is the deliverable.
 - No commit. The repo had staged RF-refactor changes when the folder was connected; nothing was
   touched outside `machinelearning/python/research/portfolio-ml/`.
 - `run_research.py` / `portfolioml/book.py` (the swing book) ran end to end only in `--quick` mode; §2's

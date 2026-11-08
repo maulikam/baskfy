@@ -156,7 +156,10 @@ pub async fn load_context(
     if let Some(overlay) = index_led {
         live = overlay;
     } else if per_stock.is_some() {
-        // The close's breadth gate stands; the index half is per stock (entries_now).
+        // The close's breadth gate stands; the index half is per stock (entries_now). The rung is
+        // reconciled with that gate: a ladder settled under an earlier RED reading must not keep
+        // entries shut once the stored gate is AMBER/GREEN (drawdown lock still holds).
+        tier = super::rules::intraday_tier(&tier, gate, &SwingConfig::default().market);
     } else if let (Some(m), Some(level)) = (&market, live_level) {
         live = read_live_gate(conn, m, &tier, day, schema, level, now, index_slug).await?;
     }

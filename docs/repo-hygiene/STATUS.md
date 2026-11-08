@@ -19,6 +19,7 @@
 | RH12 README, CONTRIBUTING | done | 8dd568d |
 | Empty `go/` removal | blocked: a safety check refused it; `rmdir go` by hand | — |
 | `make test`: 4,430 pass, 1 fail | blocked: `nothing_in_the_kite_adapter_can_reach_an_order` was already red at 0f31ee1 and is right (Law 2); fixing it changes a binary | — |
+| `local.sh verify`: every money flag false after fixing a silent exit on containers with no DRY_RUN | done | — |
 | `make test-py`: same 131 failures as baseline, none new | done | — |
 | Branch count 9, not 7 | deviation RH-3 | — |
 

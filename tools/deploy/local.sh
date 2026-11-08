@@ -211,7 +211,7 @@ verify() {
     svc="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")"
     if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$'; then
       echo "  ^ in $svc"; bad=1; fi
-    d="$(docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | tail -1 | cut -d= -f2-)"
+    d="$(docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | tail -1 | cut -d= -f2- || true)"
     [ -n "$d" ] || continue
     [ "$svc" = api ] && continue   # LOCAL-1: always false, no order path
     if [ "$(echo "$d" | tr 'A-Z' 'a-z')" = false ]; then

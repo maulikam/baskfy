@@ -357,13 +357,12 @@ impl Settings {
             }
         }
         let mut out = Self::from_values(&values)?;
-        out.regime = baskfy_core::regime::RegimeConfig::from_lookup(lookup).map_err(|e| {
-            SettingsError {
+        out.regime =
+            baskfy_core::regime::RegimeConfig::from_lookup(lookup).map_err(|e| SettingsError {
                 key: "BASKFY_REGIME_*".to_owned(),
                 raw: e.clone(),
                 python_error: "ValueError".to_owned(),
-            }
-        })?;
+            })?;
         Ok(out)
     }
 

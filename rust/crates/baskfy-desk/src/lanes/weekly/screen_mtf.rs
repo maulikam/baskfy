@@ -60,11 +60,18 @@ fn cached_leverage() -> &'static Mutex<HashMap<String, (f64, Instant)>> {
     &CACHE
 }
 
-async fn leverage(State(state): State<AppState>, _headers: HeaderMap, body: Bytes) -> Response<Body> {
+async fn leverage(
+    State(state): State<AppState>,
+    _headers: HeaderMap,
+    body: Bytes,
+) -> Response<Body> {
     let parsed: LeverageIn = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(_) => {
-            return json_response(StatusCode::BAD_REQUEST, json!({"detail": "lines are required"}));
+            return json_response(
+                StatusCode::BAD_REQUEST,
+                json!({"detail": "lines are required"}),
+            );
         }
     };
     let mut lines = Vec::new();
@@ -108,7 +115,13 @@ async fn broker_leverage(state: &AppState, symbol: &str, price: f64) -> (f64, St
     };
     let (lev, note) = match kite.order_margin_basket(&basket).await {
         Ok(PyValue::Map(map)) => leverage_from_margin(&map, price),
-        Ok(other) => (1.0, format!("margin reply {other:?}").chars().take(180).collect()),
+        Ok(other) => (
+            1.0,
+            format!("margin reply {other:?}")
+                .chars()
+                .take(180)
+                .collect(),
+        ),
         Err(e) => (1.0, e.to_string().chars().take(180).collect()),
     };
     if note.is_empty()
@@ -146,10 +159,7 @@ fn leverage_from_margin(map: &crate::wire::PyDict, price: f64) -> (f64, String) 
             return (lev.min(10.0), String::new());
         }
     }
-    (
-        1.0,
-        format!("no MTF leverage (keys {})", keys.join(",")),
-    )
+    (1.0, format!("no MTF leverage (keys {})", keys.join(",")))
 }
 
 fn json_response(status: StatusCode, body: serde_json::Value) -> Response<Body> {
@@ -231,7 +241,12 @@ async fn execute(
                 };
                 (status, order_id, error, stop)
             }
-            Err(e) => ("ERROR".to_owned(), String::new(), e.to_string(), String::new()),
+            Err(e) => (
+                "ERROR".to_owned(),
+                String::new(),
+                e.to_string(),
+                String::new(),
+            ),
         };
         let failed = FAILED_STATUSES.contains(&status.as_str());
         orders.push(json!({
@@ -246,7 +261,10 @@ async fn execute(
             },
         }));
     }
-    json_response(StatusCode::OK, json!({"plan_id": plan_id, "orders": orders}))
+    json_response(
+        StatusCode::OK,
+        json!({"plan_id": plan_id, "orders": orders}),
+    )
 }
 
 async fn arm_stop(state: &AppState, plan_id: &str, symbol: &str, qty: i64, price: f64) -> String {
@@ -270,7 +288,11 @@ async fn arm_stop(state: &AppState, plan_id: &str, symbol: &str, qty: i64, price
     {
         Ok(res) => {
             let status = text(&res, "status");
-            if status.is_empty() { "UNKNOWN".to_owned() } else { status }
+            if status.is_empty() {
+                "UNKNOWN".to_owned()
+            } else {
+                status
+            }
         }
         Err(e) => e.to_string(),
     }

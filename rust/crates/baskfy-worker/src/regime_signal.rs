@@ -7,7 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use baskfy_core::regime::RegimeMode;
-use baskfy_core::regime::signal::{FALLBACK_INDEX, Momentum, StockSignal, sector_indices, stock_signal};
+use baskfy_core::regime::signal::{
+    FALLBACK_INDEX, Momentum, StockSignal, sector_indices, stock_signal,
+};
 use baskfy_core::swing::plan::{SkipReason, Skipped, WatchItem};
 use chrono::{Days, NaiveDate};
 use serde_json::{Value, json};
@@ -82,13 +84,12 @@ async fn scan_symbols(
     on: NaiveDate,
     user_id: Option<i64>,
 ) -> Result<BTreeSet<String>, WorkerError> {
-    let mut out: BTreeSet<String> = sqlx::query_scalar::<_, String>(
-        "SELECT DISTINCT symbol FROM index_constituents",
-    )
-    .fetch_all(&mut *conn)
-    .await?
-    .into_iter()
-    .collect();
+    let mut out: BTreeSet<String> =
+        sqlx::query_scalar::<_, String>("SELECT DISTINCT symbol FROM index_constituents")
+            .fetch_all(&mut *conn)
+            .await?
+            .into_iter()
+            .collect();
     if let Some(uid) = user_id {
         for table in ["sw_setup_daily", "tw_signal_daily", "vb_signal_daily"] {
             if !table_exists(conn, table).await? {
@@ -268,7 +269,9 @@ pub async fn signals_on(
     conn: &mut PgConnection,
     on: NaiveDate,
 ) -> Result<Option<BTreeMap<String, bool>>, WorkerError> {
-    let oldest = on.checked_sub_days(Days::new(MAX_STATS_AGE_DAYS)).unwrap_or(on);
+    let oldest = on
+        .checked_sub_days(Days::new(MAX_STATS_AGE_DAYS))
+        .unwrap_or(on);
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT symbol, signal FROM stock_regime_signal WHERE as_of = \
          (SELECT max(as_of) FROM stock_regime_signal WHERE as_of <= $1 AND as_of >= $2)",

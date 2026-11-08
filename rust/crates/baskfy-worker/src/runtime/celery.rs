@@ -276,7 +276,9 @@ impl Outgoing {
                 ("chord", OrderedJson::Null),
             ]),
         ]))?;
-        let when = |at: Option<DateTime<FixedOffset>>| at.map_or(OrderedJson::Null, |t| s(py_isoformat(t)));
+        let when = |at: Option<DateTime<FixedOffset>>| {
+            at.map_or(OrderedJson::Null, |t| s(py_isoformat(t)))
+        };
         let root = self.root_id.clone().unwrap_or_else(|| self.task_id.clone());
         let mut properties = vec![
             ("correlation_id".to_owned(), s(&self.task_id)),
@@ -511,9 +513,9 @@ pub fn mark_redelivered(mut envelope: OrderedJson) -> OrderedJson {
     }
     if let OrderedJson::Object(top) = &mut envelope {
         let has_both = top.iter().any(|(k, _)| k == "headers")
-            && top.iter().any(|(k, v)| {
-                k == "properties" && v.get("delivery_info").is_some()
-            });
+            && top
+                .iter()
+                .any(|(k, v)| k == "properties" && v.get("delivery_info").is_some());
         if !has_both {
             return envelope;
         }

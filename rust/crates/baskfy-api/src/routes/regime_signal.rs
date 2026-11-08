@@ -42,12 +42,17 @@ pub(crate) async fn attach(
     if let Some(day) = on
         && !rows.is_empty()
     {
-        let ready: bool = sqlx::query_scalar("SELECT to_regclass('stock_regime_signal') IS NOT NULL")
-            .fetch_one(pool)
-            .await
-            .map_err(db)?;
+        let ready: bool =
+            sqlx::query_scalar("SELECT to_regclass('stock_regime_signal') IS NOT NULL")
+                .fetch_one(pool)
+                .await
+                .map_err(db)?;
         if ready {
-            let symbols: Vec<String> = rows.iter().map(symbol_key).filter(|s| !s.is_empty()).collect();
+            let symbols: Vec<String> = rows
+                .iter()
+                .map(symbol_key)
+                .filter(|s| !s.is_empty())
+                .collect();
             let oldest = day.checked_sub_days(Days::new(MAX_AGE_DAYS)).unwrap_or(day);
             let got: Vec<(String, String, bool, String)> = sqlx::query_as(
                 "SELECT DISTINCT ON (symbol) symbol, signal, fallback, evidence::text \
@@ -67,7 +72,11 @@ pub(crate) async fn attach(
         }
     }
     // The NSE series (EQ, BE, BZ, SM, ST...) so the UI can flag trade-for-trade / SME names.
-    let symbols: Vec<String> = rows.iter().map(symbol_key).filter(|s| !s.is_empty()).collect();
+    let symbols: Vec<String> = rows
+        .iter()
+        .map(symbol_key)
+        .filter(|s| !s.is_empty())
+        .collect();
     let series: HashMap<String, String> = if symbols.is_empty() {
         HashMap::new()
     } else {

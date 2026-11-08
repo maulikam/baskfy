@@ -47,7 +47,10 @@ pub const ALIASES: [(&str, &str); 53] = [
         "Nifty500 Multicap India Manufacturing 50:30:20",
         "NIFTY MULTI MFG",
     ),
-    ("Nifty500 Multicap Infrastructure 50:30:20", "NIFTY MULTI INFRA"),
+    (
+        "Nifty500 Multicap Infrastructure 50:30:20",
+        "NIFTY MULTI INFRA",
+    ),
     (
         "Nifty India Select 5 Corporate Groups (MAATR)",
         "NIFTY CORP MAATR",
@@ -168,7 +171,13 @@ async fn stored_index_instruments(conn: &mut PgConnection) -> Result<Vec<KiteInd
     .map_err(|e| e.to_string())?;
     Ok(rows
         .into_iter()
-        .filter_map(|(symbol, name, t)| t.map(|token| KiteIndex { symbol, name, token }))
+        .filter_map(|(symbol, name, t)| {
+            t.map(|token| KiteIndex {
+                symbol,
+                name,
+                token,
+            })
+        })
         .collect())
 }
 
@@ -243,11 +252,10 @@ fn def_key(name: &str) -> String {
 /// # Errors
 /// The database's, as text.
 pub async fn index_def_map(conn: &mut PgConnection) -> Result<HashMap<i16, i16>, String> {
-    let defs: Vec<(i16, String, String)> =
-        sqlx::query_as("SELECT id, slug, name FROM index_def")
-            .fetch_all(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?;
+    let defs: Vec<(i16, String, String)> = sqlx::query_as("SELECT id, slug, name FROM index_def")
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     let masters: Vec<(i16, String)> = sqlx::query_as("SELECT id, name FROM index_master")
         .fetch_all(&mut *conn)
         .await

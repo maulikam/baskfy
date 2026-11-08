@@ -230,7 +230,9 @@ fn dec_col(r: &sqlx::postgres::PgRow, c: &str) -> Result<Option<Decimal>, Proble
     r.try_get::<Option<Decimal>, _>(c).map_err(dbp)
 }
 
-async fn load_board(state: &AppState) -> Result<(Vec<Board>, Fresh, Option<DateTime<Utc>>), Problem> {
+async fn load_board(
+    state: &AppState,
+) -> Result<(Vec<Board>, Fresh, Option<DateTime<Utc>>), Problem> {
     let pool = state.db.pool();
     let rows = sqlx::query(
         "SELECT m.id, m.name, m.grp, m.live, m.kite_tradingsymbol, s.date, s.close, s.chg_pct, \
@@ -255,7 +257,14 @@ async fn load_board(state: &AppState) -> Result<(Vec<Board>, Fresh, Option<DateT
     let mut val: HashMap<i16, [Option<Decimal>; 3]> = HashMap::new();
     for r in &vals {
         let id: i16 = r.try_get("index_id").map_err(dbp)?;
-        val.insert(id, [dec_col(r, "pe")?, dec_col(r, "pb")?, dec_col(r, "div_yield")?]);
+        val.insert(
+            id,
+            [
+                dec_col(r, "pe")?,
+                dec_col(r, "pb")?,
+                dec_col(r, "div_yield")?,
+            ],
+        );
     }
     let sparks: Vec<(i16, Decimal)> = sqlx::query_as(
         "SELECT index_id, close FROM (SELECT index_id, date, close, row_number() OVER \
@@ -274,7 +283,11 @@ async fn load_board(state: &AppState) -> Result<(Vec<Board>, Fresh, Option<DateT
     for r in &rows {
         let id: i16 = r.try_get("id").map_err(dbp)?;
         let name: String = r.try_get("name").map_err(dbp)?;
-        let v = defs.get(&id).and_then(|d| val.get(d)).copied().unwrap_or_default();
+        let v = defs
+            .get(&id)
+            .and_then(|d| val.get(d))
+            .copied()
+            .unwrap_or_default();
         let key = name.to_lowercase();
         let slug = indices::slugify(&name);
         let hits = swing
@@ -382,7 +395,10 @@ async fn regime(state: &AppState, board: &[Board]) -> Result<Value, Problem> {
 ///
 /// # Errors
 /// 400 for an unknown group or sort; 500 for a database failure.
-pub async fn list(State(state): State<AppState>, RawQuery(raw): RawQuery) -> Result<Response, Problem> {
+pub async fn list(
+    State(state): State<AppState>,
+    RawQuery(raw): RawQuery,
+) -> Result<Response, Problem> {
     let q = query_map(raw.as_deref());
     let group = match q.get("group").map(String::as_str) {
         None | Some("" | "all") => None,
@@ -397,7 +413,10 @@ pub async fn list(State(state): State<AppState>, RawQuery(raw): RawQuery) -> Res
             None,
         ));
     }
-    let needle = q.get("q").map(|s| s.trim().to_lowercase()).unwrap_or_default();
+    let needle = q
+        .get("q")
+        .map(|s| s.trim().to_lowercase())
+        .unwrap_or_default();
     let (board, fresh, at) = load_board(&state).await?;
     let summary = regime(&state, &board).await?;
     let today = indices::now_ist().date_naive();
@@ -525,8 +544,14 @@ async fn members(
             .map(|(_, sc, _)| sc.clone())
             .collect();
         out.push(Member {
-            name: r.try_get::<Option<String>, _>("name").map_err(dbp)?.unwrap_or_default(),
-            isin: r.try_get::<Option<String>, _>("isin").map_err(dbp)?.unwrap_or_default(),
+            name: r
+                .try_get::<Option<String>, _>("name")
+                .map_err(dbp)?
+                .unwrap_or_default(),
+            isin: r
+                .try_get::<Option<String>, _>("isin")
+                .map_err(dbp)?
+                .unwrap_or_default(),
             weight: dec_col(r, "weight")?,
             ltp,
             chg,
@@ -563,7 +588,9 @@ pub async fn get_constituents(
     let id = resolve_id(&state, &key).await?;
     let (rows, as_of, at, fresh) = members(&state, id).await?;
     let stale = constituents_stale(&state, id).await?;
-    let fresh_as_of = at.map(|t| t.to_rfc3339()).or_else(|| as_of.map(|d| d.to_string()));
+    let fresh_as_of = at
+        .map(|t| t.to_rfc3339())
+        .or_else(|| as_of.map(|d| d.to_string()));
     Ok(wire::json(&json!({
         "freshness": freshness(fresh, fresh_as_of),
         "constituents_as_of": as_of.map(|d| d.to_string()),
@@ -638,9 +665,18 @@ pub async fn get_one(
         }
     };
     let (members, cons_as_of, _, _) = members(&state, b.id).await?;
-    let up = members.iter().filter(|m| m.chg.is_some_and(|c| c > Decimal::ZERO)).count();
-    let down = members.iter().filter(|m| m.chg.is_some_and(|c| c < Decimal::ZERO)).count();
-    let bench = board.iter().find(|x| x.name == "Nifty 50").and_then(|x| x.stats.ret_30d);
+    let up = members
+        .iter()
+        .filter(|m| m.chg.is_some_and(|c| c > Decimal::ZERO))
+        .count();
+    let down = members
+        .iter()
+        .filter(|m| m.chg.is_some_and(|c| c < Decimal::ZERO))
+        .count();
+    let bench = board
+        .iter()
+        .find(|x| x.name == "Nifty 50")
+        .and_then(|x| x.stats.ret_30d);
     let leading = b.above_20() == Some(true)
         && b.stats.cross == Some(true)
         && b.stats.ret_30d.zip(bench).is_some_and(|(r, n)| r > n);
@@ -769,15 +805,21 @@ pub async fn refresh_indices(
     RawQuery(raw): RawQuery,
 ) -> Result<Response, Problem> {
     require_staff(&principal)?;
-    let hv = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let hv = |k: &str| {
+        headers
+            .get(k)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned)
+    };
     if crate::auth::bearer_token(hv("authorization").as_deref()).is_none() {
         crate::csrf::require_csrf(hv("cookie").as_deref(), hv("x-csrf-token").as_deref())?;
     }
     let pool = crate::routes::screens::write_kit::pool(write)?;
     let q = query_map(raw.as_deref());
     let truthy = |k: &str, d: bool| {
-        q.get(k)
-            .map_or(d, |v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        q.get(k).map_or(d, |v| {
+            matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on")
+        })
     };
     let force = truthy("force", false);
     let with_history = truthy("history", true);

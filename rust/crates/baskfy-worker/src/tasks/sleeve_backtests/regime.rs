@@ -127,7 +127,8 @@ async fn twt_rows(
         baskfy_core::twt::calendar::drop_thin_sessions(&bars, &config).map_err(core_err)?;
     let detected = baskfy_core::twt::signals::with_twt_columns(&clean, &calendar, &config)
         .map_err(core_err)?;
-    let mask = baskfy_core::twt::signals::signal_mask(&detected, &config, None).map_err(core_err)?;
+    let mask =
+        baskfy_core::twt::signals::signal_mask(&detected, &config, None).map_err(core_err)?;
     let mut tagged = detected.clone();
     tagged
         .with_column(mask.with_name("signal".into()).into_column())
@@ -282,7 +283,8 @@ pub fn render(
             r.mode,
             r.trades,
             r.win_pct,
-            r.avg_r.map_or_else(|| "-".to_owned(), |x| format!("{x:.2}")),
+            r.avg_r
+                .map_or_else(|| "-".to_owned(), |x| format!("{x:.2}")),
             r.cagr_pct,
             r.max_dd_pct
         ));

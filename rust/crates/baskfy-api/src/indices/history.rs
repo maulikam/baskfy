@@ -122,7 +122,11 @@ pub async fn plan(
 ///
 /// # Errors
 /// The database's, as text.
-pub async fn write_bars(conn: &mut PgConnection, index_id: i16, bars: &[Bar]) -> Result<(), String> {
+pub async fn write_bars(
+    conn: &mut PgConnection,
+    index_id: i16,
+    bars: &[Bar],
+) -> Result<(), String> {
     if bars.is_empty() {
         return Ok(());
     }
@@ -235,7 +239,11 @@ fn pct(a: Decimal, b: Decimal) -> Option<Decimal> {
 
 /// The close on or before `day`.
 fn close_on_or_before(points: &[Point], i: usize, day: NaiveDate) -> Option<Decimal> {
-    points[..=i].iter().rev().find(|p| p.date <= day).map(|p| p.close)
+    points[..=i]
+        .iter()
+        .rev()
+        .find(|p| p.date <= day)
+        .map(|p| p.close)
 }
 
 /// One stats row.
@@ -318,7 +326,10 @@ pub fn stats_at(points: &[Point], i: usize) -> Stats {
         dma,
         ema: ema.and_then(|(a, b)| {
             use rust_decimal::prelude::FromPrimitive;
-            Some((Decimal::from_f64(a)?.round_dp(2), Decimal::from_f64(b)?.round_dp(2)))
+            Some((
+                Decimal::from_f64(a)?.round_dp(2),
+                Decimal::from_f64(b)?.round_dp(2),
+            ))
         }),
         ema_cross: ema.map(|(a, b)| a > b),
     }

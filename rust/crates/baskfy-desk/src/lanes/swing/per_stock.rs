@@ -155,7 +155,10 @@ pub async fn load(
             .map(|a| {
                 a.iter()
                     .filter_map(|i| {
-                        Some((i["name"].as_str()?.to_owned(), i["up"].as_bool().unwrap_or(false)))
+                        Some((
+                            i["name"].as_str()?.to_owned(),
+                            i["up"].as_bool().unwrap_or(false),
+                        ))
                     })
                     .collect()
             })
@@ -208,7 +211,9 @@ async fn live_up(
     let placeholders = vec!["?"; list.len()].join(", ");
     let mut params: Vec<Param> = list.iter().cloned().map(Param::Text).collect();
     params.push(Param::Date(day));
-    params.push(Param::Int(i64::try_from(INDEX_HISTORY_SESSIONS - 1).unwrap_or(249)));
+    params.push(Param::Int(
+        i64::try_from(INDEX_HISTORY_SESSIONS - 1).unwrap_or(249),
+    ));
     let rows = conn
         .execute(
             &format!(
@@ -227,7 +232,9 @@ async fn live_up(
         .rows;
     let mut closes: BTreeMap<String, (String, Vec<f64>)> = BTreeMap::new();
     for r in &rows {
-        let Some(c) = f64_of(col(r, "close")) else { continue };
+        let Some(c) = f64_of(col(r, "close")) else {
+            continue;
+        };
         closes
             .entry(text(col(r, "name")))
             .or_insert_with(|| (text(col(r, "sym")), Vec::new()))

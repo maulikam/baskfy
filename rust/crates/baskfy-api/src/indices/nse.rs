@@ -113,9 +113,18 @@ pub fn camel(name: &str) -> String {
 const KNOWN: &[(&str, &str)] = &[
     ("Nifty Financial Services", "ind_niftyfinancelist"),
     ("Nifty Private Bank", "ind_nifty_privatebanklist"),
-    ("Nifty Financial Services 25/50", "ind_niftyfinancialservices25-50list"),
-    ("Nifty MidSmall Financial Services", "ind_niftymidsmallfinancailservice_list"),
-    ("Nifty MidSmall IT & Telecom", "ind_niftymidsmallitAndtelecom_list"),
+    (
+        "Nifty Financial Services 25/50",
+        "ind_niftyfinancialservices25-50list",
+    ),
+    (
+        "Nifty MidSmall Financial Services",
+        "ind_niftymidsmallfinancailservice_list",
+    ),
+    (
+        "Nifty MidSmall IT & Telecom",
+        "ind_niftymidsmallitAndtelecom_list",
+    ),
     ("Nifty India Consumption", "ind_niftyconsumptionlist"),
     ("Nifty Infrastructure", "ind_niftyinfralist"),
     ("Nifty Services Sector", "ind_niftyservicelist"),
@@ -127,12 +136,27 @@ const KNOWN: &[(&str, &str)] = &[
     ("Nifty SME EMERGE", "ind_niftysmelist"),
     ("Nifty100 ESG", "ind_nifty100esglist"),
     ("Nifty100 Enhanced ESG", "ind_nifty100enhancedesglist"),
-    ("Nifty100 ESG Sector Leaders", "ind_nifty100esgsecleaderslist"),
-    ("Nifty Non-Cyclical Consumer", "ind_niftynon-cyclicalconsumer_list"),
+    (
+        "Nifty100 ESG Sector Leaders",
+        "ind_nifty100esgsecleaderslist",
+    ),
+    (
+        "Nifty Non-Cyclical Consumer",
+        "ind_niftynon-cyclicalconsumer_list",
+    ),
     ("Nifty Housing", "ind_niftyhousing_list"),
-    ("Nifty Transportation & Logistics", "ind_niftytransportationandlogistics_list"),
-    ("Nifty EV & New Age Automotive", "ind_niftyEv_NewAgeAutomotive_list"),
-    ("Nifty India Infrastructure & Logistics", "ind_niftyIndiaInfrastructure_Logistics_list"),
+    (
+        "Nifty Transportation & Logistics",
+        "ind_niftytransportationandlogistics_list",
+    ),
+    (
+        "Nifty EV & New Age Automotive",
+        "ind_niftyEv_NewAgeAutomotive_list",
+    ),
+    (
+        "Nifty India Infrastructure & Logistics",
+        "ind_niftyIndiaInfrastructure_Logistics_list",
+    ),
     ("Nifty REITs & InvITs", "ind_niftyREITs_InvITs_list"),
     ("Nifty 100 Equal Weight", "ind_nifty100list"),
     ("Nifty50 Equal weight", "ind_Nifty50EqualWeight"),
@@ -140,18 +164,48 @@ const KNOWN: &[(&str, &str)] = &[
     ("Nifty High Beta 50", "nifty_High_Beta50_Index"),
     ("Nifty Low Volatility 50", "nifty_Low_Volatility50_Index"),
     ("Nifty Dividend Opportunities 50", "ind_niftydivopp50list"),
-    ("Nifty Alpha Low-Volatility 30", "ind_nifty_alpha_lowvol30list"),
-    ("Nifty Quality Low-Volatility 30", "ind_nifty_quality_lowvol30list"),
-    ("Nifty Alpha Quality Low-Volatility 30", "ind_nifty_alpha_quality_lowvol30list"),
-    ("Nifty Alpha Quality Value Low-Volatility 30", "ind_nifty_alpha_quality_value_lowvol30list"),
+    (
+        "Nifty Alpha Low-Volatility 30",
+        "ind_nifty_alpha_lowvol30list",
+    ),
+    (
+        "Nifty Quality Low-Volatility 30",
+        "ind_nifty_quality_lowvol30list",
+    ),
+    (
+        "Nifty Alpha Quality Low-Volatility 30",
+        "ind_nifty_alpha_quality_lowvol30list",
+    ),
+    (
+        "Nifty Alpha Quality Value Low-Volatility 30",
+        "ind_nifty_alpha_quality_value_lowvol30list",
+    ),
     ("Nifty Growth Sectors 15", "ind_NiftyGrowth_Sectors15_Index"),
     ("Nifty50 Value 20", "ind_Nifty50_Value20"),
-    ("Nifty Smallcap250 Quality 50", "ind_niftySmallcap250_Quality50_list"),
-    ("Nifty India Corporate Group Index - Tata Group", "ind_nifty_tatalist"),
-    ("Nifty India Corporate Group Index - Tata Group 25% Cap", "ind_nifty_tata25caplist"),
-    ("Nifty India Corporate Group Index - Mahindra Group", "ind_nifty_mahindralist"),
-    ("Nifty India Corporate Group Index - Aditya Birla Group", "ind_nifty_adityabirlalist"),
-    ("Nifty Small Finance Banks & Microfinance Institutions", "ind_niftySFBsMfis_list"),
+    (
+        "Nifty Smallcap250 Quality 50",
+        "ind_niftySmallcap250_Quality50_list",
+    ),
+    (
+        "Nifty India Corporate Group Index - Tata Group",
+        "ind_nifty_tatalist",
+    ),
+    (
+        "Nifty India Corporate Group Index - Tata Group 25% Cap",
+        "ind_nifty_tata25caplist",
+    ),
+    (
+        "Nifty India Corporate Group Index - Mahindra Group",
+        "ind_nifty_mahindralist",
+    ),
+    (
+        "Nifty India Corporate Group Index - Aditya Birla Group",
+        "ind_nifty_adityabirlalist",
+    ),
+    (
+        "Nifty Small Finance Banks & Microfinance Institutions",
+        "ind_niftySFBsMfis_list",
+    ),
     // Built on Nifty 50 and publish no list of their own.
     ("Nifty50 USD", "ind_nifty50list"),
     ("Nifty50 PR 2x Leverage", "ind_nifty50list"),
@@ -163,8 +217,14 @@ const KNOWN: &[(&str, &str)] = &[
     ("Nifty 50 Futures TR", "ind_nifty50list"),
     ("Nifty 50 Dividend Points", "ind_nifty50list"),
     ("Nifty Equity Savings", "ind_nifty50list"),
-    ("Nifty50 and Short Duration Debt – Dynamic P/B", "ind_nifty50list"),
-    ("Nifty50 and Short Duration Debt – Dynamic P/E", "ind_nifty50list"),
+    (
+        "Nifty50 and Short Duration Debt – Dynamic P/B",
+        "ind_nifty50list",
+    ),
+    (
+        "Nifty50 and Short Duration Debt – Dynamic P/E",
+        "ind_nifty50list",
+    ),
 ];
 
 /// Filename stems to try: the persisted one, lowercase, then the two camel spellings.
@@ -174,7 +234,10 @@ pub fn candidates(name: &str, persisted: Option<&str>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for s in [
         persisted.map(str::to_owned),
-        KNOWN.iter().find(|(n, _)| *n == name).map(|(_, f)| (*f).to_owned()),
+        KNOWN
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, f)| (*f).to_owned()),
         Some(super::master::csv_slug(name)),
         Some(format!("ind_{c}list")),
         Some(format!("ind_{c}_list")),
@@ -198,8 +261,16 @@ pub fn parse(text: &str) -> Vec<Constituent> {
     let Ok(headers) = rdr.headers().cloned() else {
         return Vec::new();
     };
-    let pos = |k: &str| headers.iter().position(|h| h.trim().eq_ignore_ascii_case(k));
-    let (Some(sym), name, isin) = (pos("Symbol"), pos("Company Name").or_else(|| pos("Company")), pos("ISIN Code")) else {
+    let pos = |k: &str| {
+        headers
+            .iter()
+            .position(|h| h.trim().eq_ignore_ascii_case(k))
+    };
+    let (Some(sym), name, isin) = (
+        pos("Symbol"),
+        pos("Company Name").or_else(|| pos("Company")),
+        pos("ISIN Code"),
+    ) else {
         return Vec::new();
     };
     let industry = pos("Industry");
@@ -292,7 +363,10 @@ async fn get(client: &GuardedClient, url: &str) -> Result<(u16, String), String>
 ///
 /// # Errors
 /// The backoff, a 403/429, or no candidate answering a CSV.
-pub async fn fetch(name: &str, persisted: Option<&str>) -> Result<(String, Vec<Constituent>), String> {
+pub async fn fetch(
+    name: &str,
+    persisted: Option<&str>,
+) -> Result<(String, Vec<Constituent>), String> {
     let client = client()?;
     let mut last = String::new();
     for stem in candidates(name, persisted) {
@@ -329,7 +403,10 @@ pub async fn write(
         .await
         .map_err(|e| e.to_string())?;
     let mut seen = std::collections::HashSet::new();
-    let rows: Vec<&Constituent> = rows.iter().filter(|r| seen.insert(r.symbol.clone())).collect();
+    let rows: Vec<&Constituent> = rows
+        .iter()
+        .filter(|r| seen.insert(r.symbol.clone()))
+        .collect();
     sqlx::query(
         "INSERT INTO index_constituents (index_id, symbol, isin, name, weight, as_of, industry) \
          SELECT $1, t.symbol, t.isin, t.name, t.weight, $6, NULLIF(t.industry, '') \
@@ -346,12 +423,14 @@ pub async fn write(
     .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE index_master SET last_constituents_at = now(), nse_csv_slug = $2 WHERE id = $1")
-        .bind(index_id)
-        .bind(stem)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "UPDATE index_master SET last_constituents_at = now(), nse_csv_slug = $2 WHERE id = $1",
+    )
+    .bind(index_id)
+    .bind(stem)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

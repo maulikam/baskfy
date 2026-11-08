@@ -877,7 +877,9 @@ async fn write_market_row(
     // No signal rows within a week: per-stock is off (REGIME-SIGNAL.md), the legacy half applies.
     let per_stock = regime.is_none()
         && crate::regime_signal::per_stock_active(conn).await?
-        && crate::regime_signal::signals_on(conn, trade_date).await?.is_some();
+        && crate::regime_signal::signals_on(conn, trade_date)
+            .await?
+            .is_some();
     let (reading, used_slug) = if regime.is_some() {
         (None, Some(baskfy_core::regime::INDEX_LED_SLUG.to_owned()))
     } else if per_stock {

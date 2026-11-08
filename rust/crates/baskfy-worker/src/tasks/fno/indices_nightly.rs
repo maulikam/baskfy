@@ -11,7 +11,8 @@ async fn step<T, F>(db: &WriteDb, out: &mut Map<String, Value>, key: &str, body:
 where
     F: for<'c> FnOnce(
         &'c mut sqlx::PgConnection,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<T, String>> + Send + 'c>>,
+    )
+        -> std::pin::Pin<Box<dyn Future<Output = Result<T, String>> + Send + 'c>>,
 {
     let res = async {
         let mut tx = db.begin().await.map_err(|e| e.to_string())?;
@@ -79,9 +80,11 @@ pub(crate) async fn run(db: &WriteDb, kite: Option<&KiteProvider>) -> Value {
     {
         out.insert("stats_rows".into(), json!(n));
     }
-    let due = step(db, &mut out, "constituents_due", |c| Box::pin(nse::due(c, false)))
-        .await
-        .unwrap_or_default();
+    let due = step(db, &mut out, "constituents_due", |c| {
+        Box::pin(nse::due(c, false))
+    })
+    .await
+    .unwrap_or_default();
     let (got, failed) = nse::fetch_due(&due).await;
     let mut ok = 0_i64;
     for (id, stem, rows) in got {
@@ -94,9 +97,6 @@ pub(crate) async fn run(db: &WriteDb, kite: Option<&KiteProvider>) -> Value {
             ok += 1;
         }
     }
-    out.insert(
-        "constituents".into(),
-        json!({"ok": ok, "failed": failed}),
-    );
+    out.insert("constituents".into(), json!({"ok": ok, "failed": failed}));
     Value::Object(out)
 }

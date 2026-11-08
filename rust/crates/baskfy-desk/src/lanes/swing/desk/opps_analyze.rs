@@ -23,9 +23,9 @@ use crate::wire::{PyDict, PyValue};
 fn opt_dec(form: &FormFields, name: &str) -> Result<Option<Decimal>, Box<Response<Body>>> {
     match form.opt(name) {
         None => Ok(None),
-        Some(v) => Decimal::from_str(v.trim())
-            .map(Some)
-            .map_err(|_| Box::new(HttpError::new(400, format!("{name} must be a number")).response())),
+        Some(v) => Decimal::from_str(v.trim()).map(Some).map_err(|_| {
+            Box::new(HttpError::new(400, format!("{name} must be a number")).response())
+        }),
     }
 }
 
@@ -44,7 +44,9 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     let product_raw = form.str("product");
     let last_raw = form.str("last_price");
     let setup = form.opt("setup").unwrap_or_default();
-    let source = form.opt("source").unwrap_or_else(|| "opportunities".to_owned());
+    let source = form
+        .opt("source")
+        .unwrap_or_else(|| "opportunities".to_owned());
     let order_type = form
         .opt("order_type")
         .unwrap_or_else(|| "MARKET".to_owned())
@@ -119,7 +121,11 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     if quote_price <= Decimal::ZERO {
         return HttpError::new(400, "last_price must be positive").response();
     }
-    let price = if order_type == "LIMIT" { limit.unwrap_or(quote_price) } else { quote_price };
+    let price = if order_type == "LIMIT" {
+        limit.unwrap_or(quote_price)
+    } else {
+        quote_price
+    };
     let band_mid = (dec_of_float(settings.swing_stop_band_min)
         + dec_of_float(settings.swing_stop_band_max))
         / Decimal::TWO;
@@ -129,7 +135,8 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     };
     let trigger = trigger_in.filter(|t| *t > Decimal::ZERO).unwrap_or(price);
     if stop >= trigger || stop >= price {
-        return HttpError::new(400, "stop must be below the trigger and the order price").response();
+        return HttpError::new(400, "stop must be below the trigger and the order price")
+            .response();
     }
     let lot_floor = |n: i64| (n / lot) * lot;
     let to_i = |d: Decimal| -> i64 { d.trunc().to_string().parse().unwrap_or(0) };
@@ -143,7 +150,17 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     if kite_authed && qty > 0 {
         if qty_in <= 0 && basis == "own" && product == "MTF" {
             let budget = amount.unwrap_or(Decimal::ZERO);
-            match opps_ticket::margin_detail(&state, &symbol, "NSE", lot, &product, &order_type, price).await {
+            match opps_ticket::margin_detail(
+                &state,
+                &symbol,
+                "NSE",
+                lot,
+                &product,
+                &order_type,
+                price,
+            )
+            .await
+            {
                 Ok(one) if one.total > Decimal::ZERO => {
                     qty = lot_floor(to_i(budget / (one.total / Decimal::from(lot))));
                 }
@@ -154,7 +171,17 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
                 if qty <= 0 || margin_err.is_some() {
                     break;
                 }
-                match opps_ticket::margin_detail(&state, &symbol, "NSE", qty, &product, &order_type, price).await {
+                match opps_ticket::margin_detail(
+                    &state,
+                    &symbol,
+                    "NSE",
+                    qty,
+                    &product,
+                    &order_type,
+                    price,
+                )
+                .await
+                {
                     Ok(m) if m.total + m.charges > budget => {
                         let per = m.total / Decimal::from(qty);
                         let over = ((m.total + m.charges - budget) / per).ceil();
@@ -168,13 +195,27 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
                 }
             }
         } else {
-            match opps_ticket::margin_detail(&state, &symbol, "NSE", qty, &product, &order_type, price).await {
+            match opps_ticket::margin_detail(
+                &state,
+                &symbol,
+                "NSE",
+                qty,
+                &product,
+                &order_type,
+                price,
+            )
+            .await
+            {
                 Ok(m) => margin = Some(m),
                 Err(e) => margin_err = Some(e),
             }
         }
     }
-    let funds = if kite_authed { opps_ticket::available_funds(&state).await } else { None };
+    let funds = if kite_authed {
+        opps_ticket::available_funds(&state).await
+    } else {
+        None
+    };
     let now = state.clock.now_ist();
     let Ok(mut store) = open_store(&state).await else {
         return server_error();
@@ -195,7 +236,10 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     };
     let mut skip = String::new();
     if qty <= 0 {
-        skip = format!("{symbol}: the amount is below one lot at {}", py_dec(q2(price)));
+        skip = format!(
+            "{symbol}: the amount is below one lot at {}",
+            py_dec(q2(price))
+        );
     } else if !context.tier.new_entries_allowed {
         skip = format!(
             "GATE_RED: {symbol} — new entries are closed (rung {})",
@@ -204,17 +248,23 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     } else if product == "MTF" && margin.is_none() {
         skip = format!(
             "MTF_UNAVAILABLE: {}",
-            margin_err.clone().unwrap_or_else(|| "connect Kite to quote MTF margin".to_owned())
+            margin_err
+                .clone()
+                .unwrap_or_else(|| "connect Kite to quote MTF margin".to_owned())
         );
     } else if !simulated && !kite_authed {
         skip = "KITE_NOT_CONNECTED: connect Kite on the desk before a live order".to_owned();
     } else if !simulated && margin.is_none() {
         skip = format!(
             "MARGIN_UNAVAILABLE: {}",
-            margin_err.clone().unwrap_or_else(|| "the broker returned no margin".to_owned())
+            margin_err
+                .clone()
+                .unwrap_or_else(|| "the broker returned no margin".to_owned())
         );
     } else if !simulated && order_type == "MARKET" && stale {
-        skip = format!("STALE_QUOTE: {symbol} — no fresh broker quote; a live market order is not sent on it");
+        skip = format!(
+            "STALE_QUOTE: {symbol} — no fresh broker quote; a live market order is not sent on it"
+        );
     } else if !simulated && funds.is_none() {
         skip = "FUNDS_UNAVAILABLE: the broker did not return available funds".to_owned();
     } else if !simulated
@@ -243,7 +293,11 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
             py_dec(q2(amount.unwrap_or(order_value))),
             py_dec(q2(quote_price)),
             source.split_whitespace().collect::<String>(),
-            if setup.trim().is_empty() { "-".to_owned() } else { setup.split_whitespace().collect::<String>() },
+            if setup.trim().is_empty() {
+                "-".to_owned()
+            } else {
+                setup.split_whitespace().collect::<String>()
+            },
         );
         if let Some(l) = limit.filter(|_| order_type == "LIMIT") {
             note.push_str(&format!(" price={}", py_dec(q2(l))));
@@ -275,10 +329,17 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     }
     let dv = |d: Option<Decimal>| d.map_or(PyValue::None, |v| PyValue::Str(py_dec(q2(v))));
     let mut body = PyDict::new();
-    body.insert("confirmable", PyValue::Bool(skip.is_empty() && line_id.is_some()));
+    body.insert(
+        "confirmable",
+        PyValue::Bool(skip.is_empty() && line_id.is_some()),
+    );
     body.insert(
         "plan_id",
-        if plan_id.is_empty() { PyValue::None } else { PyValue::Str(plan_id) },
+        if plan_id.is_empty() {
+            PyValue::None
+        } else {
+            PyValue::Str(plan_id)
+        },
     );
     body.insert("line_id", line_id.map_or(PyValue::None, PyValue::Int));
     body.insert("symbol", PyValue::Str(symbol));
@@ -293,7 +354,9 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     body.insert("order_price", PyValue::Str(py_dec(q2(price))));
     body.insert(
         "quote_at",
-        q.as_ref().and_then(|x| x.at.clone()).map_or(PyValue::None, PyValue::Str),
+        q.as_ref()
+            .and_then(|x| x.at.clone())
+            .map_or(PyValue::None, PyValue::Str),
     );
     body.insert("quote_live", PyValue::Bool(q.is_some()));
     body.insert("stale_quote", PyValue::Bool(stale));
@@ -304,7 +367,10 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     body.insert("charges", dv(charges));
     body.insert("leverage", dv(margin.as_ref().and_then(|m| m.leverage)));
     body.insert("available_funds", dv(funds));
-    body.insert("margin_error", margin_err.map_or(PyValue::None, PyValue::Str));
+    body.insert(
+        "margin_error",
+        margin_err.map_or(PyValue::None, PyValue::Str),
+    );
     body.insert("mtf_interest_pct_per_day", PyValue::Str(py_dec(rate)));
     body.insert("mtf_interest_per_day", dv(interest));
     body.insert("stop", PyValue::Str(py_dec(q2(stop))));
@@ -312,7 +378,11 @@ pub async fn swing_analyze(State(state): State<AppState>, body: Bytes) -> Respon
     body.insert("trigger", PyValue::Str(py_dec(q2(trigger))));
     body.insert(
         "skip",
-        if skip.is_empty() { PyValue::None } else { PyValue::Str(skip) },
+        if skip.is_empty() {
+            PyValue::None
+        } else {
+            PyValue::Str(skip)
+        },
     );
     body.insert("simulated", PyValue::Bool(simulated));
     body.insert("kite_authed", PyValue::Bool(kite_authed));

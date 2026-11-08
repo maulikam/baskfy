@@ -1,4 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::print_stderr)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::print_stderr
+)]
 //! The consumer against the parity Redis (db 13 only).
 
 use std::time::Duration;
@@ -12,8 +17,7 @@ use baskfy_worker::settings::WorkerSettings;
 const URL: &str = "redis://127.0.0.1:56379/13";
 
 fn fixture(key: &str) -> OrderedJson {
-    let all =
-        OrderedJson::parse(include_str!("fixtures/celery_messages.json")).unwrap();
+    let all = OrderedJson::parse(include_str!("fixtures/celery_messages.json")).unwrap();
     all.get(key).unwrap().clone()
 }
 
@@ -38,7 +42,14 @@ async fn the_consumer_runs_rejects_and_revokes_like_celery() {
     let python = pyjson::dumps(&fixture("task_time_limit")).unwrap();
     let probe_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-    let mut unknown = Outgoing::new("baskfy.nope", Vec::new(), ArgsRepr::Tuple, Vec::new(), "default").unwrap();
+    let mut unknown = Outgoing::new(
+        "baskfy.nope",
+        Vec::new(),
+        ArgsRepr::Tuple,
+        Vec::new(),
+        "default",
+    )
+    .unwrap();
     unknown.task_id = "u-1".to_owned();
     let mut expired = Outgoing::new(
         "baskfy.swing.timing_probe",
@@ -49,9 +60,8 @@ async fn the_consumer_runs_rejects_and_revokes_like_celery() {
     )
     .unwrap();
     expired.task_id = "x-1".to_owned();
-    expired.expires = Some(
-        chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00+05:30").unwrap(),
-    );
+    expired.expires =
+        Some(chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00+05:30").unwrap());
     let mut bad_args = Outgoing::new(
         "baskfy.swing.timing_probe",
         vec![OrderedJson::Int(1)],
@@ -146,9 +156,21 @@ async fn the_consumer_runs_rejects_and_revokes_like_celery() {
         .await
         .unwrap();
     assert!(ttl > 600_000 && ttl <= 604_800);
-    let unacked: i64 = redis::cmd("HLEN").arg(celery::UNACKED).query_async(&mut conn).await.unwrap();
-    let index: i64 = redis::cmd("ZCARD").arg(celery::UNACKED_INDEX).query_async(&mut conn).await.unwrap();
-    let left: i64 = redis::cmd("LLEN").arg("default").query_async(&mut conn).await.unwrap();
+    let unacked: i64 = redis::cmd("HLEN")
+        .arg(celery::UNACKED)
+        .query_async(&mut conn)
+        .await
+        .unwrap();
+    let index: i64 = redis::cmd("ZCARD")
+        .arg(celery::UNACKED_INDEX)
+        .query_async(&mut conn)
+        .await
+        .unwrap();
+    let left: i64 = redis::cmd("LLEN")
+        .arg("default")
+        .query_async(&mut conn)
+        .await
+        .unwrap();
     assert_eq!((unacked, index, left), (0, 0, 0));
     let _: () = redis::cmd("FLUSHDB").query_async(&mut conn).await.unwrap();
 }

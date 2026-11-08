@@ -428,10 +428,17 @@ pub async fn read_index_led_gate(
         .rows
         .into_iter()
         .next();
-    if slug_row.as_ref().map(|r| text(col(r, "index_slug"))).as_deref() != Some(INDEX_LED_SLUG) {
+    if slug_row
+        .as_ref()
+        .map(|r| text(col(r, "index_slug")))
+        .as_deref()
+        != Some(INDEX_LED_SLUG)
+    {
         return Ok(None);
     }
-    let Some(moment) = now else { return Ok(Some(None)) };
+    let Some(moment) = now else {
+        return Ok(Some(None));
+    };
     let moment = moment.with_timezone(&crate::clock::ist());
     if moment.date_naive() != day
         || !in_session(&moment)
@@ -465,7 +472,9 @@ pub async fn read_index_led_gate(
         .rows
         .into_iter()
         .next();
-    let Some(run) = run else { return Ok(Some(None)) };
+    let Some(run) = run else {
+        return Ok(Some(None));
+    };
     let open = boolean(col(&run, "gate_open"));
     #[allow(clippy::cast_precision_loss)]
     let (leading, min) = (

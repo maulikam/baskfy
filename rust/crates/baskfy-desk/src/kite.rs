@@ -24,13 +24,13 @@
 
 use async_trait::async_trait;
 
-pub use baskfy_providers::kite::{KiteError, KiteExceptionKind};
 use baskfy_providers::errors::ProviderError;
 use baskfy_providers::kite::{
     Body, DEFAULT_ROOT_URI, KITE_HEADER_VERSION, dateutil_parse, encode_query, format_historical,
     format_quote, format_response, parse_instruments, py_json_dumps, requests_error, sdk_headers,
     sdk_http_client, validate_response,
 };
+pub use baskfy_providers::kite::{KiteError, KiteExceptionKind};
 use baskfy_providers::net::GuardedClient;
 use baskfy_providers::secret::Secret;
 use sha2::{Digest, Sha256};
@@ -228,8 +228,7 @@ impl GttParams {
                 PyValue::Map(leg)
             })
             .collect();
-        let dumps =
-            |v: &PyValue| py_json_dumps(v).map_err(KiteError::Other);
+        let dumps = |v: &PyValue| py_json_dumps(v).map_err(KiteError::Other);
         let mut params = PyDict::new();
         params.insert("condition", PyValue::Str(dumps(&PyValue::Map(condition))?));
         params.insert("orders", PyValue::Str(dumps(&PyValue::List(legs))?));

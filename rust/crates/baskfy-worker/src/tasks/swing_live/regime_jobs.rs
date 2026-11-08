@@ -105,9 +105,9 @@ pub async fn maybe_intraday(ctx: &TaskContext) {
         let mut tx = ctx.db.begin().await?;
         let last = regime::last_intraday_run(&mut tx, ctx.today_ist()).await?;
         tx.commit().await?;
-        Ok::<bool, WorkerError>(last.is_none_or(|t| {
-            (ctx.now_utc() - t).num_minutes() >= INTRADAY_EVERY_MINUTES
-        }))
+        Ok::<bool, WorkerError>(
+            last.is_none_or(|t| (ctx.now_utc() - t).num_minutes() >= INTRADAY_EVERY_MINUTES),
+        )
     }
     .await;
     match due {
@@ -214,13 +214,9 @@ pub async fn backfill_index_bars(
         let (o, h, l, c) = (col("open")?, col("high")?, col("low")?, col("close")?);
         let mut tx = ctx.db.begin().await?;
         for i in 0..dates.len() {
-            let (Some(day), Some(o), Some(h), Some(l), Some(c)) = (
-                dates[i].and_then(epoch_day),
-                o[i],
-                h[i],
-                l[i],
-                c[i],
-            ) else {
+            let (Some(day), Some(o), Some(h), Some(l), Some(c)) =
+                (dates[i].and_then(epoch_day), o[i], h[i], l[i], c[i])
+            else {
                 continue;
             };
             let d2 = |x: f64| {

@@ -25,8 +25,7 @@ pub fn close() -> NaiveTime {
 /// `os.environ.get("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"`.
 #[must_use]
 pub fn env_flag() -> bool {
-    std::env::var("BASKFY_SWING_MONITOR_ENABLED")
-        .is_ok_and(|v| v.to_lowercase() == "true")
+    std::env::var("BASKFY_SWING_MONITOR_ENABLED").is_ok_and(|v| v.to_lowercase() == "true")
 }
 
 /// The loop; `flag` is read every pass, `limit` is a test seam.

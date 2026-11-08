@@ -557,5 +557,8 @@ pub fn router() -> Router<AppState> {
         .route("/meta/trading-days", get(get_trading_days))
         .route("/meta/status", get(get_status))
         .route("/meta/live-marks", get(get_live_marks))
-        .route("/meta/series-flags", get(super::regime_signal::get_series_flags))
+        .route(
+            "/meta/series-flags",
+            get(super::regime_signal::get_series_flags),
+        )
 }

@@ -107,8 +107,9 @@ impl RegimeConfig {
     ) -> Result<Self, String> {
         let mut out = Self::default();
         if let Some(m) = mode.filter(|s| !s.trim().is_empty()) {
-            out.mode = RegimeMode::parse(m)
-                .ok_or_else(|| format!("{ENV_MODE}: {m:?} is not per_stock, index_led or legacy"))?;
+            out.mode = RegimeMode::parse(m).ok_or_else(|| {
+                format!("{ENV_MODE}: {m:?} is not per_stock, index_led or legacy")
+            })?;
         }
         if let Some(n) = min_leading.filter(|s| !s.trim().is_empty()) {
             out.min_leading = n

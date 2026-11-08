@@ -215,10 +215,18 @@ async fn dry_run_through_the_real_client_sends_no_http_request() {
         .await
         .unwrap();
     assert!(status(&cancelled).contains("DRY"), "{cancelled:?}");
-    assert_eq!(log.lock().unwrap().len(), 0, "DRY_RUN reached the HTTP layer");
+    assert_eq!(
+        log.lock().unwrap().len(),
+        0,
+        "DRY_RUN reached the HTTP layer"
+    );
 
     kite.profile().await.unwrap();
-    assert_eq!(log.lock().unwrap().len(), 1, "the mock counts real requests");
+    assert_eq!(
+        log.lock().unwrap().len(),
+        1,
+        "the mock counts real requests"
+    );
 }
 
 #[tokio::test]
@@ -291,7 +299,11 @@ async fn the_client_speaks_the_sdk_wire_to_a_mock() {
         "GET /quote/ltp?i=NSE%3AINFY&i=NSE%3ATCS HTTP/1.1"
     );
     assert_eq!(first(&seen[4]), "POST /session/token HTTP/1.1");
-    assert!(seen[4].body.starts_with("api_key=test-key&request_token=req&checksum="));
+    assert!(
+        seen[4]
+            .body
+            .starts_with("api_key=test-key&request_token=req&checksum=")
+    );
     assert!(!seen[4].body.contains("sec&"));
 }
 

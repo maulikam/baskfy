@@ -29,7 +29,18 @@ pub(crate) type PatternHit = (
     f64,
 );
 
-type BarRow = (i64, String, NaiveDate, f64, f64, f64, f64, f64, Option<f64>, f64);
+type BarRow = (
+    i64,
+    String,
+    NaiveDate,
+    f64,
+    f64,
+    f64,
+    f64,
+    f64,
+    Option<f64>,
+    f64,
+);
 
 fn core(e: &CoreError) -> WorkerError {
     WorkerError::python("ValueError", e.to_string())

@@ -15,12 +15,7 @@ use sha2::{Digest, Sha256};
 use crate::settings::API_PREFIX;
 
 /// `CACHEABLE_PREFIXES` (below `/api/v1`).
-pub const CACHEABLE_PREFIXES: [&str; 4] = [
-    "/meta/",
-    "/instruments",
-    "/market-health",
-    "/listings",
-];
+pub const CACHEABLE_PREFIXES: [&str; 4] = ["/meta/", "/instruments", "/market-health", "/listings"];
 
 /// `UNCACHEABLE_SUFFIXES`.
 pub const UNCACHEABLE_SUFFIXES: [&str; 4] = ["/csv", "/export", "/download", "/events"];

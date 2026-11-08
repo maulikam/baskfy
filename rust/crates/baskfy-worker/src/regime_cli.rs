@@ -28,7 +28,8 @@ fn flag(rest: &[String], name: &str) -> Option<String> {
 fn date_flag(rest: &[String], name: &str) -> Result<Option<NaiveDate>, String> {
     flag(rest, name)
         .map(|v| {
-            NaiveDate::parse_from_str(&v, "%Y-%m-%d").map_err(|_| format!("{name} {v:?} is not YYYY-MM-DD"))
+            NaiveDate::parse_from_str(&v, "%Y-%m-%d")
+                .map_err(|_| format!("{name} {v:?} is not YYYY-MM-DD"))
         })
         .transpose()
 }
@@ -42,7 +43,8 @@ async fn last_published(ctx: &TaskContext) -> Result<NaiveDate, String> {
             .await
             .map_err(|e| e.to_string())?;
     tx.rollback().await.map_err(|e| e.to_string())?;
-    row.and_then(|r| r.0).ok_or_else(|| "no published bars".to_owned())
+    row.and_then(|r| r.0)
+        .ok_or_else(|| "no published bars".to_owned())
 }
 
 /// Run one subcommand.

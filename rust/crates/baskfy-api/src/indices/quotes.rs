@@ -65,7 +65,9 @@ static CACHE: LazyLock<Mutex<Cache>> = LazyLock::new(|| {
 
 /// Quotes keyed by Kite tradingsymbol, the freshness, and when they were fetched.
 /// Outside market hours, or with no Kite session, nothing is fetched (`Close`).
-pub async fn index_quotes(symbols: &[String]) -> (HashMap<String, Quote>, Fresh, Option<DateTime<Utc>>) {
+pub async fn index_quotes(
+    symbols: &[String],
+) -> (HashMap<String, Quote>, Fresh, Option<DateTime<Utc>>) {
     if !super::market_open(super::now_ist()) || symbols.is_empty() {
         return (HashMap::new(), Fresh::Close, None);
     }
@@ -87,7 +89,11 @@ pub async fn index_quotes(symbols: &[String]) -> (HashMap<String, Quote>, Fresh,
     let api_key = std::env::var("BASKFY_KITE_API_KEY").unwrap_or_default();
     if !permitted || api_key.trim().is_empty() {
         let had = CACHE.lock().map(|c| c.at.is_some()).unwrap_or(false);
-        return if had { snapshot(Fresh::Stale) } else { (HashMap::new(), Fresh::Close, None) };
+        return if had {
+            snapshot(Fresh::Stale)
+        } else {
+            (HashMap::new(), Fresh::Close, None)
+        };
     }
     let fetched = match crate::live_prices::kite_provider(api_key.trim()).await {
         Ok(p) => {

@@ -263,7 +263,13 @@ struct Hit {
     scanner_score: f64,
 }
 
-type RawHit = (String, String, Option<Decimal>, Option<Decimal>, Option<f64>);
+type RawHit = (
+    String,
+    String,
+    Option<Decimal>,
+    Option<Decimal>,
+    Option<f64>,
+);
 
 /// Qullamaggie's flag / EP (the swing detector's long setups) on its latest date ≤ `on`.
 async fn swing_hits(
@@ -413,7 +419,9 @@ pub async fn run_candidates(
         return Ok(RunReport::skipped("BASKFY_REGIME_MODE=legacy"));
     }
     if !candidate_tables_ready(conn).await? {
-        return Ok(RunReport::skipped("swing_candidates (0061) is not migrated"));
+        return Ok(RunReport::skipped(
+            "swing_candidates (0061) is not migrated",
+        ));
     }
     let Some((verdict, _)) = verdict_on(conn, cfg, as_of, live).await? else {
         return Ok(RunReport::skipped("no index bars to read"));

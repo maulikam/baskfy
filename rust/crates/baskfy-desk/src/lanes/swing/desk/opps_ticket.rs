@@ -8,8 +8,8 @@ use rust_decimal::Decimal;
 
 use super::super::execute::{OPPS_NOTE_PREFIX, cash_product, opps_note_field, swing_gates};
 use super::super::rules::{dec_of_float, py_dec, q2};
-use super::open_store;
 use super::super::store::SwingStore;
+use super::open_store;
 use crate::app::AppState;
 use crate::lanes::exec_core::exec_kite::status_session;
 use crate::lanes::twt::common::{FormFields, HttpError, json_response, server_error};
@@ -210,10 +210,17 @@ pub(super) async fn swing_ticket(State(state): State<AppState>, uri: Uri) -> Res
     let Ok(mut store) = open_store(&state).await else {
         return server_error();
     };
-    let Ok(context) = store.session_context(state.clock.now_ist().date_naive()).await else {
+    let Ok(context) = store
+        .session_context(state.clock.now_ist().date_naive())
+        .await
+    else {
         return server_error();
     };
-    let q = if authed { quote(&state, &symbol, &exchange).await } else { None };
+    let q = if authed {
+        quote(&state, &symbol, &exchange).await
+    } else {
+        None
+    };
     let (funds, acct) = if authed {
         (available_funds(&state).await, account(&state).await)
     } else {
@@ -303,7 +310,12 @@ pub(super) async fn swing_ticket(State(state): State<AppState>, uri: Uri) -> Res
     json_response(200, &PyValue::Map(body))
 }
 
-fn display_status(line_state: &str, broker: Option<&str>, filled: i64, simulated: bool) -> &'static str {
+fn display_status(
+    line_state: &str,
+    broker: Option<&str>,
+    filled: i64,
+    simulated: bool,
+) -> &'static str {
     if simulated {
         return "SIMULATED";
     }
@@ -344,7 +356,9 @@ pub(super) async fn swing_order_status(State(state): State<AppState>, uri: Uri) 
     let simulated = order_id
         .as_deref()
         .is_some_and(|r| r.starts_with("DRY") || r.starts_with("SIM"))
-        || (line.state == "FILLED" && swing_gates(&state.settings_snapshot()).dry_run && order_id.is_none());
+        || (line.state == "FILLED"
+            && swing_gates(&state.settings_snapshot()).dry_run
+            && order_id.is_none());
     let mut broker = PyDict::new();
     let mut broker_status: Option<String> = None;
     let mut filled = 0;
@@ -379,15 +393,25 @@ pub(super) async fn swing_order_status(State(state): State<AppState>, uri: Uri) 
     body.insert("plan_id", PyValue::Str(line.plan_id.clone()));
     body.insert("symbol", PyValue::Str(line.symbol.clone()));
     body.insert("line_state", PyValue::Str(line.state.clone()));
-    body.insert("product", PyValue::Str(cash_product(line.note.as_deref()).to_owned()));
+    body.insert(
+        "product",
+        PyValue::Str(cash_product(line.note.as_deref()).to_owned()),
+    );
     body.insert("quantity", PyValue::Int(line.quantity));
     body.insert("order_id", order_id.map_or(PyValue::None, PyValue::Str));
-    body.insert("position_id", line.position_id.map_or(PyValue::None, PyValue::Int));
+    body.insert(
+        "position_id",
+        line.position_id.map_or(PyValue::None, PyValue::Int),
+    );
     body.insert("status", PyValue::Str(status.to_owned()));
     body.insert("filled_quantity", PyValue::Int(filled));
     body.insert(
         "broker",
-        if broker.is_empty() { PyValue::None } else { PyValue::Map(broker) },
+        if broker.is_empty() {
+            PyValue::None
+        } else {
+            PyValue::Map(broker)
+        },
     );
     body.insert(
         "needs_reconcile",
@@ -396,7 +420,10 @@ pub(super) async fn swing_order_status(State(state): State<AppState>, uri: Uri) 
     json_response(200, &PyValue::Map(body))
 }
 
-pub(super) async fn revalidate(state: &AppState, line: &super::super::store::LineRow) -> Option<String> {
+pub(super) async fn revalidate(
+    state: &AppState,
+    line: &super::super::store::LineRow,
+) -> Option<String> {
     let note = line.note.as_deref()?;
     if !note.starts_with(OPPS_NOTE_PREFIX) || line.state != "PROPOSED" {
         return None;
@@ -408,10 +435,14 @@ pub(super) async fn revalidate(state: &AppState, line: &super::super::store::Lin
     let product = cash_product(Some(note));
     let order_type = opps_note_field(note, "order").unwrap_or_else(|| "MARKET".to_owned());
     let Some(q) = quote(state, symbol, "NSE").await else {
-        return Some(format!("STALE_QUOTE: {symbol} — no broker quote; review again"));
+        return Some(format!(
+            "STALE_QUOTE: {symbol} — no broker quote; review again"
+        ));
     };
     if order_type == "MARKET" && q.stale {
-        return Some(format!("STALE_QUOTE: {symbol} — the last trade is older than five minutes; review again"));
+        return Some(format!(
+            "STALE_QUOTE: {symbol} — the last trade is older than five minutes; review again"
+        ));
     }
     let reference = opps_note_field(note, "ref").and_then(|r| Decimal::from_str(&r).ok());
     if order_type == "MARKET"
@@ -434,13 +465,25 @@ pub(super) async fn revalidate(state: &AppState, line: &super::super::store::Lin
     } else {
         q.price
     };
-    let margin = match margin_detail(state, symbol, "NSE", line.quantity, product, &order_type, price).await {
+    let margin = match margin_detail(
+        state,
+        symbol,
+        "NSE",
+        line.quantity,
+        product,
+        &order_type,
+        price,
+    )
+    .await
+    {
         Ok(m) => m,
         Err(e) if product == "MTF" => return Some(format!("MTF_UNAVAILABLE: {symbol} — {e}")),
         Err(e) => return Some(format!("MARGIN_UNAVAILABLE: {symbol} — {e}")),
     };
     let Some(funds) = available_funds(state).await else {
-        return Some("FUNDS_UNAVAILABLE: the broker did not return available funds; review again".to_owned());
+        return Some(
+            "FUNDS_UNAVAILABLE: the broker did not return available funds; review again".to_owned(),
+        );
     };
     let need = margin.total + margin.charges;
     if funds < need {
@@ -452,4 +495,3 @@ pub(super) async fn revalidate(state: &AppState, line: &super::super::store::Lin
     }
     None
 }
-

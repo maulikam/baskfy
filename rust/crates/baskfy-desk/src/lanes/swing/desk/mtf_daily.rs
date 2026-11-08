@@ -11,8 +11,8 @@ use chrono::{Datelike, NaiveDate, Timelike, Weekday};
 use futures_util::stream::{self, StreamExt};
 use rust_decimal::Decimal;
 
-use super::opps_ticket::margin_detail;
 use super::super::rules::{py_dec, q2};
+use super::opps_ticket::margin_detail;
 use crate::app::AppState;
 use crate::lanes::exec_core::exec_kite::status_session;
 use crate::lanes::twt::common::{FormFields, HttpError, json_response};
@@ -76,8 +76,12 @@ async fn basket(state: &AppState, symbols: &[String]) -> Result<HashMap<String, 
         .basket_order_margins(&orders, false, None)
         .await
         .map_err(|e| e.to_string())?;
-    let PyValue::Map(m) = &resp else { return Err("no margin".to_owned()) };
-    let Some(PyValue::List(lines)) = m.get("orders") else { return Err("no per-order margins".to_owned()) };
+    let PyValue::Map(m) = &resp else {
+        return Err("no margin".to_owned());
+    };
+    let Some(PyValue::List(lines)) = m.get("orders") else {
+        return Err("no per-order margins".to_owned());
+    };
     let mut out = HashMap::new();
     for (i, line) in lines.iter().enumerate() {
         let PyValue::Map(l) = line else { continue };
@@ -85,7 +89,8 @@ async fn basket(state: &AppState, symbols: &[String]) -> Result<HashMap<String, 
             Some(PyValue::Str(s)) => Some(s.to_uppercase()),
             _ => symbols.get(i).cloned(),
         };
-        if let (Some(sym), Some(lev)) = (sym, dec(l.get("leverage")).filter(|x| *x > Decimal::ONE)) {
+        if let (Some(sym), Some(lev)) = (sym, dec(l.get("leverage")).filter(|x| *x > Decimal::ONE))
+        {
             out.insert(sym, lev);
         }
     }
@@ -95,7 +100,10 @@ async fn basket(state: &AppState, symbols: &[String]) -> Result<HashMap<String, 
 /// Quotes every symbol: baskets of 50 in parallel; a basket the broker refuses falls back to
 /// one call per symbol, also in parallel. Kite's shared limiter paces the actual requests.
 async fn quote_all(state: &AppState, symbols: &[String]) -> HashMap<String, Lev> {
-    let chunks: Vec<Vec<String>> = symbols.chunks(BASKET_SIZE).map(<[String]>::to_vec).collect();
+    let chunks: Vec<Vec<String>> = symbols
+        .chunks(BASKET_SIZE)
+        .map(<[String]>::to_vec)
+        .collect();
     let answered: Vec<Basket> = stream::iter(chunks)
         .map(|chunk| async move {
             let r = basket(state, &chunk).await;
@@ -116,7 +124,9 @@ async fn quote_all(state: &AppState, symbols: &[String]) -> HashMap<String, Lev>
                         Lev {
                             eligible: lev.is_some(),
                             leverage: lev,
-                            reason: lev.is_none().then(|| "not on Zerodha's MTF list (no funding)".to_owned()),
+                            reason: lev
+                                .is_none()
+                                .then(|| "not on Zerodha's MTF list (no funding)".to_owned()),
                         },
                     );
                 }
@@ -137,17 +147,37 @@ async fn quote_all(state: &AppState, symbols: &[String]) -> HashMap<String, Lev>
     for (s, r) in singles {
         let lev = match r {
             // 1× means Zerodha funds nothing: the stock is not on its MTF list.
-            Ok(Some(l)) if l > Decimal::ONE => Lev { eligible: true, leverage: Some(l), reason: None },
-            Ok(Some(_)) => Lev { eligible: false, leverage: None, reason: Some("not on Zerodha's MTF list (1×, no funding)".to_owned()) },
-            Ok(None) => Lev { eligible: false, leverage: None, reason: Some("Zerodha returned no MTF leverage".to_owned()) },
-            Err(e) => Lev { eligible: false, leverage: None, reason: Some(format!("Zerodha refused an MTF margin quote: {e}")) },
+            Ok(Some(l)) if l > Decimal::ONE => Lev {
+                eligible: true,
+                leverage: Some(l),
+                reason: None,
+            },
+            Ok(Some(_)) => Lev {
+                eligible: false,
+                leverage: None,
+                reason: Some("not on Zerodha's MTF list (1×, no funding)".to_owned()),
+            },
+            Ok(None) => Lev {
+                eligible: false,
+                leverage: None,
+                reason: Some("Zerodha returned no MTF leverage".to_owned()),
+            },
+            Err(e) => Lev {
+                eligible: false,
+                leverage: None,
+                reason: Some(format!("Zerodha refused an MTF margin quote: {e}")),
+            },
         };
         out.insert(s, lev);
     }
     out
 }
 
-async fn store(state: &AppState, day: NaiveDate, rows: &HashMap<String, Lev>) -> Result<(), String> {
+async fn store(
+    state: &AppState,
+    day: NaiveDate,
+    rows: &HashMap<String, Lev>,
+) -> Result<(), String> {
     let mut conn = state.db.connect().await.map_err(|e| e.to_string())?;
     for (symbol, l) in rows {
         conn.execute(
@@ -169,7 +199,11 @@ async fn store(state: &AppState, day: NaiveDate, rows: &HashMap<String, Lev>) ->
 }
 
 /// The latest stored row per symbol, no older than `MAX_AGE_DAYS`.
-async fn stored(state: &AppState, day: NaiveDate, symbols: &[String]) -> Result<HashMap<String, Lev>, String> {
+async fn stored(
+    state: &AppState,
+    day: NaiveDate,
+    symbols: &[String],
+) -> Result<HashMap<String, Lev>, String> {
     let mut conn = state.db.connect().await.map_err(|e| e.to_string())?;
     let list = symbols
         .iter()
@@ -190,7 +224,9 @@ async fn stored(state: &AppState, day: NaiveDate, symbols: &[String]) -> Result<
         .map_err(|e| e.to_string())?;
     let mut out = HashMap::new();
     for row in &cur.rows {
-        let Some(sym) = text(row.get("symbol")) else { continue };
+        let Some(sym) = text(row.get("symbol")) else {
+            continue;
+        };
         out.insert(
             sym,
             Lev {
@@ -204,7 +240,10 @@ async fn stored(state: &AppState, day: NaiveDate, symbols: &[String]) -> Result<
 }
 
 async fn authed(state: &AppState) -> bool {
-    matches!(status_session(state).await.get("authed"), Some(PyValue::Bool(true)))
+    matches!(
+        status_session(state).await.get("authed"),
+        Some(PyValue::Bool(true))
+    )
 }
 
 /// Every active NSE cash stock (EQ and BE series).
@@ -219,14 +258,23 @@ async fn universe(state: &AppState) -> Result<Vec<String>, String> {
         )
         .await
         .map_err(|e| e.to_string())?;
-    Ok(cur.rows.iter().filter_map(|r| text(r.get("symbol"))).collect())
+    Ok(cur
+        .rows
+        .iter()
+        .filter_map(|r| text(r.get("symbol")))
+        .collect())
 }
 
 async fn refreshed_today(state: &AppState, day: NaiveDate) -> bool {
-    let Ok(mut conn) = state.db.connect().await else { return false };
-    conn.execute("SELECT 1 AS one FROM public.mtf_leverage WHERE as_of = ? LIMIT 1", &[Param::Date(day)])
-        .await
-        .is_ok_and(|c| !c.rows.is_empty())
+    let Ok(mut conn) = state.db.connect().await else {
+        return false;
+    };
+    conn.execute(
+        "SELECT 1 AS one FROM public.mtf_leverage WHERE as_of = ? LIMIT 1",
+        &[Param::Date(day)],
+    )
+    .await
+    .is_ok_and(|c| !c.rows.is_empty())
 }
 
 /// The morning job: once Kite is logged in on a weekday from 08:00, quote the whole universe.
@@ -279,7 +327,11 @@ pub(super) async fn swing_mtf_leverage(State(state): State<AppState>, uri: Uri) 
         .unwrap_or_default()
         .split(',')
         .map(|s| s.trim().to_uppercase())
-        .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "-&_.".contains(c)))
+        .filter(|s| {
+            !s.is_empty()
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-&_.".contains(c))
+        })
         .collect();
     symbols.sort();
     symbols.dedup();
@@ -291,7 +343,11 @@ pub(super) async fn swing_mtf_leverage(State(state): State<AppState>, uri: Uri) 
     }
     let day = state.clock.now_ist().date_naive();
     let mut found = stored(&state, day, &symbols).await.unwrap_or_default();
-    let missing: Vec<String> = symbols.iter().filter(|s| !found.contains_key(*s)).cloned().collect();
+    let missing: Vec<String> = symbols
+        .iter()
+        .filter(|s| !found.contains_key(*s))
+        .cloned()
+        .collect();
     // Only ask whether Kite is logged in when something must be quoted live.
     let is_authed = missing.is_empty() || authed(&state).await;
     if !missing.is_empty() && is_authed {
@@ -306,13 +362,23 @@ pub(super) async fn swing_mtf_leverage(State(state): State<AppState>, uri: Uri) 
         let entry = match found.get(s) {
             Some(l) => dict([
                 ("eligible", PyValue::Bool(l.eligible)),
-                ("leverage", l.leverage.map_or(PyValue::None, |v| PyValue::Str(py_dec(q2(v))))),
-                ("reason", l.reason.clone().map_or(PyValue::None, PyValue::Str)),
+                (
+                    "leverage",
+                    l.leverage
+                        .map_or(PyValue::None, |v| PyValue::Str(py_dec(q2(v)))),
+                ),
+                (
+                    "reason",
+                    l.reason.clone().map_or(PyValue::None, PyValue::Str),
+                ),
             ]),
             None => dict([
                 ("eligible", PyValue::Bool(false)),
                 ("leverage", PyValue::None),
-                ("reason", PyValue::Str("Connect Kite on the desk to check MTF eligibility.".to_owned())),
+                (
+                    "reason",
+                    PyValue::Str("Connect Kite on the desk to check MTF eligibility.".to_owned()),
+                ),
             ]),
         };
         data.insert(s.as_str(), PyValue::Map(entry));

@@ -1836,9 +1836,9 @@ pub fn routes() -> Router<AppState> {
         .route("/swing/rearm", post(swing_rearm))
 }
 
+pub mod mtf_daily;
 mod opps_analyze;
 mod opps_ticket;
-pub mod mtf_daily;
 #[cfg(test)]
 mod scenario;
 #[cfg(test)]

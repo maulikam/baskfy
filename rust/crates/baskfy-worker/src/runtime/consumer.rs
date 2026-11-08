@@ -110,7 +110,8 @@ async fn execute(ctx: Rc<TaskContext>, job: Job) {
     let body = {
         let ctx = Rc::clone(&ctx);
         tokio::task::spawn_local(async move {
-            let result = super::with_task_id(task_id, tasks::run_task(&ctx, spec.name, args, kwargs)).await;
+            let result =
+                super::with_task_id(task_id, tasks::run_task(&ctx, spec.name, args, kwargs)).await;
             match result {
                 Ok(v) => Outcome::Returned(v),
                 Err(e) => Outcome::Raised {
@@ -139,7 +140,11 @@ async fn execute(ctx: Rc<TaskContext>, job: Job) {
     let _ = reply.send(outcome);
 }
 
-fn slot(settings: Settings, worker: WorkerSettings, jobs: Arc<tokio::sync::Mutex<mpsc::Receiver<Job>>>) {
+fn slot(
+    settings: Settings,
+    worker: WorkerSettings,
+    jobs: Arc<tokio::sync::Mutex<mpsc::Receiver<Job>>>,
+) {
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -370,7 +375,10 @@ impl Broker {
             .await
             .unwrap_or_default();
         for tag in tags {
-            log("WARNING", &format!("Restoring unacknowledged message {tag}"));
+            log(
+                "WARNING",
+                &format!("Restoring unacknowledged message {tag}"),
+            );
             self.restore_by_tag(&tag, false).await;
         }
         let release = redis::Script::new(RELEASE_SCRIPT);
@@ -421,7 +429,10 @@ impl Backend {
         ) {
             Ok(v) => v,
             Err(e) => {
-                log("ERROR", &format!("could not encode the result of {task_id}: {e}"));
+                log(
+                    "ERROR",
+                    &format!("could not encode the result of {task_id}: {e}"),
+                );
                 return;
             }
         };
@@ -438,7 +449,10 @@ impl Backend {
             .query_async::<()>(&mut self.conn)
             .await;
         if let Err(e) = written {
-            log("ERROR", &format!("could not store the result of {task_id}: {e}"));
+            log(
+                "ERROR",
+                &format!("could not store the result of {task_id}: {e}"),
+            );
         }
     }
 }
@@ -509,10 +523,7 @@ async fn process(shared: Arc<Shared>, msg: Incoming, permit: tokio::sync::OwnedS
             .await;
         return;
     };
-    log(
-        "INFO",
-        &format!("Task {}[{}] received", msg.task, msg.id),
-    );
+    log("INFO", &format!("Task {}[{}] received", msg.task, msg.id));
     if msg.redelivered {
         let count = msg.redeliveries + 1;
         if count > shared.worker.task_max_redeliveries {
@@ -547,7 +558,10 @@ async fn process(shared: Arc<Shared>, msg: Incoming, permit: tokio::sync::OwnedS
         permit = Some(p);
     }
     if msg.expires.is_some_and(|x| now_ist() >= x) {
-        log("INFO", &format!("Discarding revoked task: {}[{}]", msg.task, msg.id));
+        log(
+            "INFO",
+            &format!("Discarding revoked task: {}[{}]", msg.task, msg.id),
+        );
         if !msg.ignore_result {
             backend
                 .store(
@@ -676,7 +690,10 @@ async fn finish(
             if !retried {
                 log(
                     "ERROR",
-                    &format!("Task {}[{}] raised unexpected: {type_name}('{message}')", msg.task, msg.id),
+                    &format!(
+                        "Task {}[{}] raised unexpected: {type_name}('{message}')",
+                        msg.task, msg.id
+                    ),
                 );
                 if store {
                     backend
@@ -714,7 +731,10 @@ async fn finish(
             }
         }
         Outcome::Lost(why) => {
-            log("ERROR", &format!("Process for {}[{}] lost: {why}", msg.task, msg.id));
+            log(
+                "ERROR",
+                &format!("Process for {}[{}] lost: {why}", msg.task, msg.id),
+            );
             if spec.acks_late {
                 broker.restore_by_tag(&msg.delivery_tag, true).await;
                 return;
@@ -768,7 +788,11 @@ pub async fn serve(
     let (jobs_tx, jobs_rx) = mpsc::channel::<Job>(cfg.concurrency);
     let jobs_rx = Arc::new(tokio::sync::Mutex::new(jobs_rx));
     for i in 0..cfg.concurrency {
-        let (settings, worker, rx) = (cfg.settings.clone(), cfg.worker.clone(), Arc::clone(&jobs_rx));
+        let (settings, worker, rx) = (
+            cfg.settings.clone(),
+            cfg.worker.clone(),
+            Arc::clone(&jobs_rx),
+        );
         std::thread::Builder::new()
             .name(format!("baskfy-pool-{i}"))
             .spawn(move || slot(settings, worker, rx))
@@ -826,7 +850,10 @@ pub async fn serve(
             Ok(Some(item)) => item,
             Ok(None) => continue,
             Err(e) => {
-                log("WARNING", &format!("consumer: Connection to broker lost: {e}"));
+                log(
+                    "WARNING",
+                    &format!("consumer: Connection to broker lost: {e}"),
+                );
                 drop(permit);
                 tokio::time::sleep(StdDuration::from_secs(1)).await;
                 continue;
@@ -837,14 +864,20 @@ pub async fn serve(
             Err(e) => {
                 log(
                     "ERROR",
-                    &format!("Received invalid task message from {}: {e}", celery::queue_of_key(&key)),
+                    &format!(
+                        "Received invalid task message from {}: {e}",
+                        celery::queue_of_key(&key)
+                    ),
                 );
                 continue;
             }
         };
         let mut b = shared.broker.clone();
         if let Err(e) = b.append(&msg, &text).await {
-            log("ERROR", &format!("could not record {} as unacked: {e}", msg.id));
+            log(
+                "ERROR",
+                &format!("could not record {} as unacked: {e}", msg.id),
+            );
         }
         running.spawn(process(Arc::clone(&shared), msg, permit));
         while running.try_join_next().is_some() {}

@@ -55,7 +55,10 @@ pub fn run_forever(seams: &mut dyn LoopSeams, program: &str, limit: Option<usize
     let mut fired = 0usize;
     loop {
         let current = seams.now();
-        let when = next_run(current, last == Some(current.with_timezone(&ist).date_naive()));
+        let when = next_run(
+            current,
+            last == Some(current.with_timezone(&ist).date_naive()),
+        );
         let wait = seconds_until(when, seams.now());
         say(&format!(
             "twt-auto: next run {} IST (wait {wait:.0}s)",

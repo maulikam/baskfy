@@ -37,7 +37,11 @@ pub fn enabled() -> bool {
 /// The web route for a desk page path, if it has one.
 #[must_use]
 pub fn target(path: &str) -> Option<String> {
-    let trimmed = if path.len() > 1 { path.trim_end_matches('/') } else { path };
+    let trimmed = if path.len() > 1 {
+        path.trim_end_matches('/')
+    } else {
+        path
+    };
     if let Some(id) = trimmed.strip_prefix("/ops/job/") {
         return (!id.is_empty() && !id.contains('/')).then(|| format!("/ops/job/{id}"));
     }

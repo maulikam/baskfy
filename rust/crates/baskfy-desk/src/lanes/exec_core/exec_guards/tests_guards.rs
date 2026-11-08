@@ -216,10 +216,9 @@ fn test_every_product_venue_and_switch_combination() {
             for bits in 0..16_u8 {
                 let (intraday, options, carry, fo_plan) =
                     (bits & 1 != 0, bits & 2 != 0, bits & 4 != 0, bits & 8 != 0);
-                let why =
-                    product_exchange_refusal(
-                        product, exchange, intraday, options, carry, fo_plan, false,
-                    );
+                let why = product_exchange_refusal(
+                    product, exchange, intraday, options, carry, fo_plan, false,
+                );
                 let old = refusal(product, exchange, intraday, options);
                 let spec = old.is_empty()
                     || (exchange == "NFO" && product == "NRML" && options && carry && fo_plan);

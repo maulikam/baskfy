@@ -1100,7 +1100,9 @@ async fn buy(
             .and_then(|p| p.parse::<Decimal>().ok())
             .filter(|p| *p > Decimal::ZERO)
         else {
-            return Ok(blocked(format!("{symbol}: a LIMIT line has no limit price")));
+            return Ok(blocked(format!(
+                "{symbol}: a LIMIT line has no limit price"
+            )));
         };
         cap = limit;
         None

@@ -196,10 +196,10 @@ mod tests {
     use super::*;
 
     fn up() -> Momentum {
-Momentum::new(110.0, 100.0)
+        Momentum::new(110.0, 100.0)
     }
     fn down() -> Momentum {
-Momentum::new(90.0, 100.0)
+        Momentum::new(90.0, 100.0)
     }
     fn names(xs: &[&str]) -> Vec<String> {
         xs.iter().map(|s| (*s).to_owned()).collect()

@@ -18,9 +18,7 @@ const MAX_LOOKBACK_MINUTES: i64 = 7 * 24 * 60;
 #[must_use]
 pub fn ist_minute(at: DateTime<Utc>) -> NaiveDateTime {
     let local = at.with_timezone(&celery::ist()).naive_local();
-    local
-        .duration_trunc(Duration::minutes(1))
-        .unwrap_or(local)
+    local.duration_trunc(Duration::minutes(1)).unwrap_or(local)
 }
 
 fn expanded_matches(e: &Expanded, at: NaiveDateTime) -> bool {
@@ -137,7 +135,10 @@ pub async fn publish<C: redis::aio::ConnectionLike + Send>(
 async fn fire(conn: &mut redis::aio::ConnectionManager, entry: &BeatEntry, now: DateTime<Utc>) {
     log(
         "INFO",
-        &format!("Scheduler: Sending due task {} ({})", entry.name, entry.task),
+        &format!(
+            "Scheduler: Sending due task {} ({})",
+            entry.name, entry.task
+        ),
     );
     let result = match beat_message(entry, now) {
         Ok(message) => publish(conn, &message).await,
@@ -146,7 +147,10 @@ async fn fire(conn: &mut redis::aio::ConnectionManager, entry: &BeatEntry, now: 
     if let Err(e) = result {
         log(
             "ERROR",
-            &format!("Message Error: Couldn't apply scheduled task {}: {e}", entry.name),
+            &format!(
+                "Message Error: Couldn't apply scheduled task {}: {e}",
+                entry.name
+            ),
         );
     }
 }
@@ -287,12 +291,18 @@ mod tests {
     fn weekends_are_quiet_for_weekday_entries() {
         let c = Crontabs::load().unwrap();
         let sat = ist(2026, 10, 31, 15, 50);
-        assert!(!names(&c.due_between(sat - Duration::minutes(1), sat)).contains(&"capture-kite-trades"));
+        assert!(
+            !names(&c.due_between(sat - Duration::minutes(1), sat))
+                .contains(&"capture-kite-trades")
+        );
     }
 
     #[test]
     fn a_beat_message_carries_expires_eta_and_kwargs() {
-        let entry = BEAT_SCHEDULE.iter().find(|e| e.name == "options-scan").unwrap();
+        let entry = BEAT_SCHEDULE
+            .iter()
+            .find(|e| e.name == "options-scan")
+            .unwrap();
         let now = DateTime::parse_from_rfc3339("2026-10-30T04:00:00Z")
             .unwrap()
             .with_timezone(&Utc);

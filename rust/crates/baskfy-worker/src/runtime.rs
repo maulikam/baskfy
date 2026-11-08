@@ -54,5 +54,8 @@ pub fn shutdown_signals(
 
 pub(crate) fn log(level: &str, message: &str) {
     use std::io::Write as _;
-    let _ = writeln!(std::io::stderr(), "{level} baskfy_worker.runtime: {message}");
+    let _ = writeln!(
+        std::io::stderr(),
+        "{level} baskfy_worker.runtime: {message}"
+    );
 }

@@ -31,7 +31,7 @@ To trade from here again: a static IP from the ISP, registered in the Kite devel
 ## Run it
 
 ```bash
-bash tools/deploy/local.sh up       # postgres + redis, migrate (a no-op at the same tag), every app service, flag check
+bash tools/deploy/local.sh up       # postgres + redis, migrate only if the image is ahead of the database, every app service, flag check
 bash tools/deploy/local.sh pipeline [tag]   # redeploy worker/ingest-worker/beat only
 bash tools/deploy/local.sh status
 bash tools/deploy/local.sh down     # data stays in the baskfy-local_* Docker volumes

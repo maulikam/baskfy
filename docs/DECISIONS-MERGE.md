@@ -8679,3 +8679,11 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 - RH-7 ⚠ UNREVIEWED: `deploy/compose.prod.yml` keeps four `infra/docker` comments so it stays byte-identical; the acceptance grep excludes that file. `deploy/compose.yml` (dev only) has its `../prometheus` and `../grafana` mounts repointed.
 - RH-8 ⚠ UNREVIEWED: cargo-deny has no per-crate allow list, so Law 1 in CI is `tools/check-core-deps.sh`.
 - RH-9 ⚠ UNREVIEWED: CI now also runs on pushes to `developer`, otherwise the trunk is never checked.
+
+## RUST-MIGRATE — schema runner moves to Rust, Python leaves the deploy path (8 Nov 2026)
+
+- Maulik, in session: "move Alembic to Rust and drop Python from deploy". Alembic is frozen at `0063_mtf_leverage`.
+- `rust/migrations/0001_baseline.sql` plus `baskfy-worker migrate status|up`, sqlx loading SQL files from the image. A fresh database and an Alembic-built one matched each other and the live schema on every fingerprint row, after normalising restore formatting.
+- An Alembic database adopts the baseline only at the frozen revision and only if its fingerprint matches. Otherwise nothing changes.
+- ⚠ UNREVIEWED: `compose.prod.yml` still names the unused Python `migrate` and `seed` services; `compose.rust.yml` overrides `migrate`. `seed` has no Rust port, so a database with no restore has no reference data beyond the baseline's two tables.
+- Reverse: restore the `compose run --rm migrate` line and the Python image; `_sqlx_migrations` is ignored by Alembic.

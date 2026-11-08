@@ -105,8 +105,7 @@ BASKFY_LLM_TIMEOUT_S=20
 EOF
       # Image tags only interpolate compose; kept out of the containers' env_file so a new app
       # image does not change the pipeline services' config and recreate them.
-      if [ "$f" = .env.staging.compose ]; then printf '%s\n' "BASKFY_PY_IMAGE=baskfy-py:$TAG" \
-        "BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG" "BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG" \
+      if [ "$f" = .env.staging.compose ]; then printf '%s\n' "BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG" "BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG" \
         "BASKFY_RS_IMAGE=baskfy-rs:$RS_TAG" "BASKFY_RS_PIPELINE_IMAGE=baskfy-rs:$PIPE_TAG"; fi
     } > "$HOME_DIR/$f.tmp" && mv "$HOME_DIR/$f.tmp" "$HOME_DIR/$f" && chmod 600 "$HOME_DIR/$f"
   done
@@ -136,8 +135,6 @@ services:
   seed:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
 EOF
   render_rust
-  docker image inspect "baskfy-py:$TAG" >/dev/null 2>&1 || \
-    gunzip -c "$(dirname "$BUNDLE")/images/baskfy-images-$TAG.tar.gz" | docker load
 }
 
 # The Rust override, cut down to the services named in rust.services (none: no override at all).
@@ -145,7 +142,7 @@ render_rust() {
   local on; on=" $(tr '\n' ' ' 2>/dev/null < "$HOME_DIR/rust.services" || true) "
   if [ -z "${on// /}" ]; then rm -f "$HOME_DIR/compose.rust.yml"; return 0; fi
   awk -v on="$on" '/^services:/ {svc=1; print; next} !svc {print; next}
-    /^  [a-z][a-z0-9-]*:/ {n=$1; sub(/:$/, "", n); keep=index(on, " " n " ") > 0} keep {print}' \
+    /^  [a-z][a-z0-9-]*:/ {n=$1; sub(/:$/, "", n); keep=(n == "migrate" || index(on, " " n " ") > 0)} keep {print}' \
     "$ROOT/tools/deploy/compose.rust.yml" > "$HOME_DIR/compose.rust.yml"
 }
 
@@ -171,12 +168,26 @@ switch() {
   stage
   compose up -d --no-deps $want
   if ! verify; then
-    echo "✗ rolling $want back to Python" >&2
-    grep -vxF -f <(printf '%s\n' $want) "$HOME_DIR/rust.services" > "$HOME_DIR/rust.services.tmp" || true
-    mv "$HOME_DIR/rust.services.tmp" "$HOME_DIR/rust.services"
-    render_rust; compose up -d --no-deps $want; exit 1
+    echo "✗ verify failed: stopping $want" >&2
+    compose stop $want; exit 1
   fi
   echo "on Rust: $(tr '\n' ' ' < "$HOME_DIR/rust.services")"
+}
+
+# The image's newest migration against the database: the runner starts only when they differ.
+schema_step() {
+  local want have
+  want="$(docker run --rm --entrypoint sh "baskfy-rs:$RS_TAG" -c 'ls /usr/share/baskfy/migrations' \
+    | sed -nE 's/^0*([0-9]+)_.*\.sql$/\1/p' | sort -n | tail -1)"
+  [ -n "$want" ] || die "baskfy-rs:$RS_TAG ships no migrations: rebuild it from deploy/Dockerfile.rust"
+  have() { compose exec -T postgres psql -U baskfy -d baskfy -Atc \
+    "select coalesce(max(version),0) from _sqlx_migrations where success" 2>/dev/null || echo none; }
+  have="$(have)"
+  if [ "$have" = "$want" ]; then echo "✓ schema at $want: no migration to run"; return 0; fi
+  echo "schema at ${have:-none}, image wants $want: running migrate"
+  compose run --rm migrate
+  have="$(have)"
+  [ "$have" = "$want" ] || die "schema at $have after migrate, image wants $want"
 }
 
 # Each Rust service's health through the compose network (its own DNS name), or its run state.
@@ -237,7 +248,7 @@ restore)
     v="${P}_$(basename "$t" .tgz | sed 's/^vol-baskfy-staging_//')"
     docker volume create "$v" >/dev/null
     docker run --rm -v "$v:/v" -v "$BUNDLE:/b:ro" --user 0 --entrypoint tar \
-      "baskfy-py:$TAG" -xzpf "/b/$(basename "$t")" --numeric-owner -C /v
+      "baskfy-rs:$RS_TAG" -xzpf "/b/$(basename "$t")" --numeric-owner -C /v
     echo "  volume $v"
   done
   compose up -d --wait postgres redis
@@ -256,7 +267,7 @@ restore)
 up)
   stage
   compose up -d --wait postgres redis
-  compose run --rm migrate
+  schema_step
   compose up -d --no-deps $APP_SVC
   compose up -d --no-deps --no-recreate $PIPE_SVC   # started if absent, never restarted
   verify || { echo "✗ stopping the stack" >&2; compose stop $SVC; exit 1; }
@@ -304,7 +315,7 @@ live|dry)
 status)  compose ps --format '{{.Service}}\t{{.Status}}' ;;
 rowcounts) rowcounts ;;
 rust)    shift; switch rust "$@" ;;
-python)  shift; switch python "$@" ;;
+python)  die "Python no longer runs here: every service is on Rust" ;;
 rust-check) rust_check ;;
 *) echo "usage: $0 restore|up|down|verify|live|dry|pipeline [tag]|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
 esac

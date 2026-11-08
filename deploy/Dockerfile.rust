@@ -68,6 +68,8 @@ esac
 EOF
 RUN chmod 0755 /usr/local/bin/baskfy-rs-healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["baskfy-rs-healthcheck"]
+# Last on purpose: a SQL-only change reuses every layer above.
+COPY rust/migrations /usr/share/baskfy/migrations
 WORKDIR /desk
 USER baskfy
 EXPOSE 8000 8420

@@ -94,7 +94,7 @@ baskfy-worker = { path = "crates/baskfy-worker" }
 # Postgres only, runtime queries only (no macros: Alembic owns the schema and no build may need a
 # live database), rustls over ring with webpki roots (no OpenSSL). rust_decimal/chrono/json are
 # the numeric, timestamptz/date and jsonb decoders.
-sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "rust_decimal", "chrono", "json"] }
+sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "rust_decimal", "chrono", "json", "migrate"] }
 # The HTTP server. http1 only (uvicorn serves HTTP/1.1), no json/query/form extractors: the API
 # parses query strings and renders bodies itself so they match Starlette and pydantic exactly.
 axum = { version = "=0.8.9", default-features = false, features = ["tokio", "http1", "matched-path", "original-uri"] }

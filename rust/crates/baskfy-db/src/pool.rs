@@ -218,6 +218,12 @@ impl WriteDb {
         Ok(Self { pool })
     }
 
+    /// The sqlx pool, for the schema runner.
+    #[must_use]
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     /// One transaction on one connection: the request's session. Dropping it without
     /// [`Transaction::commit`] rolls it back, which is what Python's `get_session` does when the
     /// handler raises.

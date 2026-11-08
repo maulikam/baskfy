@@ -62,6 +62,7 @@ use baskfy_worker::steps::{PipelineStep, RunStatus};
 use baskfy_worker::tasks::{self, TaskContext, context::TaskClock};
 use chrono::NaiveDate;
 
+mod migrate_cli;
 mod regime_cli;
 
 const USAGE: &str = "usage: baskfy-worker nightly --date YYYY-MM-DD [--replay-bundle DIR]\n       \
@@ -101,7 +102,7 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
     if args.command == "task" {
         args.task = Some(it.next().cloned().ok_or("task needs a Celery task name")?);
     }
-    if args.command == "regime" {
+    if args.command == "regime" || args.command == "migrate" {
         args.rest = it.cloned().collect();
         return Ok(args);
     }
@@ -231,6 +232,11 @@ async fn run(args: Args) -> ExitCode {
         Ok(db) => db,
         Err(e) => return fail(&format!("database: {e}")),
     };
+    if args.command == "migrate" {
+        let code = migrate_cli::run(&db, &args.rest).await;
+        db.close().await;
+        return code;
+    }
     if args.command == "regime" {
         let ctx = TaskContext::new(db, settings, worker, TaskClock::system(), None, None);
         let code = regime_cli::run(&ctx, &args.rest).await;

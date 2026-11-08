@@ -10,7 +10,7 @@
 # A context rooted at `apps/web` cannot see it, and the build fails at module resolution rather
 # than anywhere informative. Build with:
 #
-#     docker build -f infra/docker/Dockerfile.web -t baskfy-web decile-blueprint
+#     docker build -f deploy/Dockerfile.web -t baskfy-web decile-blueprint
 #
 # TARGET ARCHITECTURE
 # -------------------

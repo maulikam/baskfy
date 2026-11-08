@@ -1026,13 +1026,13 @@ fn repo_file(rel: &str) -> String {
 
 #[test]
 fn the_image_carries_the_loop() {
-    let text = repo_file("decile-blueprint/infra/docker/Dockerfile.desk");
+    let text = repo_file("deploy/Dockerfile.desk");
     assert!(text.contains("options-monitor-loop") && text.contains("scripts.options_monitor_loop"));
 }
 
 #[test]
 fn compose_runs_it_from_the_desk_block_with_money_flags_false() {
-    let text = repo_file("decile-blueprint/infra/docker/compose.prod.yml");
+    let text = repo_file("deploy/compose.prod.yml");
     let own = block(&text, "  options-monitor:", 2);
     assert!(
         own.iter()
@@ -1058,7 +1058,7 @@ fn compose_runs_it_from_the_desk_block_with_money_flags_false() {
 
 #[test]
 fn no_options_auto_execute_variable_anywhere_in_compose() {
-    let text = repo_file("decile-blueprint/infra/docker/compose.prod.yml");
+    let text = repo_file("deploy/compose.prod.yml");
     assert!(
         regex::Regex::new(r"OPTIONS\w*AUTO")
             .unwrap()

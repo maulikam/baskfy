@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.9
-# Context is the repo root: docker build -f decile-blueprint/infra/docker/Dockerfile.rust -t baskfy-rs .
+# Context is the repo root: docker build -f deploy/Dockerfile.rust -t baskfy-rs .
 
 ARG RUST_IMAGE=rust:1.99.1-slim-bookworm
 ARG DEBIAN_IMAGE=debian:bookworm-slim

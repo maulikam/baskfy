@@ -11,7 +11,7 @@ code() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 -u "baskfy:$PW" "$
 [ "$(code "$B/api/v1/meta/status")" = "200" ] || fail "/api/v1/meta/status is not 200 — the API route broke"
 
 # The rule itself, so a future edit back to `/api/*` fails here rather than in a browser console.
-CADDY="$BLUE/infra/docker/Caddyfile"
+CADDY="$BLUE/deploy/Caddyfile"
 grep -q 'handle /api/v1/\*' "$CADDY" || fail "Caddyfile no longer scopes the API to /api/v1/*"
 grep -qE '^\s*handle /api/\*' "$CADDY" && fail "Caddyfile matches bare /api/* again; that breaks NextAuth"
 

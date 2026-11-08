@@ -1,4 +1,4 @@
-# Local scrape configuration — the one `infra/docker/compose.yml`'s `observability` profile uses.
+# Local scrape configuration — the one `deploy/compose.yml`'s `observability` profile uses.
 #
 # Identical to `prometheus.yml` except for the targets: `make api` and `make worker` run on the
 # **host**, not in the compose network, so the container reaches them through

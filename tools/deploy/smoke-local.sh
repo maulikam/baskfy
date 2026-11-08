@@ -18,7 +18,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BLUE="$ROOT/decile-blueprint"
-DOCK="$BLUE/infra/docker"
+DOCK="$BLUE/deploy"
 # The agent session's scratchpad when it exists (never the repo, never /tmp's shared root
 # for a file that holds a generated password), else a private directory under $TMPDIR.
 _AGENT_SCRATCH=/private/tmp/claude-501/-Users-maulikdave-Documents-projects-baskfy/b145c25e-ef2d-4ffe-ae88-9465ecb011fc/scratchpad

@@ -5,7 +5,7 @@
 # BUILD CONTEXT IS THE REPO ROOT, because the desk imports `baskfy_core`, `baskfy_execution` and
 # `baskfy_providers` from the workspace and its own code lives in the sibling tree:
 #
-#     docker build -f decile-blueprint/infra/docker/Dockerfile.desk -t baskfy-desk .
+#     docker build -f deploy/Dockerfile.desk -t baskfy-desk .
 #
 # The root `.dockerignore` is an allow-list: only the three packages, `app/`, `config/`, `scripts/`
 # and `requirements.txt` enter the context. `.env`, `data/` (portfolio.db, the upload corpus) and

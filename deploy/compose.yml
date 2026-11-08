@@ -63,7 +63,7 @@ services:
   # `services/api/tests/test_metrics.py` without any of this running. The stack is here so that
   # "does the dashboard actually render" can be answered locally rather than in staging.
   #
-  #   docker compose -f infra/docker/compose.yml --profile observability up -d
+  #   docker compose -f deploy/compose.yml --profile observability up -d
   #
   # NOTE: the API and the worker are NOT in this compose file — they run on the host (`make api`,
   # `make worker`), so Prometheus is pointed at `prometheus.local.yml`, whose targets are
@@ -76,7 +76,7 @@ services:
     ports:
       - "${BASKFY_PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - ../prometheus:/etc/prometheus:ro
+      - ../decile-blueprint/infra/prometheus:/etc/prometheus:ro
       - baskfy-prometheus-data:/prometheus
     command:
       # `prometheus.local.yml`, not `prometheus.yml`: the API and the worker run on the host
@@ -101,9 +101,9 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - ../grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/baskfy.yml:ro
-      - ../grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/baskfy.yml:ro
-      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards/baskfy:ro
+      - ../decile-blueprint/infra/grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/baskfy.yml:ro
+      - ../decile-blueprint/infra/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/baskfy.yml:ro
+      - ../decile-blueprint/infra/grafana/dashboards:/etc/grafana/provisioning/dashboards/baskfy:ro
       - baskfy-grafana-data:/var/lib/grafana
 
 volumes:

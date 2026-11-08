@@ -12,7 +12,7 @@
 #
 # BUILD CONTEXT IS `decile-blueprint/`
 # ------------------------------------
-#     docker build -f infra/docker/Dockerfile.python -t baskfy-py decile-blueprint
+#     docker build -f deploy/Dockerfile.python -t baskfy-py decile-blueprint
 #
 # WHY uv AND NOT pip
 # ------------------

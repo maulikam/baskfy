@@ -60,7 +60,7 @@ class TestTheMarkIsFetchable:
         assert mail.LOGO_URL.startswith("https://")
 
     def test_it_lives_under_the_path_the_gate_leaves_open(self) -> None:
-        # `infra/docker/Caddyfile` exempts `/brand/*` from basic_auth precisely so a mail client,
+        # `deploy/Caddyfile` exempts `/brand/*` from basic_auth precisely so a mail client,
         # which fetches with no session, can load this. A logo anywhere else 401s and renders
         # broken for every reader.
         assert "/brand/" in mail.LOGO_URL

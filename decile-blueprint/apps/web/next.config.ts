@@ -82,7 +82,7 @@ const nextConfig: NextConfig = {
    *
    * Standalone emits `.next/standalone/server.js` with only the `node_modules` the server
    * actually reached, which is what lets the runtime image be `node:22-slim` with no pnpm store
-   * and no workspace symlinks inside it — see `infra/docker/Dockerfile.web`.
+   * and no workspace symlinks inside it — see `deploy/Dockerfile.web`.
    *
    * It costs nothing in development: the flag only changes what `next build` writes. Two things
    * it does *not* carry, and the Dockerfile copies them by hand because of it — `public/` and

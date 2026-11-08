@@ -587,7 +587,7 @@ fn test_exactly_at_the_close_it_is_too_late_to_join() {
 
 fn loop_source() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../decile-blueprint/infra/docker/Dockerfile.desk");
+        .join("../../../deploy/Dockerfile.desk");
     let text = std::fs::read_to_string(path).unwrap();
     let start = text
         .find("RUN cat > /usr/local/bin/swing-monitor-loop")

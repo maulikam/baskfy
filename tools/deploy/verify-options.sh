@@ -28,7 +28,7 @@ bad()  { printf '  FAIL %s\n' "$*"; FAILS=$((FAILS+1)); }
 note() { printf '  --   %s\n' "$*"; }
 MONEY_FLAGS="BASKFY_OPTIONS_O1M_EXECUTION_ENABLED BASKFY_OPTIONS_O1W_EXECUTION_ENABLED BASKFY_OPTIONS_O2_EXECUTION_ENABLED BASKFY_OPTIONS_O3_EXECUTION_ENABLED"
 OPS_FLAGS="BASKFY_OPTIONS_MONITOR_ENABLED BASKFY_OPTIONS_COLLECT_ENABLED BASKFY_OPTIONS_SCAN_ENABLED"
-COMPOSE="$ROOT/decile-blueprint/infra/docker/compose.prod.yml"
+COMPOSE="$ROOT/deploy/compose.prod.yml"
 
 # ------------------------------------------------------------------------------ both modes: repo
 echo "── the repository"
@@ -65,7 +65,7 @@ f = options_flags(); print(f.dry_run, f.options_enabled, f.intraday_enabled, f.o
   [ "$WORKER_FLAGS" = "False False False False False False False" ] \
     && ok "worker defaults: live (DRY-LIVE), every options switch false" \
     || bad "worker defaults are not safe: $WORKER_FLAGS"
-  # The dev stack's Postgres is the compose container (infra/docker/compose.yml); ask it directly,
+  # The dev stack's Postgres is the compose container (deploy/compose.yml); ask it directly,
   # so this needs no psql on the laptop. BASKFY_LOCAL_PG / BASKFY_LOCAL_DB override the names.
   PG="${BASKFY_LOCAL_PG:-baskfy-postgres}"; DB="${BASKFY_LOCAL_DB:-baskfy_test}"
   sql() { docker exec "$PG" psql -U baskfy -d "$DB" -tAc "$1" 2>/dev/null | tr -d ' '; }

@@ -24,7 +24,7 @@ set -euo pipefail
 
 SECRETS_DIR=/opt/baskfy/secrets/ssh
 KEY="$SECRETS_DIR/kite-session"
-# uid/gid of the container's `baskfy` user (infra/docker/Dockerfile.python). ssh will not use a
+# uid/gid of the container's `baskfy` user (deploy/Dockerfile.python). ssh will not use a
 # key it cannot read, and will not use one it considers world-readable, so both matter.
 CONTAINER_UID=1001
 

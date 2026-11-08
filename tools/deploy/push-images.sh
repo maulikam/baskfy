@@ -75,7 +75,7 @@ echo "── build web ($TAG) for https://${HOSTNAME_PUBLIC}"
 # under `set -e`, and the three lines after the comment block were parsed as commands of their
 # own (`--build-arg: command not found`). The fix for a note about an argument is to put it
 # above the command, never between its arguments.
-docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.web" \
+docker build --platform linux/arm64 -f "$BLUE/deploy/Dockerfile.web" \
   -t "$REG/baskfy-web:$TAG" -t "$REG/baskfy-web:latest" \
   --build-arg "NEXT_PUBLIC_SITE_URL=https://${HOSTNAME_PUBLIC}" \
   --build-arg "NEXT_PUBLIC_API_ORIGIN=https://${HOSTNAME_PUBLIC}" \
@@ -85,7 +85,7 @@ docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.web" \
   "$BLUE"
 
 echo "── build python ($TAG)"
-docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.python" \
+docker build --platform linux/arm64 -f "$BLUE/deploy/Dockerfile.python" \
   -t "$REG/baskfy-py:$TAG" -t "$REG/baskfy-py:latest" "$BLUE"
 
 # The web and py repositories were created by hand (runbook §1); the desk's is created here the
@@ -96,7 +96,7 @@ aws ecr describe-repositories --region "$REGION" --repository-names baskfy-desk 
        --image-scanning-configuration scanOnPush=true >/dev/null
 
 echo "── build desk ($TAG) — the weekly book and the swing book, DRY_RUN baked in"
-docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.desk" \
+docker build --platform linux/arm64 -f "$BLUE/deploy/Dockerfile.desk" \
   -t "$REG/baskfy-desk:$TAG" -t "$REG/baskfy-desk:latest" "$ROOT"
 
 echo "── push"

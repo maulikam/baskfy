@@ -41,7 +41,7 @@ have_pg() { docker exec baskfy-postgres pg_isready -U baskfy >/dev/null 2>&1; }
 
 # The workflow sets this at job level; this script never did, so every "coverage gate" run here
 # skipped the db-marked suites and the gate refused to report a number it did not trust. The
-# port is 5433 because that is what infra/docker/compose.yml publishes locally; CI's service
+# port is 5433 because that is what deploy/compose.yml publishes locally; CI's service
 # container is on 5432.
 export BASKFY_TEST_DATABASE_URL="${BASKFY_TEST_DATABASE_URL:-postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test}"
 

@@ -112,7 +112,7 @@ answered by not being in that business at all.
 **In the browser, automatically.** Caddy on the Baskfy box redirects a bare Kite return —
 `/api/v1/brokers/callback` carrying `request_token` and *no* `state` — to
 `https://desk.modelbasket.in/callback?request_token=…`. A Baskfy-initiated login carries a `state`
-and falls through to the API untouched. See `decile-blueprint/infra/docker/Caddyfile`.
+and falls through to the API untouched. See `deploy/Caddyfile`.
 
 **Server to server, with no browser.** `/opt/baskfy/bin/baskfy-desk-handoff`
 (`tools/deploy/desk/baskfy-desk-handoff`) pipes the token on stdin over SSH to the forced command:

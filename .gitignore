@@ -10,7 +10,7 @@ baskfy-safety/
 .coverage-combined/
 
 # Deployment environment files (docs/08 Phase A). The sub-trees ignore their own `.env*`; these
-# live at the root because `infra/docker/compose.prod.yml` reads them from here, and the root
+# live at the root because `deploy/compose.prod.yml` reads them from here, and the root
 # ignore file did not cover them — `.env.staging` showed up as untracked, one `git add -A` away
 # from a database password in history. `.env.example` and `.env.staging.example` are the
 # committed contracts and are exempt.

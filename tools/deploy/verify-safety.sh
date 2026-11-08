@@ -39,7 +39,7 @@ if git ls-files 'decile-blueprint/infra/**' 'tools/deploy/**' \
 fi
 
 # 3. The safety rails, in the file that describes the box.
-C="$BLUE/infra/docker/compose.prod.yml"
+C="$BLUE/deploy/compose.prod.yml"
 # The default is false since 1 Nov 2026 (Maulik; DECISIONS-MERGE DRY-LIVE). The rail now is that
 # compose reads it from the env file and deploy-swing.sh pins the box true when that file is silent.
 grep -qE 'DRY_RUN: "\$\{BASKFY_DRY_RUN:-false\}"' "$C" \
@@ -48,7 +48,7 @@ grep -q 'for k in BASKFY_DRY_RUN BASKFY_DESK_DRY_RUN' "$ROOT/tools/deploy/deploy
   || fail "deploy-swing.sh no longer pins the box's DRY_RUN when unset"
 grep -q 'BASKFY_PUBLIC_API_ENABLED: "false"' "$C" || fail "the public API is not shut (D9)"
 grep -q 'BASKFY_FREE_TIER_ENABLED: "false"'  "$C" || fail "a Track B flag is not false"
-grep -q 'DRY_RUN=false' "$BLUE/infra/docker/Dockerfile.python" || fail "the image does not state DRY_RUN's default (DRY-LIVE)"
+grep -q 'DRY_RUN=false' "$BLUE/deploy/Dockerfile.python" || fail "the image does not state DRY_RUN's default (DRY-LIVE)"
 
 # 3b. VB13 — the volume-breakout sleeve's rails, as compose defaults.
 #

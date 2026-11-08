@@ -29,7 +29,7 @@ bad()  { printf '  FAIL %s\n' "$*"; FAILS=$((FAILS+1)); }
 note() { printf '  --   %s\n' "$*"; }
 MONEY_FLAGS="BASKFY_FNO_CARRY_ENABLED BASKFY_FNO_F1_EXECUTION_ENABLED BASKFY_FNO_F2_EXECUTION_ENABLED BASKFY_FNO_F3_EXECUTION_ENABLED BASKFY_FNO_F3_AUTO_EXIT"
 OPS_FLAGS="BASKFY_FNO_SCAN_ENABLED BASKFY_FNO_MONITOR_ENABLED"
-COMPOSE="$ROOT/decile-blueprint/infra/docker/compose.prod.yml"
+COMPOSE="$ROOT/deploy/compose.prod.yml"
 SCHEMA_AT_LEAST="0052"
 
 # ------------------------------------------------------------------------------ both modes: repo

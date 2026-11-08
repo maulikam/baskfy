@@ -19,7 +19,7 @@
 # /desk on the same port (one address, Maulik, 29 Oct 2026). Tailscale serves it over HTTPS.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DOCK="$ROOT/decile-blueprint/infra/docker"
+DOCK="$ROOT/deploy"
 BUNDLE="${BASKFY_EXIT_BUNDLE:-/Volumes/T7-Work/baskfy-aws-exit-20261029/bundle}"
 HOME_DIR="${BASKFY_LOCAL_DIR:-/Volumes/T7-Work/baskfy-local}"
 TAG="${BASKFY_LOCAL_TAG:-$(cat "$HOME_DIR/py.tag" 2>/dev/null || echo d78907f)}"

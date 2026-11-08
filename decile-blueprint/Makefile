@@ -1,5 +1,5 @@
 # Baskfy — developer entrypoints. See CLAUDE.md.
-COMPOSE := docker compose -f infra/docker/compose.yml
+COMPOSE := docker compose -f ../deploy/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help

@@ -72,7 +72,7 @@ Decisions inside the box:
   Celery `compute` queue want memory headroom; the desk's own sizing doc showed how tight 4 GB
   gets. T4g is burstable — leave **unlimited mode on** for backfill night and accept the few-rupee
   surcharge rather than a stalled chain.
-- **Keep the Timescale container image in Phase A.** `infra/docker/compose.yml` already pins
+- **Keep the Timescale container image in Phase A.** `deploy/compose.yml` already pins
   `timescale/timescaledb:2.17.2-pg16` (arm64 exists); nothing needs to change while the database
   lives in compose. The Timescale exit happens once, at P3.9, into RDS (§4).
 - **S3 from day one, because it is a config value.** `s3_endpoint_url` points at real S3;
@@ -118,7 +118,7 @@ that a `REFRESH MATERIALIZED VIEW CONCURRENTLY` after the nightly publish replac
 
 The change, enumerated (this is the entire blast radius, all found this session):
 
-1. `infra/docker/compose.yml` — image `timescale/timescaledb:2.17.2-pg16` → `postgres:16`
+1. `deploy/compose.yml` — image `timescale/timescaledb:2.17.2-pg16` → `postgres:16`
    (Phase B envs; local dev can keep either).
 2. `services/api/alembic/versions/0008_performance_indexes.py` — the `create_hypertable` loop
    and the two `WITH (timescaledb.continuous)` views get a plain-Postgres branch (plain tables +

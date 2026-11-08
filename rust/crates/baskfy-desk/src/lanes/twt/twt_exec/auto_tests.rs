@@ -403,7 +403,7 @@ fn repo_file(relative: &str) -> String {
 
 #[test]
 fn test_the_image_runs_this_module() {
-    let text = repo_file("decile-blueprint/infra/docker/Dockerfile.desk");
+    let text = repo_file("deploy/Dockerfile.desk");
     assert!(text.contains("RUN cat > /usr/local/bin/twt-auto-loop"));
     assert!(text.contains("exec python -m scripts.twt_auto_loop"));
     let chmod = text.split_once("RUN chmod 0755").unwrap().1;
@@ -465,7 +465,7 @@ fn service_env(text: &str, service: &str) -> Vec<(String, String)> {
 
 #[test]
 fn test_compose_runs_it_from_the_desk_block_with_the_flag_named_false() {
-    let text = repo_file("decile-blueprint/infra/docker/compose.prod.yml");
+    let text = repo_file("deploy/compose.prod.yml");
     assert!(text.contains("  twt-auto:\n    <<: *desk\n    command: [twt-auto-loop]"));
     let env = service_env(&text, "twt-auto");
     let get = |k: &str| env.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());

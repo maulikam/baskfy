@@ -16,7 +16,7 @@ docker image inspect "$WEB_IMAGE" >/dev/null 2>&1 || {
   # The build log is kept and shown on failure. It was `>/dev/null 2>&1`, so the one line that
   # named the missing variable was discarded and the gate said only "web image did not build".
   LOG="$(mktemp)"
-  docker build --platform "$PLATFORM" -f "$BLUE/infra/docker/Dockerfile.web" -t "$WEB_IMAGE" \
+  docker build --platform "$PLATFORM" -f "$BLUE/deploy/Dockerfile.web" -t "$WEB_IMAGE" \
     --build-arg "NEXT_PUBLIC_DESK_URL=http://desk.invalid" \
     "$BLUE" >"$LOG" 2>&1 || {
       tail -25 "$LOG" | sed 's/^/    /' >&2

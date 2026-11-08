@@ -34,7 +34,7 @@ set -euo pipefail
 SECRETS_DIR=/opt/baskfy/secrets/ssh
 KEY="$SECRETS_DIR/desk-handoff"
 BIN_DIR=/opt/baskfy/bin
-# uid/gid of the container's `baskfy` user (infra/docker/Dockerfile.python). The api container
+# uid/gid of the container's `baskfy` user (deploy/Dockerfile.python). The api container
 # gets $SECRETS_DIR mounted read-only, and ssh refuses a key it cannot read.
 CONTAINER_UID=1001
 

@@ -388,8 +388,8 @@ def _auto_scan_tops() -> list[Path]:
     env_files = (
         *ROOT.glob(".env*.example"), *ROOT.glob(".env*.compose"), *ROOT.glob(".env.example"),
         *SCREENER.glob(".env*.example"), *SCREENER.glob(".env.example"),
-        *DESK.glob(".env*.example"), *(SCREENER / "infra/docker").glob(".env*.compose"),
-        *(SCREENER / "infra/docker").glob("compose*.yml"), *ROOT.glob("compose*.yml"),
+        *DESK.glob(".env*.example"), *(ROOT / "deploy").glob(".env*.compose"),
+        *(ROOT / "deploy").glob("compose*.yml"), *ROOT.glob("compose*.yml"),
         *ROOT.glob("docker-compose*.yml"),
     )  # fmt: skip
     return [p for p in (*tops, *env_files) if p.exists()]

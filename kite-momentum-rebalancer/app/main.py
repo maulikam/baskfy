@@ -176,12 +176,28 @@ def gateway() -> OrderGateway:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, logged_in: str = "", autorun: str = "", note: str = ""):
+def home(request: Request, logged_in: str = "", autorun: str = "", note: str = "",
+         plan_id: str = ""):
     authed = False
     try:
         authed = kite().is_authed()
     except Exception:
         pass
+    handoff_plan, handoff_error = None, ""
+    if plan_id:
+        if not authed:
+            handoff_error = "Kite session expired — log in, then open the handoff again."
+        else:
+            try:
+                from .analytics import db as _db, plan_store as _ps
+                with _db.connect() as conn:
+                    _db.migrate(conn)
+                    handoff_plan = _ps.load_executable_plan(conn, plan_id)
+                PLANS[handoff_plan["plan_id"]] = handoff_plan
+            except Exception as exc:                              # noqa: BLE001
+                # The page remains usable for a fresh Analyze.  The handoff itself is refused
+                # explicitly; it is never approximated from whichever half of the journal loaded.
+                handoff_error = str(exc)[:200]
     # Collection health belongs on the desk: a silently broken daily job costs history
     # that cannot be backfilled, and this is the page actually opened before trading.
     collection = None
@@ -222,7 +238,9 @@ def home(request: Request, logged_in: str = "", autorun: str = "", note: str = "
     return templates.TemplateResponse(request, "index.html",
                                       {"authed": authed, "dry_run": C.DRY_RUN,
                                        "collection": collection, "auto": auto,
-                                       "protection": protection})
+                                       "protection": protection,
+                                       "handoff_plan": handoff_plan,
+                                       "handoff_error": handoff_error})
 
 
 @app.get("/login")

@@ -39,6 +39,19 @@
   {% endif %}
 {% endif %}
 
+{% if handoff_error %}
+<div class="collect bad">
+  <span class="tag">handoff refused</span>
+  <span>{{ handoff_error }}</span>
+</div>
+{% elif handoff_plan %}
+<div class="collect ok">
+  <span class="tag">product plan loaded</span>
+  <span>Plan {{ handoff_plan.plan_id }} was restored from the desk journal. Review every line;
+    nothing is sent until the confirmation below.</span>
+</div>
+{% endif %}
+
 {# Only shown when something is wrong. A healthy collection needs no banner: a status
    line that is always present stops being read, and this one has to be believed on the
    day it turns red. #}
@@ -161,7 +174,7 @@
 
 {% block scripts %}
 <script>
-let PLAN=null;
+let PLAN={{ handoff_plan | tojson if handoff_plan else 'null' }};
 const fmt=n=>n==null?'—':Number(n).toLocaleString('en-IN');
 document.getElementById('f').addEventListener('submit',async e=>{
   e.preventDefault();
@@ -418,5 +431,6 @@ async function execute(){
   res.scrollIntoView({behavior:'smooth',block:'start'});
   res.focus({preventScroll:true});
 }
+if(PLAN) render();
 </script>
 {% endblock %}

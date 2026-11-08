@@ -47,7 +47,10 @@ not split below a coherent deliverable.
         - exact catalog math + golden/property tests ........ `gates/leaf-sc2-math.md`
         - authenticated catalog/watchlist API ............... `gates/leaf-sc2-api.md`
         - idempotent metrics job + SCAN projection .......... `gates/leaf-sc2-job-seed.md`
-      - 1.2.1.3 SC3 versions/rebalance/plans ............... expand before dispatch
+      - 1.2.1.3 SC3 versions/rebalance/plans ............... `gates/node-sc3.md`
+        - exact target diff + market-session rules .......... `gates/leaf-sc3-math-calendar.md`
+        - immutable publishing + timeline side effects ...... `gates/leaf-sc3-publishing.md`
+        - plan journal + fill/expiry lifecycle .............. `gates/leaf-sc3-plan-lifecycle.md`
       - 1.2.1.4 SC4 accounting ............................. expand before dispatch
     - 1.2.2 Product surfaces
       - SC5 discovery/detail ............................... expand before dispatch
@@ -79,6 +82,8 @@ Append-only. One line per event; never rewrite earlier entries.
 - 2026-08-23 parent integration passed 85 SC2 tests, 110 generated-client tests, full repository
   lint/type checks, migrate/seed idempotence, and the unchanged 1,328-test desk suite under
   `DRY_RUN=true`; SC2 is ready for its single green commit.
+- 2026-08-23 SC2 committed green as `38652a6`; SC3 expanded into exact diff/calendar,
+  publishing/timeline, and journal lifecycle leaves with disjoint ownership and disposable DBs.
 
 ## SC2 fixed contract
 
@@ -103,3 +108,22 @@ Append-only. One line per event; never rewrite earlier entries.
   `MomentumScan`, owned by `baskfy-engine`, with equal four-decimal weights using deterministic
   largest-remainder allocation. Projection tests consume a fixture scan; they do not infer live
   orders.
+
+## SC3 fixed contract
+
+- Pure plan math lives in `baskfy_core.curated_rebalance`, consumes only exact Decimal values,
+  and returns immutable buy/sell/cash/top-up intent. Applying a version diffs the investment's
+  current intended holdings—not the previous basket version—against current target values.
+- Market eligibility is an explicit NSE trading-calendar decision in Asia/Kolkata: 09:15 is
+  inclusive, 15:30 is exclusive, and the closed response names the next stored trading session.
+  A closed request creates neither product batch nor desk-journal plan.
+- Publishing appends through the SC1 repository seam and atomically creates exactly one ENGINE
+  post, one unresolved REBALANCE_AVAILABLE action per affected sole user, and a PENDING state for
+  every ACTIVE investment. Re-publishing supersedes unresolved state without duplicating alerts.
+- Plan-generating API operations are `invest`, `invest-more`, `apply`, `exit`, and `partial-exit`.
+  They create product batch intent plus a desk-compatible journal plan only; there is no broker,
+  provider, execution-package import, or order-submission route. `DRY_RUN=true` is mandatory.
+- `cb_order_batch.desk_plan_id` is the opaque reconciliation key. Only confirmed journal fills
+  mutate SC holdings and advance a batch to EXECUTED; a 30-minute deadline expires strictly after
+  the boundary, and an expired apply batch restores PENDING. Reconciliation is idempotent and
+  set-based, with no optimistic holding mutation.

@@ -18,9 +18,11 @@ and a panel claiming policy was implemented has to be able to tell them apart.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 import json
+import math
+import re
 import time
-from typing import Iterable, Mapping, Sequence
 
 from . import db
 
@@ -48,6 +50,14 @@ _AT_EXCHANGE = frozenset({SUBMITTED, FILLED, PARTIAL, LAPSED})
 _REFUSED = frozenset({FAILED, BLOCKED})
 _TERMINAL_BROKER = {"COMPLETE", "REJECTED", "CANCELLED"}
 
+PLAN_TTL_SECONDS = 30 * 60
+MAX_PLAN_ORDERS = 500
+_SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&._-]{0,49}$")
+
+
+class StoredPlanError(ValueError):
+    """A persisted envelope is absent, stale, or disagrees with its normalized journal."""
+
 
 def save_plan(conn, plan: Mapping, *, evaluation_id: str | None = None,
               note: str = "") -> str:
@@ -65,9 +75,11 @@ def save_plan(conn, plan: Mapping, *, evaluation_id: str | None = None,
         conn.execute("DELETE FROM rebalance_orders WHERE version_id=?", (pid,))
         conn.execute(
             "INSERT OR REPLACE INTO rebalance_versions(version_id, created_ts,"
-            " constituents_json, weights_json, note, evaluation_id) VALUES(?,?,?,?,?,?)",
+            " constituents_json, weights_json, note, evaluation_id, plan_json) "
+            "VALUES(?,?,?,?,?,?,?)",
             (pid, float(plan.get("created_at") or time.time()),
-             json.dumps(constituents), json.dumps(weights), note, evaluation_id))
+             json.dumps(constituents), json.dumps(weights), note, evaluation_id,
+             json.dumps(plan, sort_keys=True, separators=(",", ":"))))
         conn.executemany(
             "INSERT INTO rebalance_orders(version_id, symbol, side, planned_qty,"
             " planned_ref_price, filled_qty, avg_fill_price, status)"
@@ -76,6 +88,129 @@ def save_plan(conn, plan: Mapping, *, evaluation_id: str | None = None,
               abs(int(o["delta"])), float(o.get("ref_price") or 0.0), PENDING)
              for o in orders])
     return pid
+
+
+def load_executable_plan(conn, plan_id: str, *, now: float | None = None) -> dict:
+    """Restore one persisted plan only after its envelope and journal agree exactly.
+
+    Persistence is not an alternate order path.  This function performs no broker/network work;
+    it only reconstructs the same in-memory value ``/analyze`` creates.  ``/execute`` still
+    requires the desk origin, an explicit ``confirm=true``, an authenticated Kite session and the
+    sole gateway.  The normalized rows are cross-checked so editing either representation makes
+    the handoff fail closed instead of changing an order silently.
+    """
+    if not isinstance(plan_id, str) or not _SYMBOL.fullmatch(plan_id.upper()) or len(plan_id) > 50:
+        raise StoredPlanError("invalid plan id")
+    row = conn.execute(
+        "SELECT version_id, created_ts, plan_json FROM rebalance_versions WHERE version_id=?",
+        (plan_id,),
+    ).fetchone()
+    if row is None:
+        raise StoredPlanError("unknown plan id")
+    created = _finite_number(row["created_ts"], "stored created_ts")
+    observed = time.time() if now is None else _finite_number(now, "current time")
+    age = observed - created
+    if age < -60:
+        raise StoredPlanError("plan timestamp is in the future")
+    if age > PLAN_TTL_SECONDS:
+        raise StoredPlanError("plan is older than 30 minutes")
+    # sqlite3.Row deliberately has no Mapping.get; the Postgres adapter's Row does.  Indexed
+    # access is the common interface and keeps the handoff identical on both desk backends.
+    raw = row["plan_json"]
+    if not isinstance(raw, str) or not raw:
+        raise StoredPlanError("plan has no durable review payload; re-run Analyze")
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise StoredPlanError("plan review payload is not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise StoredPlanError("plan review payload must be an object")
+    if parsed.get("plan_id") != plan_id:
+        raise StoredPlanError("plan id disagrees with its review payload")
+    payload_created = _finite_number(parsed.get("created_at"), "payload created_at")
+    if abs(payload_created - created) > 0.001:
+        raise StoredPlanError("plan timestamp disagrees with its review payload")
+    _non_negative_number(parsed.get("book_value"), "book_value")
+
+    orders = parsed.get("orders")
+    if not isinstance(orders, list) or not orders:
+        raise StoredPlanError("plan must contain at least one order row")
+    if len(orders) > MAX_PLAN_ORDERS:
+        raise StoredPlanError(f"plan exceeds the {MAX_PLAN_ORDERS}-row safety limit")
+
+    payload_orders: dict[str, tuple[str, int, float]] = {}
+    for index, order in enumerate(orders):
+        if not isinstance(order, dict):
+            raise StoredPlanError(f"order {index} must be an object")
+        symbol = order.get("symbol")
+        if not isinstance(symbol, str) or not _SYMBOL.fullmatch(symbol):
+            raise StoredPlanError(f"order {index} has an invalid NSE symbol")
+        if symbol in payload_orders:
+            raise StoredPlanError(f"duplicate plan symbol {symbol}")
+        delta = order.get("delta")
+        if isinstance(delta, bool) or not isinstance(delta, int):
+            raise StoredPlanError(f"order {symbol} delta must be a whole-share integer")
+        ref_price = _positive_number(order.get("ref_price"), f"order {symbol} ref_price")
+        action = order.get("action")
+        if not isinstance(action, str) or not action or len(action) > 32:
+            raise StoredPlanError(f"order {symbol} action is invalid")
+        if delta:
+            payload_orders[symbol] = ("BUY" if delta > 0 else "SELL", abs(delta), ref_price)
+
+    journal_rows = conn.execute(
+        "SELECT symbol, side, planned_qty, planned_ref_price FROM rebalance_orders "
+        "WHERE version_id=?",
+        (plan_id,),
+    ).fetchall()
+    journal_orders: dict[str, tuple[str, int, float]] = {}
+    for journal in journal_rows:
+        symbol = str(journal["symbol"])
+        if symbol in journal_orders:
+            raise StoredPlanError(f"journal contains duplicate symbol {symbol}")
+        qty_raw = journal["planned_qty"]
+        qty = int(qty_raw)
+        if isinstance(qty_raw, bool) or qty <= 0 or float(qty_raw) != qty:
+            raise StoredPlanError(f"journal quantity for {symbol} is invalid")
+        side = str(journal["side"])
+        if side not in {"BUY", "SELL"}:
+            raise StoredPlanError(f"journal side for {symbol} is invalid")
+        journal_orders[symbol] = (
+            side,
+            qty,
+            _positive_number(journal["planned_ref_price"], f"journal {symbol} ref_price"),
+        )
+    if payload_orders != journal_orders:
+        raise StoredPlanError("plan review payload disagrees with normalized journal orders")
+    if not payload_orders:
+        raise StoredPlanError("plan contains no executable order")
+
+    # Use the journal timestamp after proving equality.  Downstream expiry therefore cannot be
+    # extended by a second timestamp hidden in JSON, and unknown product metadata remains intact.
+    parsed["created_at"] = created
+    return parsed
+
+
+def _finite_number(value, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise StoredPlanError(f"{name} must be a finite number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise StoredPlanError(f"{name} must be a finite number")
+    return number
+
+
+def _positive_number(value, name: str) -> float:
+    number = _finite_number(value, name)
+    if number <= 0:
+        raise StoredPlanError(f"{name} must be positive")
+    return number
+
+
+def _non_negative_number(value, name: str) -> float:
+    number = _finite_number(value, name)
+    if number < 0:
+        raise StoredPlanError(f"{name} must be non-negative")
+    return number
 
 
 def record_execution(conn, plan_id: str, results: Iterable[Mapping]) -> dict:

@@ -29,7 +29,7 @@ import psycopg
 
 WT = Path(__file__).resolve().parents[2]
 MAIN = Path("/Volumes/T7-Work/Dev/projects/baskfy")
-LOCK = MAIN / "rust" / "target" / "nightly_diff.lock"
+LOCK = Path("/Volumes/T7-Work/baskfy-cargo-target") / "nightly_diff.lock"
 ADMIN = "postgresql://baskfy:rs-test-only@127.0.0.1:55432/postgres"
 BASE = "postgresql://baskfy:rs-test-only@127.0.0.1:55432/"
 SLUG = "nifty-total-market"

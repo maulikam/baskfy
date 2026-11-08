@@ -6,7 +6,7 @@
 # is the only thing making that URL work. That distinction is the whole task, so it is computed
 # from the two sources of truth rather than from a list someone typed.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 exec python3 - "$@" <<'PY'
 import pathlib, re, sys
 

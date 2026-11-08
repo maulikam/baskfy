@@ -4,7 +4,7 @@
 # It cannot engage counsel. It CAN make sure that (1) one sendable brief exists, (2) the drafts
 # cannot be mistaken for reviewed text, and (3) the blocker is filed where the owner will see it.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 WEB=decile-blueprint/apps/web
 BASE="${BASE:-http://localhost:3000}"
 fail=0

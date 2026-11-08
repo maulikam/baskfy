@@ -5,7 +5,7 @@
 # earlier task in the same session, and a gate that failed on those would be reporting on someone
 # else's work. This names the files node 1.1.1 owns and checks the two trees it must never touch.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 fail=0
 
 echo "files this node owns:"

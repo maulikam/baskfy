@@ -5,7 +5,7 @@
 # is exactly how an orchestrated build reports done at 80%. It counts files as well as reading
 # them, because a leaf with no gates file at all cannot fail its own gates.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 CHECKER=~/.claude/skills/unlazy/scripts/gate-check.mjs
 
 shopt -s nullglob

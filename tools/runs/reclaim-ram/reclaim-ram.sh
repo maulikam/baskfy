@@ -21,7 +21,7 @@ set -uo pipefail
 KILL=0
 [ "${1:-}" = "--kill" ] && KILL=1
 
-REPO=$(cd "$(dirname "$0")/.." && pwd)
+REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 
 # Two conditions, and a process must meet both.
 #

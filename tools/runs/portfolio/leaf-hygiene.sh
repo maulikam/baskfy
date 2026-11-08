@@ -3,7 +3,7 @@
 #
 #   bash tools/runs/portfolio/leaf-hygiene.sh <module_name>     e.g. cash_ledger
 set -uo pipefail
-cd "$(dirname "$0")/../../decile-blueprint" || exit 2
+cd "$(dirname "$0")/../../../decile-blueprint" || exit 2
 MOD="packages/core/src/baskfy_core/${1:?module name}.py"
 TEST="packages/core/tests/test_${1}.py"
 fail=0

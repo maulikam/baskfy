@@ -19,7 +19,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(dirname "$here")"
+repo="$(cd "$here/../../.." && pwd)"
 
 export DRY_RUN=true
 cd "$repo/decile-blueprint"

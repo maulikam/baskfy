@@ -70,7 +70,7 @@ from baskfy_providers.records import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUT = ROOT / "rust" / "target" / "replay"
+DEFAULT_OUT = Path("/Volumes/T7-Work/baskfy-cargo-target") / "replay"
 CONTAINER = "baskfy-rs-pg"
 BED_DB = "baskfy"
 CORPORATE_ACTION_LOOKBACK_DAYS = 7

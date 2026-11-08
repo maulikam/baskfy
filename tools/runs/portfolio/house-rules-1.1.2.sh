@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Node 1.1.2 / G8 — the repo's rules, applied to the files this node adds or edits.
 set -uo pipefail
-cd "$(dirname "$0")/../../decile-blueprint" || exit 2
+cd "$(dirname "$0")/../../../decile-blueprint" || exit 2
 FILES=(
   services/api/alembic/versions/0021_allocation_ledger.py
   packages/core/src/baskfy_core/models/accounts.py

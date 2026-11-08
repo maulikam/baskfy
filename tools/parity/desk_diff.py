@@ -72,9 +72,9 @@ MAIN = Path("/Volumes/T7-Work/Dev/projects/baskfy")
 DESK = REPO / "kite-momentum-rebalancer"
 UPLOADS = MAIN / "kite-momentum-rebalancer" / "data" / "uploads"
 DESK_PY = MAIN / "kite-momentum-rebalancer" / ".venv" / "bin" / "python"
-LOCK = MAIN / "rust" / "target" / "nightly_diff.lock"
+LOCK = Path("/Volumes/T7-Work/baskfy-cargo-target") / "nightly_diff.lock"
 RUST = REPO / "rust"
-RS_BIN = RUST / "target" / "debug" / "baskfy-desk"
+RS_BIN = Path("/Volumes/T7-Work/baskfy-cargo-target") / "debug" / "baskfy-desk"
 BED = "postgresql://baskfy:rs-test-only@127.0.0.1:55432/{db}"
 REDIS = "redis://127.0.0.1:56379"
 PORTS = range(18500, 18800)
@@ -445,7 +445,7 @@ def run(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915
     if not args.python_both and not args.no_build:
         subprocess.run(["nice", "-n", "10", str(Path.home() / ".cargo/bin/cargo"), "build", "-p", "baskfy-desk"],  # noqa: S603, S607
                        cwd=RUST, check=True,
-                       env={**os.environ, "CARGO_TARGET_DIR": str(RUST / "target"), "CARGO_BUILD_JOBS": "4"})
+                       env={**os.environ, "CARGO_TARGET_DIR": str(Path("/Volumes/T7-Work/baskfy-cargo-target")), "CARGO_BUILD_JOBS": "4"})
     cases = load_cases(args.cases, args.plans)
     db_masks = load_db_masks(args.cases)
     base = Path(tempfile.mkdtemp(prefix="desk_diff_"))

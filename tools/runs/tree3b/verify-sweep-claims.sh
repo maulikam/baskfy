@@ -6,7 +6,7 @@
 # there, trust it" is exactly the reasoning this discipline exists to refuse. So the claims are
 # re-run against today's source: the tests, and the source conditions they assert.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 WEB=decile-blueprint/apps/web
 fail=0
 

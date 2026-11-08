@@ -5,7 +5,7 @@
 # two files, so a pass here means "this node did not weaken the codebase" rather than "the tests
 # happened to be green".
 set -uo pipefail
-cd "$(dirname "$0")/../../decile-blueprint" || exit 2
+cd "$(dirname "$0")/../../../decile-blueprint" || exit 2
 MOD=packages/core/src/baskfy_core/allocation_ledger.py
 TEST=packages/core/tests/test_allocation_ledger.py
 fail=0

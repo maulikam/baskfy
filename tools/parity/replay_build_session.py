@@ -52,7 +52,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE_TGZ = Path("/Volumes/T7-Work/baskfy-aws-exit-20261029/bundle/vol-baskfy-staging_baskfy-archive.tgz")
-SOURCES = ROOT / "rust" / "target" / "replay" / "sources" / "aws-exit-20261029"
+SOURCES = Path("/Volumes/T7-Work/baskfy-cargo-target") / "replay" / "sources" / "aws-exit-20261029"
 FO_SESSIONS = 5
 QUOTE_MINUTES = ("0935", "1315", "1529")
 QUOTED_UNDERLYINGS = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY")

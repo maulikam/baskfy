@@ -6,7 +6,7 @@
 #
 #   bash tools/runs/portfolio/acceptance.sh <c1|c2|c3|c4|c5|c6|c7|c8|nav|suites|all>
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 BLUE=decile-blueprint
 WEB=$BLUE/apps/web
 TESTDB="postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_tree3_test"

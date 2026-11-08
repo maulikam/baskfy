@@ -6,7 +6,7 @@
 # what archive-then-parse (docs/09) is for. This samples symbols, recomputes both stored numbers
 # straight from the archived JSON, and compares.
 set -uo pipefail
-cd "$(dirname "$0")/../../decile-blueprint" || exit 2
+cd "$(dirname "$0")/../../../decile-blueprint" || exit 2
 PSQL=(docker exec baskfy-postgres psql -U baskfy -d baskfy -tAc)
 DATE="${1:-$("${PSQL[@]}" "select max(trade_date) from pipeline_run where data_version is not null")}"
 SAMPLE="${2:-25}"

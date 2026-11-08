@@ -6,7 +6,7 @@
 # when all three hold, so the gate cannot pass on a partial run.
 set -uo pipefail
 
-WEB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../decile-blueprint/apps/web" && pwd)"
+WEB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../decile-blueprint/apps/web" && pwd)"
 cd "$WEB" || exit 1
 
 # Pre-existing eslint problems on this tree. Raising it hides a regression; it is a ceiling.

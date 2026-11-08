@@ -8,7 +8,7 @@
 # one unstyled column. So the class names are grepped out of the compiled stylesheet.
 set -uo pipefail
 
-WEB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../decile-blueprint/apps/web" && pwd)"
+WEB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../decile-blueprint/apps/web" && pwd)"
 cd "$WEB" || exit 1
 
 LOG="${TMPDIR:-/tmp}/baskfy-flow-build.log"

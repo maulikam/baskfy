@@ -7,7 +7,7 @@
 #   bash tools/runs/portfolio/schema-check.sh <columns|criterion2|monitoring|cascade|roundtrip
 #                                         |single-vocabulary|dev-intact>
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 DB="${DB:-baskfy_mig_test}"
 API=decile-blueprint/services/api
 URL="postgresql+asyncpg://baskfy:baskfy@localhost:5433/$DB"

@@ -5,7 +5,7 @@
 # recalled from an hour ago. Nothing here is typed by hand; if a number appears in the report it
 # comes out of this script.
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 PSQL=(docker exec baskfy-postgres psql -U baskfy -d baskfy -tAc)
 PUB=$("${PSQL[@]}" "select max(trade_date) from pipeline_run where data_version is not null")
 BARS=$("${PSQL[@]}" "select max(date) from ohlcv_daily")

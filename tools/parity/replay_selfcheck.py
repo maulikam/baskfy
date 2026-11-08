@@ -136,7 +136,7 @@ def main(argv: list[str]) -> int:
     with tempfile.TemporaryDirectory() as tmp:
         calls_file = Path(tmp) / "calls.json"
         calls_file.write_text(json.dumps(calls))
-        env = {**os.environ, "CARGO_TARGET_DIR": str(ROOT / "rust" / "target"), "CARGO_BUILD_JOBS": "6"}
+        env = {**os.environ, "CARGO_TARGET_DIR": str(Path("/Volumes/T7-Work/baskfy-cargo-target")), "CARGO_BUILD_JOBS": "6"}
         out = subprocess.run(
             ["nice", "-n", "10", str(CARGO), "run", "-q", "-p", "baskfy-providers", "--example",
              "replay_probe", "--", str(bundle), str(calls_file)],

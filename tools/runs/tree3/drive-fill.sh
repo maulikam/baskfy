@@ -12,7 +12,7 @@
 #
 #   bash tools/runs/tree3/drive-fill.sh 2026-08-18 [max_rounds] [seconds_per_round]
 set -uo pipefail
-cd "$(dirname "$0")/../.." || exit 2
+cd "$(dirname "$0")/../../.." || exit 2
 DATE="${1:?usage: drive-fill.sh YYYY-MM-DD [rounds] [seconds]}"
 ROUNDS="${2:-12}"
 PER_ROUND="${3:-900}"

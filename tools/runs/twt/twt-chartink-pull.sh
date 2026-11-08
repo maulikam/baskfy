@@ -12,7 +12,7 @@
 # on the box and `cut` into 20,000-character pages. The row count is asserted at the end: a page
 # lost in transit shows up as a short file rather than as a quietly smaller universe.
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 export AWS_PROFILE="${AWS_PROFILE:-baskfy-poc}"
 OUT="$ROOT/decile-blueprint/data/outputs/twt"
 mkdir -p "$OUT"

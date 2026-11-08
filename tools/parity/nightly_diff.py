@@ -107,7 +107,7 @@ from api_writes import (  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 BLUEPRINT = REPO / "decile-blueprint"
-TARGET = REPO / "rust" / "target"
+TARGET = Path("/Volumes/T7-Work/baskfy-cargo-target")
 LOCK_FILE = TARGET / "nightly_diff.lock"
 CACHE_DIR = TARGET / "nightly_diff_cache"
 REPLAY_ROOT = TARGET / "replay"

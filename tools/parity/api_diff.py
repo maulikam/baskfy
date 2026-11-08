@@ -83,8 +83,8 @@ import api_writes as writes_mod  # noqa: E402
 REPO = Path(__file__).resolve().parents[2]
 BLUEPRINT = REPO / "decile-blueprint"
 RUST = REPO / "rust"
-DEFAULT_SECRET_FILE = RUST / "target" / "parity-jwt-secret"
-DEFAULT_RS_BIN = RUST / "target" / "debug" / "baskfy-api"
+DEFAULT_SECRET_FILE = Path("/Volumes/T7-Work/baskfy-cargo-target") / "parity-jwt-secret"
+DEFAULT_RS_BIN = Path("/Volumes/T7-Work/baskfy-cargo-target") / "debug" / "baskfy-api"
 
 #: The test bed (lead-provisioned copy of the database). Anything else needs --allow-db-url.
 BED_DATABASE_URL = "postgresql+asyncpg://baskfy:rs-test-only@127.0.0.1:55432/baskfy"
@@ -313,7 +313,7 @@ def start_python(args: argparse.Namespace, env: dict[str, str], servers: Servers
 def build_rust(args: argparse.Namespace) -> None:
     cargo = Path.home() / ".cargo/bin/cargo"
     env = dict(os.environ)
-    env.update({"CARGO_TARGET_DIR": str(RUST / "target"), "CARGO_BUILD_JOBS": "6"})
+    env.update({"CARGO_TARGET_DIR": str(Path("/Volumes/T7-Work/baskfy-cargo-target")), "CARGO_BUILD_JOBS": "6"})
     subprocess.run(
         ["nice", "-n", "10", str(cargo), "build", "-p", "baskfy-api"],
         cwd=RUST,

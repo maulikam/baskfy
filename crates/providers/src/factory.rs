@@ -186,8 +186,13 @@ pub async fn build_rate_limiter(
     let Some(backend) = source.backend().await else {
         return Ok(None);
     };
-    let config = TokenBucketConfig::new(rate_per_second, rate_per_second)?;
+    let config = TokenBucketConfig::new(rate_per_second, bucket_capacity(rate_per_second))?;
     Ok(Some(Arc::new(RedisTokenBucket::new(backend, key, config))))
+}
+
+/// One second's worth, but never under one token: below that a rate under 1/s could never pay.
+fn bucket_capacity(rate_per_second: f64) -> f64 {
+    rate_per_second.max(1.0)
 }
 
 /// `build_spaced_rate_limiter`: a shared no-burst request clock, or `None` when Redis is
@@ -577,4 +582,13 @@ pub async fn build_provider_stack_with(
         settings.provider_circuit_reset_seconds,
         None,
     )
+}
+
+#[cfg(test)]
+mod capacity_tests {
+    #[test]
+    fn a_rate_under_one_per_second_still_holds_a_whole_token() {
+        assert!((super::bucket_capacity(0.5) - 1.0).abs() < f64::EPSILON);
+        assert!((super::bucket_capacity(3.0) - 3.0).abs() < f64::EPSILON);
+    }
 }

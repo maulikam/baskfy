@@ -2524,3 +2524,10 @@ session and the 18:40–21:15 nightly window:
 - **Done meanwhile:** code, tests, and a 3-name end-to-end run against a throwaway database. The agent did not touch the running stack.
 - **When:** start it right after a nightly publish, outside 18:40–21:15 IST. It shares NSE's rate limit with nightly step 6, which already stalls every ~600 requests.
 - **Then PM4** (after the backfill and one nightly on the new image), from `machinelearning/python/research/portfolio-ml`: `bash export_bars_local.sh && source .venv/bin/activate && python build_dataset.py --mb 1.0 250 && python run_pm4.py mb_u100_h250`. It refuses below 70 % coverage and prints the coverage instead.
+
+## Portfolio-ML (PM0.7) — ship the dead names into the plant (9 Nov 2026)
+
+- **Needed:** ship an image with `db/migrations/0005_instrument_terminal.sql`, then in the worker container `baskfy-worker dead_names backfill --from 2011-01-03 --to 2026-11-06`. About an hour at 1 req/s for files not yet archived; outside 18:40–21:15 IST. It writes instrument rows, bars and `instrument_terminal`, and marks stopped names inactive.
+- **Why:** PM4 and any future backtest need them in the plant. Today they exist only in the throwaway `pm07-pg`; the agent did not touch the running stack.
+- **Done meanwhile:** full run and two-pass hash check in the throwaway; downloaded archive kept at `/Volumes/T7-Work/pm07`. Safe to delete after the backfill, along with containers `pm07-pg` and `pm07-redis`.
+- **Then PM4:** add `--terminal=b` to the `build_dataset.py` step above. `run_pm4.py` reads the (b) dataset and refuses until this has run.

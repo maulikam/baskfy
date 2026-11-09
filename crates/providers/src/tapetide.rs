@@ -8,6 +8,7 @@ use reqwest::{StatusCode, Url};
 
 use crate::archive::RawArchive;
 use crate::errors::ProviderError;
+use crate::net::{GuardedClient, client_builder};
 use crate::ratelimit::RateLimiter;
 
 /// The token bucket's Redis key.
@@ -24,7 +25,7 @@ fn upstream(message: String) -> ProviderError {
 
 /// Raw pages of one symbol's endpoint, through the shared limiter and the raw archive.
 pub struct TapetideProvider {
-    client: reqwest::Client,
+    client: GuardedClient,
     token: String,
     limiter: Arc<dyn RateLimiter>,
     archive: Arc<dyn RawArchive>,
@@ -38,10 +39,7 @@ impl TapetideProvider {
         limiter: Arc<dyn RateLimiter>,
         archive: Arc<dyn RawArchive>,
     ) -> Result<Self, ProviderError> {
-        let client = reqwest::Client::builder()
-            .timeout(TIMEOUT)
-            .build()
-            .map_err(|e| upstream(format!("client: {e}")))?;
+        let client = GuardedClient::from_builder(client_builder().timeout(TIMEOUT))?;
         Ok(Self {
             client,
             token,
@@ -89,7 +87,7 @@ impl TapetideProvider {
         let mut last = String::new();
         for attempt in 1..=ATTEMPTS {
             self.limiter.acquire(1.0).await?;
-            let sent = self.client.get(url).bearer_auth(&self.token).send().await;
+            let sent = self.client.get(url)?.bearer_auth(&self.token).send().await;
             let response = match sent {
                 Ok(r) => r,
                 Err(e) => {

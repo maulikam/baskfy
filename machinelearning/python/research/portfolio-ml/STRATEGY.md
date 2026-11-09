@@ -14,7 +14,7 @@ The Kepler analogy does **not** work for 2–4-week swing trades on NSE: across 
 walk-forward LightGBM ranker is better than chance (AUC 0.53–0.60) and **unable to pay for itself** (§2). Pointed
 at *which liquid names will touch 2× within 250 sessions*, it ranks doublers better than chance in all twelve
 walk-forward years, 2014–2025, with delisted and merged names included (PM0.8): AUC 0.55–0.78. **It is not a return
-edge in a bad tape:** the top-20 lags the universe by 11–15 points in 2018, 2019, 2024 and 2025. The number to plan
+edge in a bad tape:** the top-20 lags the universe by 13–15 points in 2018, 2019, 2024 and 2025. The number to plan
 on is the from-2014 book, investable, every line marked on real bars, dead names written off (variant b):
 **top-20 skip-held 17.2 % CAGR, −66.3 %, Sharpe 0.75; top-10 skip-held 17.0 %, −72.6 %, 0.69**, against investable
 equal-weight 13.0 % / −55.8 % and Smallcap 250 16.3 % / −60.8 %. So: a little more return than the index, and a
@@ -110,7 +110,7 @@ the test year); test on every universe row of year Y whose 12-month path is comp
 
 The four bold years are the universe's flat or falling years, and the top-20 lags by 10–12 points in each. That is the signature of high-beta names, not of a stock-picking edge that holds up when small caps fall.
 
-**Twelve years with the dead included (PM0.8, variant b; `build_dataset.py --terminal=b`, `out/from2014/*_tb_*`).** Survivors-only is the table above. Scores are the same for (a) and (b), which differ only in outcomes. Variant (a) never moves a top-20 12-month median by more than 1 point against (b).
+**Twelve years with the dead included (PM0.8, variant b; `build_dataset.py --terminal=b`, `out/from2014/*_tb_*`).** Survivors-only is the table above. Scores are the same for (a) and (b), which differ only in outcomes. Variant (a) moves a top-20 12-month median by about a point at most against (b).
 
 | Signal year | base | AUC | top-20 hit | top-decile hit | top-20 / universe 12m mean | top-20 / universe 12m median | worst point: top-20 / universe |
 |---|---|---|---|---|---|---|---|
@@ -127,7 +127,7 @@ The four bold years are the universe's flat or falling years, and the top-20 lag
 | 2024 | 8.0 % | 0.660 | 15.1 % | 13.6 % | **−14 / −1 %** | −28 / −8 % | −40 / −29 % |
 | 2025 (→ Nov) | 5.5 % | 0.604 | 4.0 % | 7.1 % | **−12 / +3 %** | −19 / −7 % | −33 / −27 % |
 
-Adding the dead lowers AUC by 0.00–0.05, most in the oldest years, as PM0.6 predicted, and does not change the shape: the ranking works, and the top-20 falls further than the universe in every weak year (now five with 2015).
+Adding the dead lowers AUC by up to 0.05 before 2022, most in 2015, as PM0.6 predicted, leaves 2024–25 within 0.003, and does not change the shape: the ranking works, and the top-20 falls further than the universe in every weak year (now five with 2015).
 
 **Signal-year 2025 is the newest walk-forward year and the price-only model showed no edge there**
 (investable top-20 hit 4.5 % vs 5.4 % base, −2.2 % vs +3.9 %). It is out of sample for training, but the
@@ -166,9 +166,10 @@ the problem; the information is (§6.1–6.3); graded relevance (0/1/2/3 by hori
 `run_multibagger.py mb_u100_h250 touch`; `portfolioml/tranches.py`. On the first session of each month,
 1/12 of capital goes equal-weight into the top-N names by score; each line is held 250 sessions
 (a close below −35 % freezes the line at −35 % where `stop35` is on); 25 bps a side. Twelve slices
-compound independently, so the book is continuously ~fully invested after the first year. A line
-with no bar on a day carries its last close (suspended/delisted names are not treated as zero —
-one of the open items is to decide whether they should be). Marks are daily closes.
+compound independently, so the book is continuously ~fully invested after the first year. A line with no bar on a day carries its last close; under `terminal="b"` a delisted or suspended line
+goes to zero 60 sessions after its last bar. Marks are daily closes. **The table below and every §4 book before
+PM0.8 mark a line only while it stays in the investable set, then freeze it: read them as overstated (see "The book
+from 2014, every line marked").**
 
 | Book (Jan 2020 → 6 Nov 2026) | CAGR | max DD | Sharpe | from Jan 2021: CAGR / DD / Sharpe | picks | touched 2× | ≥ 2× at 12m | mean 12m | median 12m |
 |---|---|---|---|---|---|---|---|---|---|
@@ -245,7 +246,7 @@ Calendar years, (b), top-10 skip / top-20 skip / investable EW / Smallcap 250: 2
 | Top-20 skip-held | 17.2 / −66.3 / 0.75 | 13.1 / −50.5 / 0.77 | 15.6 / −56.4 / 0.77 | 13.9 / −54.3 / 0.76 |
 | Top-20 rebuy | 16.3 / −74.8 / 0.64 | 13.7 / −56.4 / 0.75 | 18.1 / −60.1 / 0.82 | 15.2 / −57.2 / 0.78 |
 
-Every gate cuts drawdown by 7–18 points. The return cost is not uniform: the 50-DMA gate costs 3–4 CAGR points everywhere, and breadth ≥ 0.40 adds 2 points to two books and costs 2 on the third. The earlier "not worth it" rested on a bull-only window and frozen marks and no longer stands; which gate is a decision for later, on data not used to pick it.
+Every gate cuts drawdown by 10–18 points. The return cost is not uniform: the 50-DMA gate costs 3–4 CAGR points everywhere, and breadth ≥ 0.40 adds 2 points to two books and costs 2 on the third. The earlier "not worth it" rested on a bull-only window and frozen marks and no longer stands; which gate is a decision for later, on data not used to pick it.
 
 **Skip-held (PM0.2b, 6 Nov scores, investable, Jan 2020 → Nov 2026; `explore_cadence.py`).** A name held by any of the last 12 tranches is not eligible. Rebuy → skip: top-10 35.9 % / −19.5 % / 1.86 → 35.6 % / −19.7 % / 2.16, 346 → 574 names; top-20 35.7 % / −22.0 % / 1.98 → 33.8 % / −18.1 % / 2.14, 564 → 927 names. Top-10 2022 +12 → +11 %, 2025 −5 → −8 %; top-20 2022 +10 → +17 %, 2025 −9 → −5 %. Sharpe rises in both, but CAGR falls and the top-10's drawdown and bad years do not improve, so the 10 Sep result (33.6 → 36.9 %, −21.6 → −17.0 %) **did not replicate as a gain in return or in losses**. `skip_held` stays off by default.
 

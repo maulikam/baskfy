@@ -2534,3 +2534,9 @@ session and the 18:40–21:15 nightly window:
 - **Why:** PM4 and any future backtest need them in the plant. Today they exist only in the throwaway `pm07-pg`; the agent did not touch the running stack.
 - **Done meanwhile:** full run and two-pass hash check in the throwaway; downloaded archive kept at `/Volumes/T7-Work/pm07`. Safe to delete after the backfill, along with containers `pm07-pg` and `pm07-redis`.
 - **Then PM4:** add `--terminal=b` to the `build_dataset.py` step above. `run_pm4.py` reads the (b) dataset and refuses until this has run.
+
+## Portfolio-ML (PM1.9) — Tapetide API key (10 Nov 2026)
+
+- **Needed:** a Tapetide API key and your yes to one month of the Fundamentals plan (the free tier is about 5 calls a day).
+- **Why:** a pilot on 132 crawled names, 20 dead names and 5 banks could replace most of the NSE crawl if it passes the grading in DECISIONS-PM PM1.9.
+- **Done meanwhile:** nothing built or spent. The NSE crawl continues as the source.

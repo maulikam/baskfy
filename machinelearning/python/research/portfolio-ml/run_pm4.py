@@ -1,5 +1,6 @@
 """PM4: the re-run. Same walk-forward and book as STRATEGY §3/§4, price-only vs with PM1–PM3 columns,
-judged on 2024, 2025 and pooled 2024+2025. Refuses to run until the backfill has covered the universe.
+judged on 2024, 2025 and pooled 2024+2025, dead names included, terminal variant (b). Refuses to run until
+PM0.7 has run and the backfill has covered the universe.
 
 usage: python run_pm4.py mb_u100_h250        (writes out/pm4/)"""
 
@@ -22,10 +23,19 @@ DATA, OUT = HERE / "data", HERE / "out" / "pm4"
 MIN_COVERAGE = 0.70
 COVERAGE_FROM = 2019
 HIT_MULTIPLE = 1.5
+TERMINAL = "b"  # 06 PM4 AC1
 GATES = {"2024": (2024,), "2025": (2025,), "2024+2025": (2024, 2025)}
 EXTRA = [*F.FEATURES, "days_since_filing", *S.FEATURES, *M.FEATURES]
 KEEP = list(dict.fromkeys(["instrument_id", "date", "label", "held", "fwd_ret_h", "fwd_max_ret", "fwd_min_ret", "fwd_min_close_ret",
                            "entry_px", "close", "close_raw", "turnover20", "r21", "r63", *ALL_FEATURES]))
+
+
+def dead_names_present(data: Path) -> bool:
+    """PM0.7 has run: some instrument has a delisted_on."""
+    path = data / "instrument.csv.gz"
+    if not path.exists():
+        return False
+    return pl.read_csv(path, columns=["delisted_on"], schema_overrides={"delisted_on": pl.String})["delisted_on"].is_not_null().any()
 
 
 def fundamentals_coverage(keys: pl.DataFrame, filings: pl.DataFrame) -> tuple[float, pl.DataFrame]:
@@ -90,7 +100,10 @@ def verdict(gate: pl.DataFrame, model: str) -> bool:
 
 def main(geometry: str) -> int:
     horizon = int(geometry.split("_h")[1])
-    source = DATA / f"dataset_{geometry}.parquet"
+    source = DATA / f"dataset_{geometry}_t{TERMINAL}.parquet"
+    if not dead_names_present(DATA):
+        print("REFUSED: delisted_on is null for every instrument; PM0.7 has not run on this export")
+        return 2
     if not (DATA / "fundamental_pit.csv.gz").exists() or not source.exists():
         print("REFUSED: run the backfill, export_bars_local.sh and build_dataset.py first (NEEDS-MAULIK.md)")
         return 2
@@ -119,18 +132,19 @@ def main(geometry: str) -> int:
     full, full_auc, imps = walk_forward(frame, [*ALL_FEATURES, *EXTRA], horizon)
 
     investable = frame.filter((pl.col("close_raw") >= 50) & (pl.col("turnover20") >= 5e7))
-    book = tranches.TrancheConfig(horizon=horizon, max_per_sector=None)
-    capped = tranches.TrancheConfig(horizon=horizon, max_per_sector=3)
+    book = tranches.TrancheConfig(horizon=horizon, max_per_sector=None, terminal=TERMINAL)
+    capped = tranches.TrancheConfig(horizon=horizon, max_per_sector=3, terminal=TERMINAL)
+    marks = pl.scan_parquet(source).select("instrument_id", "date", "close", "terminal").collect()
     flat = price.select("instrument_id", "date", pl.lit(0.0).alias("score"))
     sims = {"price_only": (price, book), "with_fundamentals": (full, book), "with_fundamentals_cap3": (full, capped)}
     picks, books = {}, []
     bench = panel.load_index_series(DATA).select("date", "nifty50", "midcap150", "smallcap250")
     for name, (scores, cfg) in sims.items():
-        p, eq = tranches.simulate(investable, scores, "score", cfg)
+        p, eq = tranches.simulate(investable, scores, "score", cfg, marks=marks)
         picks[name] = p
         books.append({"sim": name, **tranches.summary(eq, p, bench)})
         p.write_csv(OUT / f"picks_{name}.csv")
-    base, _ = tranches.simulate(investable, flat, "score", tranches.TrancheConfig(top_n=10_000, horizon=horizon, max_per_sector=None))
+    base, _ = tranches.simulate(investable, flat, "score", tranches.TrancheConfig(top_n=10_000, horizon=horizon, max_per_sector=None, terminal=TERMINAL), marks=marks)
 
     gate = gate_table({k: picks[k] for k in ("price_only", "with_fundamentals")}, base)
     gate.write_csv(OUT / "gate.csv")

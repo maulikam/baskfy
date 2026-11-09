@@ -10,16 +10,17 @@ use baskfy_providers::secret::Secret;
 use chrono::{NaiveDate, NaiveDateTime, Utc};
 
 use super::{
-    cb_metrics, eq_bars, factors, fno, fundamentals, fundamentals_pit, kite_session, options,
-    pipeline, reconcile, reference_backfill, swing, twt, vbt,
+    cb_metrics, dead_names, eq_bars, factors, fno, fundamentals, fundamentals_pit, kite_session,
+    options, pipeline, reconcile, reference_backfill, swing, twt, vbt,
 };
 use crate::error::WorkerError;
 use crate::settings::WorkerSettings;
 use crate::tasks::context::{TaskClock, TaskContext};
 
 /// The subcommands, as `python -m baskfy_worker.<module>` names them (`-`/`_`, `_cli` optional).
-pub const SUBCOMMANDS: [&str; 14] = [
+pub const SUBCOMMANDS: [&str; 15] = [
     "cb_metrics",
+    "dead_names",
     "eq_bars",
     "factors",
     "fno",
@@ -55,6 +56,7 @@ pub async fn run(raw: &[String]) -> ExitCode {
     let rest = &raw[1..];
     let outcome = match name {
         "cb_metrics" => cb_metrics::run(rest).await,
+        "dead_names" => dead_names::run(rest).await,
         "eq_bars" => eq_bars::run(rest).await,
         "factors" => factors::run(rest).await,
         "fno" => fno::run(rest).await,

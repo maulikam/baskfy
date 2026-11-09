@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datetime import date
+
 import polars as pl
 
 
@@ -66,12 +68,23 @@ def clean_label(df: pl.DataFrame, max_close_dd: float) -> pl.Expr:
     return ((pl.col("label") == 1) & (pl.col("fwd_min_close_ret") > max_close_dd)).cast(pl.Int8)
 
 
-def multibagger(bars: pl.DataFrame, cfg: MultibaggerConfig = MultibaggerConfig()) -> pl.DataFrame:
+DEATH_SESSIONS = 60  # variant (b): a dead name's last close stands this many sessions, then −100 %
+NOT_DEATHS = ("merged",)  # the holder is paid in the successor: variant (a) only
+
+
+def multibagger(bars: pl.DataFrame, cfg: MultibaggerConfig = MultibaggerConfig(), terminal: str | None = None, last_complete: date | None = None) -> pl.DataFrame:
     """Did the name touch ``1+up`` × next-open entry at any point in the next ``horizon`` sessions?
 
     Also: whether it *closed* there at the horizon (``held``), the horizon return, the best and
     worst point on the way. No lower barrier — the question is 'does it double', the book sim
-    decides what to do with the losers."""
+    decides what to do with the losers.
+
+    ``terminal`` needs a ``terminal`` column on ``bars``. For a dead name whose bars end inside the
+    horizon the outcome is (``"a"``) the last close carried forward, or (``"b"``) that close for
+    DEATH_SESSIONS more sessions and −100 % after; ``merged`` names are always (a). Names still
+    alive at the end of the data stay unlabelled. ``last_complete`` is the last session whose whole
+    horizon lies inside the data: past it a dead row stays unlabelled too, or the newest test rows
+    would be dead names only, which is knowing the future."""
     g = pl.col("instrument_id")
     entry = pl.col("open").shift(-1).over(g)
     h = cfg.horizon
@@ -80,7 +93,7 @@ def multibagger(bars: pl.DataFrame, cfg: MultibaggerConfig = MultibaggerConfig()
     fwd_min_close = pl.col("close").rolling_min(h).shift(-h).over(g)
     close_h = pl.col("close").shift(-h).over(g)
     complete = close_h.is_not_null() & entry.is_not_null()
-    return bars.with_columns(
+    out = bars.with_columns(
         entry.alias("entry_px"),
         pl.when(complete).then((fwd_max / entry >= 1 + cfg.up).cast(pl.Int8)).alias("label"),
         pl.when(complete).then((close_h / entry >= 1 + cfg.up).cast(pl.Int8)).alias("held"),
@@ -88,4 +101,32 @@ def multibagger(bars: pl.DataFrame, cfg: MultibaggerConfig = MultibaggerConfig()
         pl.when(complete).then(fwd_max / entry - 1).alias("fwd_max_ret"),
         pl.when(complete).then(fwd_min / entry - 1).alias("fwd_min_ret"),
         pl.when(complete).then(fwd_min_close / entry - 1).alias("fwd_min_close_ret"),
+    )
+    if terminal is None:
+        return out
+    if terminal not in ("a", "b"):
+        raise ValueError(f"terminal must be 'a' or 'b', got {terminal}")
+
+    def ahead(col: str, agg: str) -> pl.Expr:
+        c = pl.col(col).reverse()
+        rolled = c.rolling_max(h, min_samples=1) if agg == "max" else c.rolling_min(h, min_samples=1)
+        return rolled.reverse().shift(-1).over(g)
+
+    remaining = pl.len().over(g) - 1 - pl.int_range(pl.len()).over(g)
+    dead = (pl.col("terminal") != "alive") & (remaining >= 1) & (remaining < h)
+    if last_complete is not None:
+        dead = dead & (pl.col("date") <= last_complete)
+    last_close = pl.col("close").last().over(g)
+    written_off = (
+        pl.lit(terminal == "b") & ~pl.col("terminal").is_in(NOT_DEATHS) & (h - remaining > DEATH_SESSIONS)
+    )
+    best, worst, worst_close = ahead("high", "max"), ahead("low", "min"), ahead("close", "min")
+    entered = pl.col("entry_px")
+    return out.with_columns(
+        pl.when(dead).then((best / entered >= 1 + cfg.up).cast(pl.Int8)).otherwise(pl.col("label")).alias("label"),
+        pl.when(dead).then((last_close / entered >= 1 + cfg.up).cast(pl.Int8)).otherwise(pl.col("held")).alias("held"),
+        pl.when(dead & written_off).then(pl.lit(-1.0)).when(dead).then(last_close / entered - 1).otherwise(pl.col("fwd_ret_h")).alias("fwd_ret_h"),
+        pl.when(dead).then(best / entered - 1).otherwise(pl.col("fwd_max_ret")).alias("fwd_max_ret"),
+        pl.when(dead & written_off).then(pl.lit(-1.0)).when(dead).then(worst / entered - 1).otherwise(pl.col("fwd_min_ret")).alias("fwd_min_ret"),
+        pl.when(dead & written_off).then(pl.lit(-1.0)).when(dead).then(worst_close / entered - 1).otherwise(pl.col("fwd_min_close_ret")).alias("fwd_min_close_ret"),
     )

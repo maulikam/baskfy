@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
+from portfolioml.labels import DEATH_SESSIONS
+
 
 @dataclass(frozen=True)
 class TrancheConfig:
@@ -21,6 +23,7 @@ class TrancheConfig:
     weighting: str = "equal"  # or "rank": top pick gets ~2× the weight of the last
     keep_if_top_frac: float | None = None  # "re-rank, don't sell": a maturing name still in this top fraction rolls over at no cost
     skip_held: bool = False  # a name in any of the last ``slices`` tranches is not eligible (ignored with keep_if_top_frac)
+    terminal: str | None = None  # "b": a delisted or suspended line is marked at zero 60 sessions after its last bar (needs marks with "terminal")
     cadence_sessions: int | None = None  # enter every N sessions, one slice per entry; None = first session of each month, 12 slices
     max_per_sector: int | None = 3  # applies only when ds has a "sector" column; None switches it off
 
@@ -44,8 +47,11 @@ def _capped(day: pl.DataFrame, cap: int, n: int) -> pl.DataFrame:
     return pl.concat([first, extra]).sort("_pos").drop("_k", "_pos")
 
 
-def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: TrancheConfig, descending: bool = True) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Returns (picks with their 12-month outcome, daily equity of the rolling book)."""
+def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: TrancheConfig, descending: bool = True, marks: pl.DataFrame | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Returns (picks with their 12-month outcome, daily equity of the rolling book).
+
+    ``marks``: every bar (instrument_id, date, close, and terminal for variant b). Without it a name
+    that drops out of ``ds`` (say below the investable floor) is frozen at its last price in ``ds``."""
     sessions = ds["date"].unique().sort().to_list()
     sidx = {d: i for i, d in enumerate(sessions)}
     scored = set(scores["date"].to_list())
@@ -102,11 +108,23 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
         .explode("i").filter(pl.col("i") < len(sessions))
         .join(sess, on="i")
     )
-    closes = ds.select("instrument_id", "date", "close").filter(pl.col("instrument_id").is_in(p["instrument_id"].unique().implode()))
+    held_ids = p["instrument_id"].unique().implode()
+    closes = (ds if marks is None else marks).select("instrument_id", "date", "close").filter(pl.col("instrument_id").is_in(held_ids))
     path = held.join(closes, on=["instrument_id", "date"], how="left").sort("instrument_id", "signal_date", "i")
     path = path.with_columns(
         (pl.col("close") / pl.col("entry_px")).fill_null(strategy="forward").over("instrument_id", "signal_date").fill_null(1.0).alias("mult")
     )
+    if cfg.terminal == "b":
+        if marks is None or "terminal" not in marks.columns:
+            raise ValueError("terminal='b' needs marks with a terminal column")
+        ended = (
+            marks.filter(pl.col("instrument_id").is_in(held_ids) & pl.col("terminal").is_in(["delisted", "suspended"]))
+            .group_by("instrument_id").agg(pl.col("date").max().alias("date"))
+            .join(sess, on="date").select("instrument_id", pl.col("i").alias("last_i"))
+        )
+        path = path.join(ended, on="instrument_id", how="left").with_columns(
+            pl.when(pl.col("i") > pl.col("last_i") + DEATH_SESSIONS).then(0.0).otherwise(pl.col("mult")).alias("mult")
+        ).drop("last_i")
     if cfg.stop is not None:
         # first close below the stop freezes the line at the stop level thereafter
         path = path.with_columns(

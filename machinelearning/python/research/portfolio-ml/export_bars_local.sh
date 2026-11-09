@@ -29,5 +29,8 @@ copy fundamental_daily "SELECT instrument_id, date, marketcap_cr FROM fundamenta
 if $PG -At -c "SELECT to_regclass('public.instrument_sector')" | grep -q instrument_sector; then
   copy instrument_sector "SELECT instrument_id, macro, sector, industry, basic_industry, as_of FROM instrument_sector"
 fi
+if $PG -At -c "SELECT to_regclass('public.instrument_terminal')" | grep -q instrument_terminal; then
+  copy instrument_terminal "SELECT instrument_id, status, reason, last_bar, source FROM instrument_terminal"
+fi
 rm -f "$OUT/ohlcv_daily.parquet" "$OUT/dataset.parquet" "$OUT/features.parquet"
 echo "done: $(du -sh "$OUT" | cut -f1)"

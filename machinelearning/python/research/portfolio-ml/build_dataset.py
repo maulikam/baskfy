@@ -5,6 +5,7 @@ price columns only, stored as float32, and joined at the end."""
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ from portfolioml import features as F
 from portfolioml import panel
 from portfolioml.labels import BarrierConfig, MultibaggerConfig, multibagger, triple_barrier
 
-DATA = Path(__file__).parent / "data"
+DATA = Path(os.environ.get("PM_DATA", Path(__file__).parent / "data"))
 OUT = Path(__file__).parent / "out"
 CHUNKS = 6
 PRICE = ["instrument_id", "date", "open", "high", "low", "close", "volume", "close_raw", "turnover"]
@@ -59,11 +60,12 @@ def build_features(t0: float) -> pl.DataFrame:
     return feat
 
 
-def build_labels(bars: pl.DataFrame, cfg: BarrierConfig | MultibaggerConfig, t0: float) -> pl.DataFrame:
+def build_labels(bars: pl.DataFrame, cfg: BarrierConfig | MultibaggerConfig, t0: float, terminal: str | None = None) -> pl.DataFrame:
     parts = []
+    last_complete = bars["date"].unique().sort()[-(cfg.horizon + 1)]
     for ch in _chunks(bars):
         if isinstance(cfg, MultibaggerConfig):
-            lab = multibagger(ch, cfg).select("instrument_id", "date", "entry_px", "label", "held", "fwd_ret_h", "fwd_max_ret", "fwd_min_ret", "fwd_min_close_ret")
+            lab = multibagger(ch, cfg, terminal, last_complete).select("instrument_id", "date", "entry_px", "label", "held", "fwd_ret_h", "fwd_max_ret", "fwd_min_ret", "fwd_min_close_ret")
             parts.append(lab.with_columns([pl.col(c).cast(pl.Float32) for c in ("fwd_ret_h", "fwd_max_ret", "fwd_min_ret", "fwd_min_close_ret")]))
             continue
         lab = triple_barrier(ch, cfg).select("instrument_id", "date", "entry_px", "label", "exit_k", "exit_ret", "fwd_ret_h")
@@ -76,11 +78,12 @@ def build_labels(bars: pl.DataFrame, cfg: BarrierConfig | MultibaggerConfig, t0:
 def main(argv: list[str]) -> None:
     t0 = time.time()
     mb = "--mb" in argv
-    argv = [a for a in argv if a != "--mb"]
+    terminal = next((a.split("=")[1] for a in argv if a.startswith("--terminal=")), None)
+    argv = [a for a in argv if a != "--mb" and not a.startswith("--terminal=")]
     if mb:  # python build_dataset.py --mb 1.0 250  → touches 2x within 250 sessions
         up, horizon = (float(argv[0]), int(argv[1])) if len(argv) >= 2 else (1.0, 250)
         cfg: BarrierConfig | MultibaggerConfig = MultibaggerConfig(up=up, horizon=horizon)
-        tag = f"mb_u{int(round(up*100))}_h{horizon}"
+        tag = f"mb_u{int(round(up*100))}_h{horizon}" + (f"_t{terminal}" if terminal else "")
     else:
         up, down, horizon = (float(argv[0]), float(argv[1]), int(argv[2])) if len(argv) >= 3 else (0.05, 0.03, 10)
         cfg = BarrierConfig(up=up, down=down, horizon=horizon)
@@ -93,8 +96,12 @@ def main(argv: list[str]) -> None:
         feat = build_features(t0)
         feat.write_parquet(fp)
     bars = feat.select("instrument_id", "date", "open", "high", "low", "close")
-    labels = build_labels(bars, cfg, t0)
-    ds = feat.join(labels, on=["instrument_id", "date"], how="left")
+    if terminal:
+        status = panel.load_terminal(DATA)
+        feat = feat.join(status, on="instrument_id", how="left").with_columns(pl.col("terminal").fill_null("alive"))
+        bars = feat.select("instrument_id", "date", "open", "high", "low", "close", "terminal")
+    labels = build_labels(bars, cfg, t0, terminal)
+    ds = feat.join(labels.drop("terminal", strict=False), on=["instrument_id", "date"], how="left")
     OUT.mkdir(exist_ok=True)
     ds.write_parquet(DATA / f"dataset_{tag}.parquet")
     print(f"dataset_{tag} {ds.shape}  {time.time()-t0:.0f}s", flush=True)

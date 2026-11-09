@@ -9,6 +9,7 @@ use super::{BoundArgs, TaskContext, TaskResult};
 
 mod cb_metrics;
 pub mod cli;
+mod dead_names;
 mod desk;
 mod eq_bars;
 mod factors;
@@ -35,6 +36,7 @@ pub const PORTED: &[&str] = &[
 /// `baskfy-worker` subcommand ([`cli::SUBCOMMANDS`]).
 pub const CLI_MODULES: &[&str] = &[
     "cb_metrics_cli",
+    "dead_names_cli",
     "eq_bars_cli",
     "factors_cli",
     "fno_cli",

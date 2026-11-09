@@ -100,6 +100,11 @@ def load_fundamental_daily(data: Path) -> pl.DataFrame:
     return pl.read_csv(data / "fundamental_daily.csv.gz").with_columns(pl.col("date").str.to_date())
 
 
+def load_terminal(data: Path) -> pl.DataFrame:
+    """instrument_terminal export: how a name stopped. A name with no row is alive."""
+    return pl.read_csv(data / "instrument_terminal.csv.gz").select("instrument_id", pl.col("status").alias("terminal"))
+
+
 def load_index_membership(data: Path) -> pl.DataFrame:
     """Point-in-time membership flags where the export has them (2021-08 →); null before."""
     members = pl.read_csv(data / "index_member_daily.csv.gz").with_columns(pl.col("date").str.to_date())

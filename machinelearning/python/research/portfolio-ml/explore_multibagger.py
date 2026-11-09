@@ -1,7 +1,7 @@
 """Walk-forward lambdarank on the multibagger label. Per test year: does the top of the list
 double more often than the universe, and what does holding it 12/24 months return?
 
-usage: python explore_multibagger.py data/dataset_mb_u100_h250.parquet [years...] [--first-test-year=2014]"""
+usage: python explore_multibagger.py data/dataset_mb_u100_h250.parquet [years...] [--first-test-year=2014] [--terminal=a|b]"""
 
 from __future__ import annotations
 
@@ -107,4 +107,6 @@ def main(path: str, years: list[int], kind: str = "touch", first_test_year: int 
 if __name__ == "__main__":
     kind = next((a.split("=")[1] for a in sys.argv if a.startswith("--target=")), "touch")
     first = next((int(a.split("=")[1]) for a in sys.argv if a.startswith("--first-test-year=")), 2020)
-    main(sys.argv[1], [int(a) for a in sys.argv[2:] if a.isdigit()], kind, first)
+    terminal = next((a.split("=")[1] for a in sys.argv if a.startswith("--terminal=")), None)
+    path = sys.argv[1].replace(".parquet", f"_t{terminal}.parquet") if terminal else sys.argv[1]
+    main(path, [int(a) for a in sys.argv[2:] if a.isdigit()], kind, first)

@@ -46,6 +46,7 @@ use crate::clock::{Clock, SystemClock};
 use crate::composite::SupplementaryReads;
 use crate::errors::{ErrorKind, ProviderError};
 use crate::net::GuardedClient;
+use crate::nse_bhavcopy::{BhavRow, parse_bhav_rows};
 use crate::nse_results::{ResultsFiling, parse_integrated_listing, parse_reg33_listing};
 use crate::nse_shareholding::{ShareholdingFiling, parse_shareholding_listing};
 use crate::ports::{
@@ -69,6 +70,8 @@ pub const PROVIDER_NAME: &str = "nse";
 pub const KIND_BHAVCOPY: &str = "bhavcopy";
 /// Archive kind of the F&O bhavcopy.
 pub const KIND_FO_BHAVCOPY: &str = "fo-bhavcopy";
+/// PM0.7: archive kind of the dated `cm…bhav` files before 2024.
+pub const KIND_BHAVCOPY_LEGACY: &str = "bhavcopy-legacy";
 /// NSE switched the F&O bhavcopy to the UDiFF layout on this session; earlier days exist only in
 /// the legacy `fo{DD}{MON}{YYYY}bhav.csv.zip` file under `content/historical/DERIVATIVES`.
 pub const FO_UDIFF_SINCE: NaiveDate = match NaiveDate::from_ymd_opt(2024, 7, 8) {
@@ -1621,6 +1624,79 @@ impl NseProvider {
             filings.extend(parse_integrated_listing(&payload, &token)?);
         }
         Ok(filings)
+    }
+
+    /// PM0.7: one day's cash-equity prints with ISINs, archived. `None` is a 404. The dated
+    /// `cm…bhav` file to 2023, UDiFF from 2024 (the plant's own key, so its archive is reused).
+    ///
+    /// # Errors
+    /// Every failure but a 404; a file with no ISIN column.
+    pub async fn bhav_rows(&self, on: NaiveDate) -> Result<Option<Vec<BhavRow>>, ProviderError> {
+        let base = &self.inner.settings.nse_archive_url;
+        let (kind, url) = if on.year() >= 2024 {
+            (
+                KIND_BHAVCOPY,
+                format!(
+                    "{base}/content/cm/BhavCopy_NSE_CM_0_0_0_{}_F_0000.csv.zip",
+                    on.format("%Y%m%d")
+                ),
+            )
+        } else {
+            let month = on.format("%b").to_string().to_uppercase();
+            (
+                KIND_BHAVCOPY_LEGACY,
+                format!(
+                    "{base}/content/historical/EQUITIES/{}/{month}/cm{}{month}{}bhav.csv.zip",
+                    on.year(),
+                    on.format("%d"),
+                    on.year()
+                ),
+            )
+        };
+        let payload = match self
+            .inner
+            .archived(kind, on, url, "zip", "application/zip")
+            .await
+        {
+            Ok(p) => p,
+            Err(e) if e.to_string().contains("returned 404") => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        off_runtime(move || parse_bhav_rows(&maybe_unzip(&payload)?).map(Some)).await
+    }
+
+    /// PM0.7: every corporate action NSE lists for one calendar year, raw and archived.
+    ///
+    /// # Errors
+    /// Fetch and archive failures.
+    pub async fn corporate_actions_year(&self, year: i32) -> Result<Vec<u8>, ProviderError> {
+        let on = NaiveDate::from_ymd_opt(year, 12, 31)
+            .ok_or_else(|| unexpected(format!("bad year {year}")))?;
+        self.inner
+            .archived(
+                "corporate-actions-year",
+                on,
+                format!(
+                    "{}/api/corporates-corporateActions?index=equities&from_date=01-01-{year}&to_date=31-12-{year}",
+                    self.inner.settings.nse_base_url
+                ),
+                "json",
+                "application/json",
+            )
+            .await
+    }
+
+    /// PM0.7: one NSE reference file from the archive host, archived under `name`.
+    ///
+    /// # Errors
+    /// `UnexpectedPayload` for a foreign URL; fetch and archive failures.
+    pub async fn reference_file(
+        &self,
+        name: &str,
+        url: &str,
+        on: NaiveDate,
+    ) -> Result<Vec<u8>, ProviderError> {
+        self.inner.filing_xbrl("reference", name, url, on).await
     }
 
     /// PM2: every quarter-end shareholding filing NSE lists for `symbol`.

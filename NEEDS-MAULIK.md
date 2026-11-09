@@ -2519,7 +2519,8 @@ session and the 18:40–21:15 nightly window:
 
 ## Portfolio-ML (PM1) — deploy the migration, then run the fundamentals backfill (9 Nov 2026)
 
-- **RUNNING since 9 Nov 2026 14:36 IST:** `/Volumes/T7-Work/pm07/fundamentals-run.sh` (container `pm-fundamentals`, 2,946 names including the dead; runs through the nightly, Maulik's call; progress in `fundamentals.state`; `touch fundamentals.stop` ends it).
+- **RUNNING since 9 Nov 2026 14:36 IST:** `/Volumes/T7-Work/pm07/fundamentals-run.sh` (container `pm-fundamentals`, 2,946 names including the dead; stops 18:00–21:30 IST every day, PM1.7; progress in `fundamentals.state`; `touch fundamentals.stop` ends it).
+- **Operational note (9 Nov 2026):** `bash /Volumes/T7-Work/pm07/nse-failures.sh` counts NSE failures per class (DNS, reset, timeout, HTTP 403 / Access Denied, other) for the backfill and nightly; the backfill appends it hourly to `fundamentals.status`. A 403 page is a block: the supervisor writes `rate.override` = 0.5 req/s, restarts on it and logs it to `fundamentals.state`. Never raise it. Worker, ingest-worker and beat use public DNS via `/Volumes/T7-Work/baskfy-local/compose.dns.yml`; delete that file and run `local.sh pipeline` to reverse.
 - **Original request:** ship an image with `db/migrations/0002`–`0004` (additive; `0004` also makes the nightly fill `instrument_sector`), then in the worker container `baskfy-worker fundamentals_pit all` (results and shareholding, one limiter; `backfill` or `shareholding` alone also work) (resumable; `--limit N` / `--symbols A,B` to start small).
 - **Why:** PM1 AC2 (coverage) and PM4 need the data. About 2,660 names × ~53 requests ≈ 140k requests, ~40 h at the 1 req/s NSE limit (results ~24 h, shareholding ~16 h), shared with the nightly's NSE calls.
 - **Done meanwhile:** code, tests, and a 3-name end-to-end run against a throwaway database. The agent did not touch the running stack.

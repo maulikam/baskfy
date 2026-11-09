@@ -358,6 +358,7 @@ fn note(
 ) -> Result<(), WorkerError> {
     match outcome {
         Err(WorkerError::Provider(e)) if e.is_provider_error() => {
+            say(&format!("FAILED {symbol}: {e}"));
             report.failed.push((symbol.to_owned(), e.to_string()));
             Ok(())
         }

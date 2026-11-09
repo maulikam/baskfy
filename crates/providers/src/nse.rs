@@ -1213,7 +1213,19 @@ async fn http_get(client: &dyn HttpClientLike, url: &str) -> Result<HttpResponse
     client
         .get(url)
         .await
-        .map_err(|e| upstream(format!("GET {url} failed: {e}")))
+        .map_err(|e| upstream(format!("GET {url} failed: {}", with_causes(e.as_ref()))))
+}
+
+/// The error and every cause under it: reqwest's own message stops at "error sending request".
+fn with_causes(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = e.to_string();
+    let mut cause = e.source();
+    while let Some(c) = cause {
+        out.push_str(": ");
+        out.push_str(&c.to_string());
+        cause = c.source();
+    }
+    out
 }
 
 /// `_body`: 429 and 5xx are transient, any other 4xx is a payload error.

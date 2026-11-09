@@ -48,6 +48,8 @@ die() { echo "✗ $*" >&2; exit 1; }
 compose() {
   local f=(-f "$HOME_DIR/compose.prod.yml" -f "$HOME_DIR/compose.local.yml")
   [ -s "$HOME_DIR/compose.rust.yml" ] && f+=(-f "$HOME_DIR/compose.rust.yml")
+  # Backup resolvers for the pipeline services (9 Nov 2026). Reverse: delete the file, `local.sh pipeline`.
+  [ -s "$HOME_DIR/compose.dns.yml" ] && f+=(-f "$HOME_DIR/compose.dns.yml")
   docker compose -p "$P" --project-directory "$HOME_DIR" "${f[@]}" --env-file "$HOME_DIR/.env.staging.compose" "$@"
 }
 # Refuses to recreate the stack while a nightly chain holds its advisory lock

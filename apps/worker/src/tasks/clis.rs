@@ -22,6 +22,7 @@ mod pipeline;
 mod reconcile;
 mod reference_backfill;
 mod swing;
+mod tapetide;
 mod twt;
 mod vbt;
 
@@ -48,6 +49,7 @@ pub const CLI_MODULES: &[&str] = &[
     "reconcile_cli",
     "reference_backfill",
     "swing_cli",
+    "tapetide_cli",
     "twt_cli",
     "vbt_cli",
 ];

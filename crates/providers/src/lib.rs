@@ -58,5 +58,6 @@ pub mod nse;
 pub mod nse_bhavcopy;
 pub mod nse_results;
 pub mod nse_shareholding;
+pub mod tapetide;
 
 pub use errors::{ErrorKind, ProviderError};

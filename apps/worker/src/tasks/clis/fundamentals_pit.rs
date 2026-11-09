@@ -64,11 +64,18 @@ async fn scope(
     symbols: Option<&[String]>,
 ) -> Result<Vec<(i64, String)>, WorkerError> {
     // Delisted names stay in scope: dropping them would be survivorship.
+    // PM1.6: names that ever met the investable floors, then the other dead names, then the rest.
     Ok(sqlx::query_as(
-        "SELECT i.id, i.symbol FROM instrument i \
+        "WITH bars AS (SELECT instrument_id, close_raw, avg(close_raw * volume_raw) OVER w AS t20, count(*) OVER w AS n \
+         FROM ohlcv_daily WINDOW w AS (PARTITION BY instrument_id ORDER BY date ROWS 19 PRECEDING)), \
+         investable AS (SELECT DISTINCT instrument_id FROM bars WHERE n = 20 AND close_raw >= 50 AND t20 >= 5e7) \
+         SELECT i.id, i.symbol FROM instrument i \
+         LEFT JOIN investable v ON v.instrument_id = i.id \
+         LEFT JOIN instrument_terminal t ON t.instrument_id = i.id \
          WHERE i.instrument_type = 'EQ' AND i.series IN ('EQ', 'BE', 'BZ') \
          AND EXISTS (SELECT 1 FROM ohlcv_daily o WHERE o.instrument_id = i.id AND o.date >= $1) \
-         AND ($2::text[] IS NULL OR i.symbol = ANY($2)) ORDER BY i.id",
+         AND ($2::text[] IS NULL OR i.symbol = ANY($2)) \
+         ORDER BY CASE WHEN v.instrument_id IS NOT NULL THEN 0 WHEN t.instrument_id IS NOT NULL THEN 1 ELSE 2 END, i.id",
     )
     .bind(since)
     .bind(symbols)

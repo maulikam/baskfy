@@ -2519,7 +2519,8 @@ session and the 18:40–21:15 nightly window:
 
 ## Portfolio-ML (PM1) — deploy the migration, then run the fundamentals backfill (9 Nov 2026)
 
-- **Needed:** ship an image with `db/migrations/0002`–`0004` (additive; `0004` also makes the nightly fill `instrument_sector`), then in the worker container `baskfy-worker fundamentals_pit all` (results and shareholding, one limiter; `backfill` or `shareholding` alone also work) (resumable; `--limit N` / `--symbols A,B` to start small).
+- **RUNNING since 9 Nov 2026 14:36 IST:** `/Volumes/T7-Work/pm07/fundamentals-run.sh` (container `pm-fundamentals`, 2,946 names including the dead; runs through the nightly, Maulik's call; progress in `fundamentals.state`; `touch fundamentals.stop` ends it).
+- **Original request:** ship an image with `db/migrations/0002`–`0004` (additive; `0004` also makes the nightly fill `instrument_sector`), then in the worker container `baskfy-worker fundamentals_pit all` (results and shareholding, one limiter; `backfill` or `shareholding` alone also work) (resumable; `--limit N` / `--symbols A,B` to start small).
 - **Why:** PM1 AC2 (coverage) and PM4 need the data. About 2,660 names × ~53 requests ≈ 140k requests, ~40 h at the 1 req/s NSE limit (results ~24 h, shareholding ~16 h), shared with the nightly's NSE calls.
 - **Done meanwhile:** code, tests, and a 3-name end-to-end run against a throwaway database. The agent did not touch the running stack.
 - **When:** start it right after a nightly publish, outside 18:40–21:15 IST. It shares NSE's rate limit with nightly step 6, which already stalls every ~600 requests.
@@ -2527,7 +2528,8 @@ session and the 18:40–21:15 nightly window:
 
 ## Portfolio-ML (PM0.7) — ship the dead names into the plant (9 Nov 2026)
 
-- **Needed:** ship an image with `db/migrations/0005_instrument_terminal.sql`, then in the worker container `baskfy-worker dead_names backfill --from 2011-01-03 --to 2026-11-06`. About an hour at 1 req/s for files not yet archived; outside 18:40–21:15 IST. It writes instrument rows, bars and `instrument_terminal`, and marks stopped names inactive.
+- **DONE 9 Nov 2026 14:23–14:30 IST:** `baskfy-rs:rel-822124b`, migrations 2–5 applied, pipeline services on it, two backfill passes; live hashes equal the throwaway's. App services stay on rel-5c0c18e until the next `local.sh up` (`rs.tag` already bumped; the old image cannot migrate past 1).
+- **Original request:** ship an image with `db/migrations/0005_instrument_terminal.sql`, then in the worker container `baskfy-worker dead_names backfill --from 2011-01-03 --to 2026-11-06`. About an hour at 1 req/s for files not yet archived; outside 18:40–21:15 IST. It writes instrument rows, bars and `instrument_terminal`, and marks stopped names inactive.
 - **Why:** PM4 and any future backtest need them in the plant. Today they exist only in the throwaway `pm07-pg`; the agent did not touch the running stack.
 - **Done meanwhile:** full run and two-pass hash check in the throwaway; downloaded archive kept at `/Volumes/T7-Work/pm07`. Safe to delete after the backfill, along with containers `pm07-pg` and `pm07-redis`.
 - **Then PM4:** add `--terminal=b` to the `build_dataset.py` step above. `run_pm4.py` reads the (b) dataset and refuses until this has run.

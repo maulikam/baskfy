@@ -44,3 +44,24 @@ def test_coverage_counts_only_rows_with_a_ttm_figure_from_2019():
                                    "total_equity": pl.Float64, "cfo": pl.Float64})
     share, _ = R.fundamentals_coverage(keys, filings)
     assert share == 0.0
+
+
+def blanks(values_dead, values_live):
+    rows = [{"instrument_id": 1, "date": date(2024, 1, 1 + i), "terminal": "delisted", "close_raw": 100.0, "turnover20": 1e8, "x": v} for i, v in enumerate(values_dead)]
+    rows += [{"instrument_id": 2, "date": date(2024, 1, 1 + i), "terminal": "alive", "close_raw": 100.0, "turnover20": 1e8, "x": v} for i, v in enumerate(values_live)]
+    return R.blank_rates(pl.DataFrame(rows, schema_overrides={"x": pl.Float64}), ["x"])
+
+
+def test_blank_rates_separate_dead_from_live():
+    got = blanks([None, None, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]).filter(pl.col("scope") == "all").row(0, named=True)
+    assert (got["blank_dead"], got["blank_live"], got["gap"]) == (0.5, 0.0, 0.5)
+
+
+def test_a_gap_over_ten_points_is_a_breach_and_ten_is_not():
+    assert R.blank_gap_breached(blanks([None, None, 1.0, 1.0], [1.0] * 4))
+    assert not R.blank_gap_breached(blanks([None] + [1.0] * 9, [1.0] * 10))
+
+
+def test_where_covered_keeps_only_rows_with_the_ttm_figure():
+    frame = pl.DataFrame({"pat_margin_ttm": [0.1, None, 0.2]})
+    assert R.covered(frame)["pat_margin_ttm"].to_list() == [0.1, 0.2]

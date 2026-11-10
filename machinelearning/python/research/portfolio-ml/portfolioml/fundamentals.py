@@ -8,10 +8,16 @@ import polars as pl
 
 FEATURES = [
     "rev_q_yoy", "rev_accel", "ttm_rev_yoy", "ttm_pat_yoy", "ebitda_margin_ttm", "pat_margin_ttm",
-    "ebitda_margin_chg4q", "pat_margin_chg4q", "debt_equity", "roce", "cfo_pat", "pat_ttm_positive",
+    "ebitda_margin_chg4q", "pat_margin_chg4q", "debt_equity", "roce", "cfo_pat", "pat_ttm_positive", "is_bank",
 ]
 # EPS growth is deliberately absent: filed EPS is not restated for bonuses and splits, so it steps
 # on a bonus issue. PAT growth carries the same signal without the artefact.
+
+
+def _is_bank(row: dict) -> float | None:
+    """From the filing's own format (PM1.12); a name with no filing has no value, as every feature here."""
+    url = row.get("source_url")
+    return None if url is None else float(url.rsplit("/", 1)[-1].startswith(("BANKING_", "INTEGRATED_FILING_BANKING_")))
 
 
 def _ttm(q: dict[int, dict], i: int, col: str) -> float | None:
@@ -69,6 +75,7 @@ def _features(q: dict[int, dict]) -> dict[str, float | None]:
         "roce": _ratio(ebit, capital),
         "cfo_pat": None if year_end is None else _ratio(q[year_end]["cfo"], _ttm(q, year_end, "pat")),
         "pat_ttm_positive": None if pat is None else float(pat > 0),
+        "is_bank": _is_bank(latest),
     }
 
 

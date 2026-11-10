@@ -1,6 +1,6 @@
 """PM1 AC1: a feature at date d changes only when a filing with available_on <= d exists."""
 
-from datetime import date
+from datetime import date, datetime
 
 import polars as pl
 
@@ -65,3 +65,20 @@ def test_a_lone_standalone_quarter_never_enters_a_consolidated_series():
 
 def test_no_figure_exists_before_the_first_filing():
     assert at(history(), date(2023, 1, 1))["ttm_rev_yoy"] is None
+
+
+def _filing(url):
+    return pl.DataFrame({
+        "instrument_id": [1], "period_end": [date(2024, 12, 31)], "period_type": ["consolidated"],
+        "available_on": [date(2025, 1, 20)], "filed_at": [datetime(2025, 1, 19, 18, 0)], "revenue": [100.0], "pat": [10.0],
+        "ebitda": [20.0], "depreciation": [5.0], "total_debt": [None], "total_equity": [None], "cfo": [None], "source_url": [url],
+    }, schema_overrides={"total_debt": pl.Float64, "total_equity": pl.Float64, "cfo": pl.Float64})
+
+
+def test_is_bank_comes_from_the_filing_format():
+    base = "https://nsearchives.nseindia.com/corporate/xbrl/"
+    got = {name: F.snapshots(_filing(base + name))["is_bank"][0] for name in
+           ("BANKING_51549_208046_21012020011136_WEB.xml", "INTEGRATED_FILING_BANKING_1661430_29042026070224_WEB.xml",
+            "INDAS_38795_34792_14082018123759_WEB.xml", "NBFC_1_2_3_WEB.xml", "INTEGRATED_FILING_NBFC_1_2_WEB.xml")}
+    assert list(got.values()) == [1.0, 1.0, 0.0, 0.0, 0.0]
+

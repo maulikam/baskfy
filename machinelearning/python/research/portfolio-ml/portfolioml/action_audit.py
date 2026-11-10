@@ -8,6 +8,7 @@ import re
 
 MOVE, FIT = 0.60, math.log(1.5)  # the observed step must sit within 1.5× of what the action implies
 SLACK_DAYS = 2
+FALL_LOW, FALL_HIGH, FALL_FIT, FALL_MIN_FACTOR = 0.4, 0.8, math.log(1.15), 1.25
 _SIDES = re.compile(r"(?:from\s*)?(?:rs\.?|re\.?|inr)\s*([\d.]+)[^\d]*?(?:per\s+share\s*)?to\s*(?:rs\.?|re\.?|inr)\s*([\d.]+)", re.I)
 _BONUS = re.compile(r"bonus(?:\s+issue)?\s*[-:]?\s*(\d+)\s*:\s*(\d+)", re.I)
 
@@ -48,6 +49,17 @@ def classify(step: float, candidates: list[tuple[str, float | None]]) -> tuple[s
     if step < 1 and any(c == "demerger" for c, _ in candidates):
         return "demerger", None
     return "unexplained", None
+
+
+def classify_fall(step: float, candidates: list[tuple[str, float | None]]) -> tuple[str, float] | None:
+    """A fall of 20–60 %: only a bonus or split that fits within 1.15× explains it, and only from a factor of 1.25."""
+    if not FALL_LOW <= step <= FALL_HIGH:
+        return None
+    fits = [(abs(math.log(step * f)), c, f) for c, f in candidates if f and c in ("bonus", "split") and f >= FALL_MIN_FACTOR]
+    if not fits:
+        return None
+    gap, name, factor = min(fits, key=lambda x: x[0])
+    return (name, 1 / factor) if gap <= FALL_FIT else None
 
 
 def in_window(ex_date: dt.date, previous_bar: dt.date, move: dt.date) -> bool:

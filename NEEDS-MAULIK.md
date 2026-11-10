@@ -2541,3 +2541,51 @@ session and the 18:40–21:15 nightly window:
 - **Needed:** a Tapetide API key and your yes to one month of the Fundamentals plan (the free tier is about 5 calls a day).
 - **Why:** a pilot on 132 crawled names, 20 dead names and 5 banks could replace most of the NSE crawl if it passes the grading in DECISIONS-PM PM1.9.
 - **Done meanwhile:** nothing built or spent. The NSE crawl continues as the source.
+
+## Plant data: corporate actions not adjusted in `ohlcv_daily` (PM0.12, 10 Nov 2026)
+
+- **Needed:** your decision whether to correct these in the plant. Research already adjusts them in its own copy (`audit_moves.py` runs in `export_bars_local.sh`); `ohlcv_daily` and `corporate_action` are unchanged.
+- **Why:** live screens and factors read `close`, so these show as a one-day fall or jump that never happened to a holder.
+- **Blocks:** nothing in research. 39 live-name cases below; matched to the archived NSE action files or the scheme list. For a demerger or scheme the files give no ratio, so the figure is the ex-day open over the previous close.
+
+| Symbol | Ex-date in bars | Action | Ratio | Observed step |
+|---|---|---|---|---|
+| MASTEK | 2015-06-12 | demerger | price × 0.342 | 0.340 |
+| CGPOWER | 2016-03-15 | demerger | price × 0.341 | 0.283 |
+| PTL | 2017-03-27 | demerger | price × 0.391 | 0.372 |
+| BEARDSELL | 2017-05-04 | split | 1 share → 6.00 | 0.175 |
+| ATLASCYCLE | 2017-10-30 | split | 1 share → 2.00 | 0.525 |
+| LANDSMILL | 2018-01-23 | bonus | 1 share → 3.00 | 0.350 |
+| AGI | 2019-08-19 | demerger | price × 0.335 | 0.318 |
+| SUVEN | 2020-01-21 | demerger | price × 0.050 | 0.053 |
+| ESSENTIA | 2022-02-07 | split | 1 share → 3.00 | 0.346 |
+| DRCSYSTEMS | 2022-03-21 | split | 1 share → 10.00 | 0.105 |
+| SONAMLTD | 2022-07-14 | bonus | 1 share → 2.00 | 0.509 |
+| AHLEAST | 2022-10-06 | bonus | 1 share → 1.50 | 0.753 |
+| NDLVENTURE | 2022-11-22 | demerger | price × 0.150 | 0.158 |
+| MIRZAINT | 2023-03-29 | demerger | price × 0.223 | 0.234 |
+| KANANIIND | 2024-01-30 | bonus | 1 share → 2.00 | 0.526 |
+| SEMAC | 2024-05-17 | demerger | price × 0.367 | 0.367 |
+| VERTOZ | 2024-07-05 | split | 1 share → 20.00 | 0.053 |
+| AARTECH | 2024-08-09 | split | 1 share → 3.00 | 0.350 |
+| ESSENTIA | 2024-08-12 | bonus | 1 share → 2.00 | 0.342 |
+| ROSSELLIND | 2024-10-07 | demerger | price × 0.180 | 0.160 |
+| MINDTECK | 2024-11-18 | bonus | 1 share → 1.25 | 0.768 |
+| DIACABS | 2024-12-03 | split | 1 share → 10.00 | 0.105 |
+| MAZDA | 2025-01-28 | split | 1 share → 5.00 | 0.209 |
+| NAVKARURB | 2025-04-24 | bonus | 1 share → 2.50 | 0.420 |
+| ABFRL | 2025-05-22 | demerger | price × 0.364 | 0.334 |
+| UEL | 2025-06-02 | bonus | 1 share → 1.68 | 0.625 |
+| VERTOZ | 2025-07-11 | consolidation | 0.10 shares per old share | 9.499 |
+| SHANKARA | 2025-10-09 | demerger | price × 0.144 | 0.147 |
+| ABINFRA | 2025-10-17 | split | 1 share → 10.00 | 0.098 |
+| ALLCARGO | 2025-11-26 | demerger | price × 0.360 | 0.380 |
+| SIKKO | 2025-11-27 | split | 1 share → 10.00 | 0.101 |
+| SIKKO | 2025-12-08 | bonus | 1 share → 2.00 | 0.524 |
+| DCMSRIND | 2026-01-09 | demerger | price × 0.311 | 0.285 |
+| DBEIL | 2026-06-19 | split | 1 share → 10.00 | 0.105 |
+| UNIVASTU | 2026-07-02 | bonus | 1 share → 3.00 | 0.369 |
+| KILITCH | 2026-07-03 | bonus | 1 share → 2.00 | 0.509 |
+| INDIAGLYCO | 2026-09-02 | demerger | price × 0.203 | 0.214 |
+| VERANDA | 2026-10-06 | demerger | price × 0.133 | 0.140 |
+| BHAGYANGR | 2026-10-08 | demerger | price × 0.086 | 0.091 |

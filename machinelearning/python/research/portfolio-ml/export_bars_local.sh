@@ -35,4 +35,9 @@ if $PG -At -c "SELECT to_regclass('public.instrument_terminal')" | grep -q instr
   copy instrument_terminal "SELECT instrument_id, status, reason, last_bar, source FROM instrument_terminal"
 fi
 rm -f "$OUT/ohlcv_daily.parquet" "$OUT/dataset.parquet" "$OUT/features.parquet"
+# PM0.12: known corporate actions adjusted in the research copy only; ohlcv_daily and corporate_action are never written.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CA="$OUT/_corporate_actions"; rm -rf "$CA"; mkdir -p "$CA"
+docker exec -i "${BASKFY_WORKER_CONTAINER:-baskfy-local-worker-1}" tar -c -C /var/lib/baskfy/archive/nse corporate-actions-year | tar -x -C "$CA"
+"$HERE/.venv/bin/python" "$HERE/audit_moves.py" "$OUT" "$CA/corporate-actions-year" "$HERE/../../../../crates/providers/src/reference/nse_schemes.csv" "$OUT"
 echo "done: $(du -sh "$OUT" | cut -f1)"

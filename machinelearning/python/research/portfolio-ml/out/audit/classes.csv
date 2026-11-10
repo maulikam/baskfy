@@ -1,6 +1,8 @@
-class,true,false
-bonus,7,3
-consolidation,0,1
-demerger,7,16
-split,22,10
-unexplained,345,399
+band,class,true,false
+beyond_60,bonus,7,3
+beyond_60,consolidation,0,1
+beyond_60,demerger,7,16
+beyond_60,split,22,10
+beyond_60,unexplained,345,399
+fall_20_60,bonus,21,8
+fall_20_60,split,4,1

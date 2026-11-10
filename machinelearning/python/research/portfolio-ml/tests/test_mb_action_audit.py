@@ -44,3 +44,11 @@ def test_demerger_only_explains_a_fall():
 def test_ex_date_must_lie_between_the_bars():
     assert A.in_window(dt.date(2024, 1, 10), dt.date(2024, 1, 9), dt.date(2024, 1, 10))
     assert not A.in_window(dt.date(2023, 1, 10), dt.date(2024, 1, 9), dt.date(2024, 1, 10))
+
+
+def test_a_fall_needs_a_close_fit_and_a_real_factor():
+    assert A.classify_fall(0.51, [("bonus", 2.0)]) == ("bonus", 0.5)
+    assert A.classify_fall(0.7, [("bonus", 2.0)]) is None
+    assert A.classify_fall(0.79, [("split", 1.1)]) is None
+    assert A.classify_fall(0.5, [("demerger", None)]) is None
+    assert A.classify_fall(0.3, [("bonus", 3.0)]) is None

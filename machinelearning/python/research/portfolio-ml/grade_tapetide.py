@@ -125,7 +125,8 @@ def main(root: str, fund: str, shp: str, sessions_path: str, dead_path: str, ban
         print(f"  estimated={est}: n={len(g)} within 1: {rate([abs(x) <= 1 for x in g]):.1%}  median {st.median(g)}  p5 {q[0]} p95 {q[18]}  earlier than the filing: {early[est] / len(g):.1%}")
 
     print("== quarters, 2018-03 to 2026-09, crawled names")
-    ours_keys = {k for k in nse if "2018-03-31" <= k[1] <= "2026-09-30"}
+    pulled = {k[0] for k in tt}
+    ours_keys = {k for k in nse if k[0] in pulled and "2018-03-31" <= k[1] <= "2026-09-30"}
     theirs_keys = {k for k in tt if k[0] in crawled and "2018-03-31" <= k[1] <= "2026-09-30"}
     print(f"  both {len(ours_keys & theirs_keys)}  only NSE {len(ours_keys - theirs_keys)}  only Tapetide {len(theirs_keys - ours_keys)}")
 

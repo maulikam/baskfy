@@ -1,15 +1,15 @@
 == values, first NSE filing, same basis, relative error ≤ 1 %
-  revenue     matched  5071  within 1 %:  84.7%  median error 0.0088%
+  revenue     matched  5071  within 1 %:  91.0%  median error 0.0059%
   net_profit  matched  5069  within 1 %:  91.8%  median error 0.0554%
   eps         matched  5071  within 1 %:  86.2%  median error 0.0000%
   basis: {'same basis: consolidated': 4575, 'same basis: standalone': 496, 'tapetide basis absent from NSE rows': 241}
-  banks only: {'revenue': '139 0.0%', 'net_profit': '139 91.4%', 'eps': '139 71.9%'}
+  banks only: {'revenue': '139 95.7%', 'net_profit': '139 91.4%', 'eps': '139 71.9%'}
 == available_from against our first filed_on, sessions
   matched 5071  within 1 session: 70.6%
   estimated=False: n=3535 within 1: 97.6%  median 0  p5 -1.0 p95 0.0  earlier than the filing: 24.2%
   estimated=True: n=1536 within 1: 8.3%  median 9.0  p5 -17.0 p95 1339.0  earlier than the filing: 19.4%
 == quarters, 2018-03 to 2026-09, crawled names
-  both 5312  only NSE 1012  only Tapetide 687
+  both 5312  only NSE 0  only Tapetide 687
 == promoter % and pledge %
   promoter matched 3698 within 1 %: 99.7%
   pledge   matched 415 within 1 %: 93.0%

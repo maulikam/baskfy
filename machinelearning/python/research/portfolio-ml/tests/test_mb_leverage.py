@@ -25,6 +25,6 @@ def test_borrowing_charges_interest_and_lending_earns():
 
 def test_a_breach_sells_at_the_next_close_only():
     p = np.array([1.0, 1.0, 0.6, 0.6, 0.6])  # the line ends right after the sale, so interest cannot cause a second breach
-    eq, gross, forced = L.pool_levered([T.Line(1, p, 2.0)], 7, 0, 2.0)
+    eq, gross, forced = L.pool_levered([T.Line(1, p, 1.9)], 7, 0, 1.9)  # below the 2× margin line, so entry costs alone cannot breach
     assert forced == 1
     assert gross[3] > 2.0 and gross[4] <= 2.0 + 1e-9

@@ -1,0 +1,10 @@
+kind,window,2014-2019_beats,2020-2025_beats,real_this_window
+partial_1_20,42,true,true,true
+full_past_count,42,false,true,false
+full_ex_post,42,false,false,false
+partial_1_20,63,true,true,true
+full_past_count,63,false,false,false
+full_ex_post,63,false,true,false
+partial_1_20,126,true,true,true
+full_past_count,126,true,true,true
+full_ex_post,126,false,true,false

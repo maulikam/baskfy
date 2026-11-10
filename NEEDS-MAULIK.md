@@ -2606,4 +2606,4 @@ bash export_bars_local.sh
 .venv/bin/python run_pm4.py mb_u100_h250 --blank-rates
 ```
 
-The last line prints `gap above 10%: YES, use --where-covered` or `no` (PM4.4); the full table is in `out/pm4/blank_rates.csv`. It does not run PM4.
+It prints `BLANK CHECK: gap above 10%: YES` or `no` and the judged run (PM4.4); `run_pm4.py` without the flag runs the same check first, every time; the full table is in `out/pm4/blank_rates.csv`. It does not run PM4.

@@ -3,9 +3,9 @@ controls + fundamentals, controls + technicals, all. The gate is judged on model
 2024+2025, dead names included, terminal variant (b). Refuses to run until PM0.7 has run and the backfill has
 covered the universe.
 
-usage: python run_pm4.py mb_u100_h250 [--where-covered | --blank-rates]        (writes out/pm4/)
-Both the common-coverage rows and the full universe always run; --where-covered makes the first the judged one (PM4.4).
---blank-rates reports PM1/PM2 blanks, dead vs live, by year, and stops; it needs no coverage."""
+usage: python run_pm4.py mb_u100_h250 [--blank-rates]        (writes out/pm4/)
+Step 1, always: PM1/PM2 blank rates, dead vs live, by year; a gap above 10 points makes the common-coverage rows the
+judged run, otherwise the full universe (PM4.4). Both always run. --blank-rates stops after step 1."""
 
 from __future__ import annotations
 
@@ -214,8 +214,8 @@ def evaluate(frame: pl.DataFrame, horizon: int, marks: pl.DataFrame, bench: pl.D
     return gate, aucs, top
 
 
-def report_blanks(source: Path, filings: pl.DataFrame) -> int:
-    """Run when the backfill has reached the dead names; `ever_investable` is reliable first, `all` once it finishes."""
+def blank_check(source: Path, filings: pl.DataFrame) -> bool:
+    """PM4.4, step 1 of every run: writes blank_rates.csv and says whether the common-coverage rows are judged."""
     univ = pl.scan_parquet(source).filter(pl.col("universe")).select(KEEP).collect()
     frame = S.join_features(F.join_features(univ, F.snapshots(filings)), S.snapshots(panel.load_shareholding(DATA)))
     rates = blank_rates(frame, BLANK_FEATURES)
@@ -223,11 +223,12 @@ def report_blanks(source: Path, filings: pl.DataFrame) -> int:
     rates.write_csv(OUT / "blank_rates.csv")
     pl.Config.set_tbl_rows(60); pl.Config.set_tbl_width_chars(200); pl.Config.set_float_precision(3)
     print(rates.filter(pl.col("year") >= COVERAGE_FROM).sort(pl.col("gap").abs(), descending=True).head(40))
-    print(f"gap above {MAX_BLANK_GAP:.0%}: {'YES, use --where-covered' if blank_gap_breached(rates) else 'no'}")
-    return 0
+    breached = blank_gap_breached(rates)
+    print(f"BLANK CHECK: gap above {MAX_BLANK_GAP:.0%}: {'YES' if breached else 'no'}; judged run: {'common-coverage rows' if breached else 'full universe'} (PM4.4)", flush=True)
+    return breached
 
 
-def main(geometry: str, where_covered: bool = False, blanks_only: bool = False) -> int:
+def main(geometry: str, blanks_only: bool = False) -> int:
     horizon = int(geometry.split("_h")[1])
     source = DATA / f"dataset_{geometry}_t{TERMINAL}.parquet"
     if not dead_names_present(DATA):
@@ -237,8 +238,9 @@ def main(geometry: str, where_covered: bool = False, blanks_only: bool = False) 
         print("REFUSED: run the backfill, export_bars_local.sh and build_dataset.py first (NEEDS-MAULIK.md)")
         return 2
     filings = panel.load_fundamentals(DATA)
+    where_covered = blank_check(source, filings)
     if blanks_only:
-        return report_blanks(source, filings)
+        return 0
     keys = pl.scan_parquet(source).filter(pl.col("universe")).select("instrument_id", "date").collect()
     share, by_year = fundamentals_coverage(keys, filings)
     pl.Config.set_tbl_rows(40); pl.Config.set_tbl_width_chars(200); pl.Config.set_float_precision(3)
@@ -273,5 +275,7 @@ def main(geometry: str, where_covered: bool = False, blanks_only: bool = False) 
 
 
 if __name__ == "__main__":
+    if "--where-covered" in sys.argv:
+        sys.exit("REFUSED: --where-covered is gone; the blank check decides the judged run (PM4.4)")
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    sys.exit(main(args[0] if args else "mb_u100_h250", "--where-covered" in sys.argv, "--blank-rates" in sys.argv))
+    sys.exit(main(args[0] if args else "mb_u100_h250", "--blank-rates" in sys.argv))

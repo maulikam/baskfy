@@ -176,7 +176,7 @@ def report_blanks(source: Path, filings: pl.DataFrame) -> int:
     return 0
 
 
-def main(geometry: str, where_covered: bool = False, blanks_only: bool = False, lagged: bool = False) -> int:
+def main(geometry: str, where_covered: bool = False, blanks_only: bool = False) -> int:
     horizon = int(geometry.split("_h")[1])
     source = DATA / f"dataset_{geometry}_t{TERMINAL}.parquet"
     if not dead_names_present(DATA):
@@ -185,8 +185,7 @@ def main(geometry: str, where_covered: bool = False, blanks_only: bool = False, 
     if not (DATA / "fundamental_pit.csv.gz").exists() or not source.exists():
         print("REFUSED: run the backfill, export_bars_local.sh and build_dataset.py first (NEEDS-MAULIK.md)")
         return 2
-    filings = panel.load_fundamentals(DATA, lagged)
-    tag = "_with_lagged" if lagged else ""  # PM1.13: report only, the judged run has no lagged rows
+    filings = panel.load_fundamentals(DATA)
     if blanks_only:
         return report_blanks(source, filings)
     keys = pl.scan_parquet(source).filter(pl.col("universe")).select("instrument_id", "date").collect()
@@ -208,10 +207,10 @@ def main(geometry: str, where_covered: bool = False, blanks_only: bool = False, 
 
     marks = pl.scan_parquet(source).select("instrument_id", "date", "close", "terminal").collect()
     bench = panel.load_index_series(DATA).select("date", "nifty50", "midcap150", "smallcap250")
-    gate, aucs, top = evaluate(covered(frame) if where_covered else frame, horizon, marks, bench, tag)
+    gate, aucs, top = evaluate(covered(frame) if where_covered else frame, horizon, marks, bench, "")
     if where_covered:
         print("REFERENCE ONLY: full universe, not judged (PM4.4)", flush=True)
-        evaluate(frame, horizon, marks, bench, f"_full_reference{tag}")
+        evaluate(frame, horizon, marks, bench, "_full_reference")
     in_top = top.head(12).filter(pl.col("feature").is_in(EXTRA)).height
     ac1, ac2 = verdict(gate, "with_fundamentals"), bool((aucs["delta"] >= -0.02).all())
     print(f"AC1 gate (each window): {'PASS' if ac1 else 'FAIL'}")
@@ -222,4 +221,4 @@ def main(geometry: str, where_covered: bool = False, blanks_only: bool = False, 
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    sys.exit(main(args[0] if args else "mb_u100_h250", "--where-covered" in sys.argv, "--blank-rates" in sys.argv, "--with-lagged" in sys.argv))
+    sys.exit(main(args[0] if args else "mb_u100_h250", "--where-covered" in sys.argv, "--blank-rates" in sys.argv))

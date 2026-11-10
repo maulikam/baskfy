@@ -34,16 +34,6 @@ def read_quarters(root: Path, basis: str, symbol: str) -> dict[str, dict[str, fl
     return quarters(json.loads(path.read_text(encoding="utf8"))) if path.exists() else {}
 
 
-def lagged_available_on(period_end: dt.date) -> dt.date:
-    """SEBI's deadlines: 45 days after a quarter, 60 after the March year-end."""
-    return period_end + dt.timedelta(days=60 if period_end.month == 3 else 45)
-
-
-def quarter_start(period_end: dt.date) -> dt.date:
-    month = period_end.month - 2
-    return dt.date(period_end.year, month, 1)
-
-
 def ttm(figures: dict[str, dict[str, float]], period_ends: list[str], metric: str) -> float | None:
     values = [figures.get(p, {}).get(metric) for p in period_ends]
     return None if any(v is None for v in values) else sum(values)

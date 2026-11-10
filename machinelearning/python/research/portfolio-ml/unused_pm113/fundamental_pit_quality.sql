@@ -1,3 +1,4 @@
+-- UNUSED, never applied (PM1.13): Screener feeds no product table. Outside db/migrations so no deploy runs it.
 -- PM1.13: how far a fundamentals row can be trusted as of its date. NSE filings are as filed; Screener's are today's numbers on a lagged date.
 ALTER TABLE fundamental_pit
     ADD COLUMN pit_quality text NOT NULL DEFAULT 'as_filed' CHECK (pit_quality IN ('as_filed', 'lagged')),

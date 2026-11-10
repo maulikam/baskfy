@@ -20,16 +20,6 @@ def _is_bank(row: dict) -> float | None:
     return None if url is None else float(url.rsplit("/", 1)[-1].startswith(("BANKING_", "INTEGRATED_FILING_BANKING_")))
 
 
-def usable(filings: pl.DataFrame, lagged: bool = False) -> pl.DataFrame:
-    """PM1.13: Screener's lagged rows stay out unless asked for, and never sit beside an NSE row of the same quarter."""
-    if "pit_quality" not in filings.columns:
-        return filings
-    filed = filings.filter(pl.col("pit_quality") != "lagged")
-    if not lagged:
-        return filed
-    return pl.concat([filed, filings.filter(pl.col("pit_quality") == "lagged").join(filed.select("instrument_id", "period_end").unique(), on=["instrument_id", "period_end"], how="anti")])
-
-
 def _ttm(q: dict[int, dict], i: int, col: str) -> float | None:
     vals = [q.get(k, {}).get(col) for k in range(i - 3, i + 1)]
     return None if any(v is None for v in vals) else sum(vals)

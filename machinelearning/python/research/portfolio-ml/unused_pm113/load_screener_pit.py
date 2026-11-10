@@ -1,4 +1,6 @@
-"""PM1.13 step 3: Screener quarters with no NSE row, lagged, into fundamental_pit. Idempotent; dry run without --apply.
+"""UNUSED (PM1.13): Maulik ruled that nothing from Screener feeds fundamental_pit; kept for the record, --apply refuses.
+
+PM1.13 step 3: Screener quarters with no NSE row, lagged, into fundamental_pit. Idempotent; dry run without --apply.
 
 usage: python load_screener_pit.py <data/screener> [--apply]     undo: DELETE FROM fundamental_pit WHERE source = 'screener'"""
 
@@ -15,10 +17,20 @@ import subprocess
 import sys
 from decimal import Decimal
 
-from portfolioml.screener import DIRS, lagged_available_on, quarter_start, quarters
+from portfolioml.screener import DIRS, quarters
 
 PG = ["docker", "exec", "-i", os.environ.get("BASKFY_PG_CONTAINER", "baskfy-local-postgres-1"), "psql", "-U", "baskfy", "-d", "baskfy", "-v", "ON_ERROR_STOP=1", "-q"]
 COLUMNS = ["instrument_id", "period_end", "filed_on", "period_type", "filed_at", "available_on", "period_start", "is_revision", "revenue", "other_income", "finance_costs", "depreciation", "ebitda", "pbt", "pat", "eps_diluted", "source", "source_url", "pit_quality", "restated"]
+
+
+def lagged_available_on(period_end: dt.date) -> dt.date:
+    """SEBI's deadlines: 45 days after a quarter, 60 after the March year-end."""
+    return period_end + dt.timedelta(days=60 if period_end.month == 3 else 45)
+
+
+def quarter_start(period_end: dt.date) -> dt.date:
+    month = period_end.month - 2
+    return dt.date(period_end.year, month, 1)
 
 
 def sql(query: str) -> list[list[str]]:
@@ -61,6 +73,8 @@ def main(root: str, apply: bool) -> int:
     if not apply:
         print("dry run: nothing written")
         return 0
+    print("REFUSED: Screener rows do not go into fundamental_pit (PM1.13)")
+    return 2
     body = io.StringIO()
     csv.writer(body).writerows(rows)
     script = (f"begin;\ncreate temp table s (like fundamental_pit including defaults) on commit drop;\n\\copy s ({','.join(COLUMNS)}) from stdin csv\n{body.getvalue()}\\.\n"

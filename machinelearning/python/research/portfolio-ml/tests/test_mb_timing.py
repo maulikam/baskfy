@@ -50,3 +50,18 @@ def test_period_stats_reads_cagr_and_drawdown():
     d = [dt.date(2020, 1, 1), dt.date(2021, 1, 1)]
     s = T.period_stats(np.array([1.0, 1.1]), d)
     assert abs(s["cagr"] - 0.1) < 0.002 and s["max_dd"] == 0.0
+
+
+def test_invested_share_tracks_the_held_line():
+    p = np.array([1.0, 1.0, 1.0])
+    _, _, inv = T.pool_book_detail([T.Line(1, p, 0.5)], 6, 0)
+    assert inv[0] == 0.0 and 0.49 < inv[1] < 0.51 and inv[-1] == 0.0
+
+
+def test_causal_split_never_sees_an_open_window():
+    from explore_trigger_match import split_causal
+    line = lambda s: T.Line(s, np.ones(2), 0.0)  # noqa: E731
+    out = split_causal([(0, [line(1) for _ in range(4)]), (5, [line(6)]), (30, [line(31)])])
+    assert abs(out[0].weight - 1 / 12 / 20) < 1e-12  # no history yet
+    assert abs(out[4].weight - 1 / 12 / 20) < 1e-12  # first tranche's window still open
+    assert abs(out[5].weight - 1 / 12 / 2.5) < 1e-12  # both earlier tranches closed

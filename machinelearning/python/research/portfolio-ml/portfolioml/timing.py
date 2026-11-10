@@ -29,11 +29,18 @@ class Line:
 
 def pool_book(lines: list[Line], n_sessions: int, first: int) -> tuple[np.ndarray, float]:
     """Daily equity from session ``first``, and the share of wanted money actually allotted. Allocation is capped by cash; idle cash earns CASH_RATE."""
+    equity, share, _ = pool_book_detail(lines, n_sessions, first)
+    return equity, share
+
+
+def pool_book_detail(lines: list[Line], n_sessions: int, first: int) -> tuple[np.ndarray, float, np.ndarray]:
+    """``pool_book`` plus the invested share of equity each session."""
     daily = (1 + CASH_RATE) ** (1 / 252)
     by_start: dict[int, list[Line]] = {}
     for line in lines:
         by_start.setdefault(line.start, []).append(line)
     cash, active, out = 1.0, [], np.ones(n_sessions - first)
+    invested = np.zeros(n_sessions - first)
     wanted = granted = 0.0
     for t in range(first, n_sessions):
         cash *= daily
@@ -56,8 +63,10 @@ def pool_book(lines: list[Line], n_sessions: int, first: int) -> tuple[np.ndarra
             else:
                 still.append((u, p, s))
         active = still
-        out[t - first] = cash + sum(u * p[t - s] for u, p, s in active)
-    return out, granted / wanted if wanted else 1.0
+        value = sum(u * p[t - s] for u, p, s in active)
+        out[t - first] = cash + value
+        invested[t - first] = value / out[t - first]
+    return out, granted / wanted if wanted else 1.0, invested
 
 
 def period_stats(equity: np.ndarray, days: list[dt.date]) -> dict:

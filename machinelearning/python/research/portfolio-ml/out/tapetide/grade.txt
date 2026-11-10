@@ -1,0 +1,46 @@
+== values, first NSE filing, same basis, relative error ≤ 1 %
+  revenue     matched  5071  within 1 %:  84.7%  median error 0.0088%
+  net_profit  matched  5069  within 1 %:  91.8%  median error 0.0554%
+  eps         matched  5071  within 1 %:  86.2%  median error 0.0000%
+  basis: {'same basis: consolidated': 4575, 'same basis: standalone': 496, 'tapetide basis absent from NSE rows': 241}
+  banks only: {'revenue': '139 0.0%', 'net_profit': '139 91.4%', 'eps': '139 71.9%'}
+== available_from against our first filed_on, sessions
+  matched 5071  within 1 session: 70.6%
+  estimated=False: n=3535 within 1: 97.6%  median 0  p5 -1.0 p95 0.0  earlier than the filing: 24.2%
+  estimated=True: n=1536 within 1: 8.3%  median 9.0  p5 -17.0 p95 1339.0  earlier than the filing: 19.4%
+== quarters, 2018-03 to 2026-09, crawled names
+  both 5312  only NSE 1012  only Tapetide 687
+== promoter % and pledge %
+  promoter matched 3698 within 1 %: 99.7%
+  pledge   matched 415 within 1 %: 93.0%
+== dead names (20): quarters of revenue, last period against our last bar
+  AJRINFRA     suspended last bar 2023-10-03  quarters  12  last period 2026-09-30  AFTER DEATH
+  ALBK         suspended last bar 2020-03-19  quarters   7  last period 2019-12-31
+  CASTEXTECH   delisted  last bar 2021-07-20  quarters  13  last period 2021-06-30
+  EASUNREYRL   suspended last bar 2022-10-06  quarters   0  last period -
+  HERCULES     delisted  last bar 2026-01-01  quarters  37  last period 2026-09-30  AFTER DEATH
+  JUBLINDS     merged    last bar 2024-10-25  quarters  13  last period 2024-06-30
+  KGL          suspended last bar 2021-04-12  quarters  10  last period 2019-03-31
+  MEGH         merged    last bar 2021-05-17  quarters  13  last period 2020-12-31
+  METKORE      suspended last bar 2021-02-23  quarters   6  last period 2018-09-30
+  PBAINFRA     delisted  last bar 2022-08-23  quarters  36  last period 2026-06-30  AFTER DEATH
+  PUNJLLOYD    suspended last bar 2022-10-06  quarters  13  last period 2026-09-30  AFTER DEATH
+  RAMGOPOLY    delisted  last bar 2019-07-15  quarters  34  last period 2026-09-30  AFTER DEATH
+  ROHITFERRO   delisted  last bar 2022-04-07  quarters  13  last period 2021-12-31
+  SGFL         delisted  last bar 2019-10-22  quarters   3  last period 2019-12-31
+  SYNCOM       delisted  last bar 2021-06-28  quarters  13  last period 2021-06-30
+  SYNDIBANK    suspended last bar 2020-03-19  quarters   7  last period 2019-12-31
+  TECHNOFAB    suspended last bar 2021-08-02  quarters  13  last period 2025-03-31  AFTER DEATH
+  UNITEDBNK    suspended last bar 2020-03-20  quarters  13  last period 2019-12-31
+  VIKASWSP     suspended last bar 2023-04-28  quarters  21  last period 2026-06-30  AFTER DEATH
+  VISESHINFO   delisted  last bar 2024-12-02  quarters  13  last period 2025-12-31  AFTER DEATH
+  with ≥ 8 quarters: 15/20 = 75%; figures after the last bar: 8
+== verdict
+  FAIL  revenue ≥ 95 %
+  FAIL  net_profit ≥ 95 %
+  FAIL  eps ≥ 95 %
+  PASS  promoter ≥ 95 %
+  FAIL  pledge ≥ 95 %
+  FAIL  available_from within 1 session ≥ 95 %
+  FAIL  dead names ≥ 80 %
+OVERALL FAIL

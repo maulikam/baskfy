@@ -2537,6 +2537,7 @@ session and the 18:40–21:15 nightly window:
 
 ## Portfolio-ML (PM1.9) — Tapetide API key (10 Nov 2026)
 
+- **DONE, pilot failed (DECISIONS-PM PM1.9).** Nothing loaded. The key is on Pro+; cancel it if you have no other use for it.
 - **Needed:** a Tapetide API key and your yes to one month of the Fundamentals plan (the free tier is about 5 calls a day).
 - **Why:** a pilot on 132 crawled names, 20 dead names and 5 banks could replace most of the NSE crawl if it passes the grading in DECISIONS-PM PM1.9.
 - **Done meanwhile:** nothing built or spent. The NSE crawl continues as the source.

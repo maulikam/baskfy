@@ -38,6 +38,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 - AC2 No year's AUC for model 4 falls below model 3's (the price-only model) by more than 0.02.
 - AC3 STRATEGY §3/§4 regenerated; feature importance shows fundamentals/shareholding/mcap in the top 12.
 - If AC1 fails: record it, keep the price-only model as the sleeve's model, and PM5–PM9 proceed with the better of the two. A negative result is a result.
+- After AC1: re-test the 63-day-high trigger on model 4's picks at 1/20 and 1/16 of a tranche per name, no borrowing, drawdown judged on the full period (PM0.17 follow-through). No levered arm.
 
 ## PM5 — Delivery %, bulk/block deals, SAST
 **Goal:** the smaller signals. Delivery % from the bhavcopy archive (daily); bulk/block deals and SAST/insider filings from NSE's daily reports. Features: 20-day delivery % vs 1-year, net bulk buys, insider net buys 90d. AC: coverage + no-lookahead; re-run §3 only.
@@ -52,7 +53,7 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 **Goal:** see it. Web `/mb` (read-only): top 50, rank, score, investable, sector, mcap, 12m return, distance from ATH, turnover, listing age; the §4 backtest as the "what this is" panel; disclaimers as components. Desk `/mb`: the same list as a **watchlist** with a link that pre-fills a *manual* `/analyze`. No plan builder. AC: 402-gating consistent with the other sleeves; no `execute` route touched (`tools/deploy/verify-safety.sh` still green).
 
 ## PM8 — Paper book
-**Goal:** twelve monthly tranches of the live ranking, journaled, compared monthly to the backtest's expectation (27–30 % of picks touch 2×, median 12m +15–19 %, ≤ −20 % drawdown), plus the **"re-rank, don't sell"** rule tested on `mb_score_daily` history. AC: a `/mb/paper` panel with expected-vs-realised; twelve months before any real-money discussion.
+**Goal:** twelve monthly tranches of the live ranking, journaled, compared monthly to the backtest's expectation (27–30 % of picks touch 2×, median 12m +15–19 %, ≤ −20 % drawdown), plus the **"re-rank, don't sell"** rule tested on `mb_score_daily` history. AC: a `/mb/paper` panel with expected-vs-realised; twelve months before any real-money discussion. Shadow lines beside the book: the 63-day-high trigger at 1/20 and 1/16, no borrowing (PM0.17 follow-through).
 
 ## PM9 — Text
 **Goal:** results-call transcripts and announcements as embeddings → a few summary features. Last; only after PM4 passes and PM8 has run six months.

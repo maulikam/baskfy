@@ -1746,6 +1746,33 @@ impl NseProvider {
             .await
     }
 
+    /// PM1.11: a results XBRL already in the archive, `None` if absent. Never touches NSE.
+    ///
+    /// # Errors
+    /// Archive failures.
+    pub async fn archived_results_xbrl(
+        &self,
+        symbol: &str,
+        url: &str,
+        filed_on: NaiveDate,
+    ) -> Result<Option<Vec<u8>>, ProviderError> {
+        let token = py_strip(symbol).to_uppercase();
+        let stem = url
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches(".xml");
+        let kind = format!("{KIND_FINANCIAL_RESULTS_XBRL}/{token}/{stem}");
+        let key = archive_key(&kind, filed_on, "xml")?;
+        let Some(archive) = &self.inner.archive else {
+            return Ok(None);
+        };
+        if !archive.exists(&key).await? {
+            return Ok(None);
+        }
+        archive.get(&key).await.map(Some)
+    }
+
     /// PM1: one XBRL filing named by the listing, archived under the day it was filed. A URL
     /// outside NSE's archive host is refused: it came out of a payload.
     ///

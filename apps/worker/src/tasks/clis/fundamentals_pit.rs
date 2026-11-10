@@ -9,13 +9,13 @@ use baskfy_providers::ProviderError;
 use baskfy_providers::factory::{RedisSource, build_nse_provider};
 use baskfy_providers::nse::NseProvider;
 use baskfy_providers::nse_results::{
-    ResultsFacts, ResultsFiling, available_on, parse_results_xbrl,
+    ResultsFacts, ResultsFiling, SOURCE_INTEGRATED, SOURCE_REG33, available_on, parse_results_xbrl,
 };
 use baskfy_providers::nse_shareholding::{
     SOURCE_SHP, ShareholdingFacts, ShareholdingFiling, parse_shareholding_xbrl,
 };
 use baskfy_providers::settings::ProviderSettings;
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use sqlx::PgConnection;
 
@@ -285,7 +285,7 @@ async fn shareholding_symbol(
 }
 
 pub(super) async fn run(args: &[String]) -> Outcome {
-    let (what, rest) = command(args, &["backfill", "shareholding", "all"])?;
+    let (what, rest) = command(args, &["backfill", "shareholding", "all", "reparse"])?;
     let jobs = Jobs {
         results: what != "shareholding",
         shareholding: what != "backfill",
@@ -309,6 +309,15 @@ pub(super) async fn run(args: &[String]) -> Outcome {
         .map(|s| s.split(',').map(|t| t.trim().to_uppercase()).collect());
     let db = connect(None)?;
     let provider = build_provider().await.map_err(Failure::Raised)?;
+    if what == "reparse" {
+        let outcome = reparse(&db, &provider).await;
+        db.close().await;
+        let (seen, stored, missing, unread) = outcome.map_err(Failure::Raised)?;
+        say(&format!(
+            "REPARSE rows={seen} stored={stored} not_archived={missing} unreadable={unread}"
+        ));
+        return Ok(code(missing == 0 && unread == 0));
+    }
     let plan = Plan {
         jobs,
         since,
@@ -364,6 +373,68 @@ fn note(
         }
         other => other,
     }
+}
+
+/// PM1.11: every stored filing again from its archived XBRL. No NSE request is possible.
+async fn reparse(
+    db: &baskfy_db::WriteDb,
+    provider: &NseProvider,
+) -> Result<(usize, usize, usize, usize), WorkerError> {
+    let mut session = Checkpointed::open(db).await?;
+    type Row = (
+        i64,
+        String,
+        NaiveDate,
+        String,
+        NaiveDateTime,
+        bool,
+        String,
+        String,
+    );
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT f.instrument_id, i.symbol, f.period_end, f.period_type, f.filed_at, f.is_revision, \
+         f.source, f.source_url FROM fundamental_pit f JOIN instrument i ON i.id = f.instrument_id \
+         ORDER BY f.instrument_id, f.period_end, f.filed_on, f.period_type",
+    )
+    .fetch_all(session.conn())
+    .await?;
+    let (mut stored, mut missing, mut unread) = (0, 0, 0);
+    for (index, (id, symbol, period_end, basis, filed_at, is_revision, source, url)) in
+        rows.iter().enumerate()
+    {
+        let Some(bytes) = provider
+            .archived_results_xbrl(symbol, url, filed_at.date())
+            .await?
+        else {
+            missing += 1;
+            continue;
+        };
+        match parse_results_xbrl(&bytes)? {
+            Some(facts) if facts.period_end == Some(*period_end) => {
+                let filing = ResultsFiling {
+                    period_end: *period_end,
+                    consolidated: basis == "consolidated",
+                    filed_at: *filed_at,
+                    is_revision: *is_revision,
+                    source: if source == SOURCE_INTEGRATED {
+                        SOURCE_INTEGRATED
+                    } else {
+                        SOURCE_REG33
+                    },
+                    xbrl_url: url.clone(),
+                };
+                let start = facts.period_start.unwrap_or(*period_end);
+                store(session.conn(), *id, &filing, &facts, start).await?;
+                stored += 1;
+            }
+            _ => unread += 1,
+        }
+        if (index + 1) % 200 == 0 {
+            session.checkpoint().await?;
+        }
+    }
+    session.finish().await?;
+    Ok((rows.len(), stored, missing, unread))
 }
 
 async fn operation(

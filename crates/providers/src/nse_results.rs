@@ -232,7 +232,8 @@ pub fn parse_results_xbrl(payload: &[u8]) -> Result<Option<ResultsFacts>, Provid
     Ok(Some(ResultsFacts {
         period_start: Some(start),
         period_end: Some(end),
-        revenue: quarter("RevenueFromOperations").or_else(|| quarter("Income")),
+        // Banks file `Income` (interest plus other income); `InterestEarned` is their revenue.
+        revenue: first(&["RevenueFromOperations", "InterestEarned", "Income"]),
         other_income: quarter("OtherIncome"),
         finance_costs: quarter("FinanceCosts"),
         depreciation: quarter("DepreciationDepletionAndAmortisationExpense"),
@@ -289,6 +290,31 @@ mod tests {
 </x>"#;
         let facts = parse_results_xbrl(xml).unwrap().unwrap();
         assert_eq!(facts.revenue, Some(Decimal::from(100)));
+    }
+
+    #[test]
+    fn a_banks_revenue_is_interest_earned_not_total_income() {
+        let xml = br#"<x>
+<in-bse-fin:DateOfStartOfReportingPeriod contextRef="OneD">2024-10-01</in-bse-fin:DateOfStartOfReportingPeriod>
+<in-bse-fin:DateOfEndOfReportingPeriod contextRef="OneD">2024-12-31</in-bse-fin:DateOfEndOfReportingPeriod>
+<in-bse-fin:InterestEarned contextRef="OneD">80.00</in-bse-fin:InterestEarned>
+<in-bse-fin:OtherIncome contextRef="OneD">20.00</in-bse-fin:OtherIncome>
+<in-bse-fin:Income contextRef="OneD">100.00</in-bse-fin:Income>
+</x>"#;
+        let facts = parse_results_xbrl(xml).unwrap().unwrap();
+        assert_eq!(facts.revenue, Some(Decimal::from(80)));
+    }
+
+    #[test]
+    fn revenue_from_operations_wins_when_a_filing_has_both() {
+        let xml = br#"<x>
+<in-bse-fin:DateOfStartOfReportingPeriod contextRef="OneD">2024-10-01</in-bse-fin:DateOfStartOfReportingPeriod>
+<in-bse-fin:DateOfEndOfReportingPeriod contextRef="OneD">2024-12-31</in-bse-fin:DateOfEndOfReportingPeriod>
+<in-bse-fin:RevenueFromOperations contextRef="OneD">90.00</in-bse-fin:RevenueFromOperations>
+<in-bse-fin:Income contextRef="OneD">100.00</in-bse-fin:Income>
+</x>"#;
+        let facts = parse_results_xbrl(xml).unwrap().unwrap();
+        assert_eq!(facts.revenue, Some(Decimal::from(90)));
     }
 
     #[test]

@@ -2594,3 +2594,16 @@ session and the 18:40–21:15 nightly window:
 
 - One results filing from NSE fails to parse: "invalid utf-8 sequence of 1 bytes from index 11359"; the raw file is in the archive. The only failed name of 2,946 in the final crawl.
 - Blocks nothing; its results rows are missing until fixed (likely a Latin-1 byte; decode with a fallback). Parked until after PM4, per Maulik.
+
+## PM4.4 blank-rate check, by hand (11 Nov 2026)
+
+Scheduled in-session for 12:00 on 11 Nov; it fires only if that session is open and the Mac awake. To run it yourself (Docker stack up, about 10–20 min):
+
+```
+cd /Volumes/T7-Work/Dev/projects/baskfy/machinelearning/python/research/portfolio-ml
+bash export_bars_local.sh
+.venv/bin/python build_dataset.py --mb 1.0 250 --terminal=b
+.venv/bin/python run_pm4.py mb_u100_h250 --blank-rates
+```
+
+The last line prints `gap above 10%: YES, use --where-covered` or `no` (PM4.4); the full table is in `out/pm4/blank_rates.csv`. It does not run PM4.

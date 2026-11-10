@@ -47,7 +47,7 @@ def _capped(day: pl.DataFrame, cap: int, n: int) -> pl.DataFrame:
     return pl.concat([first, extra]).sort("_pos").drop("_k", "_pos")
 
 
-def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: TrancheConfig, descending: bool = True, marks: pl.DataFrame | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
+def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: TrancheConfig, descending: bool = True, marks: pl.DataFrame | None = None, detail: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Returns (picks with their 12-month outcome, daily equity of the rolling book).
 
     ``marks``: every bar (instrument_id, date, close, and terminal for variant b). Without it a name
@@ -142,6 +142,7 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
     slice_val = np.ones((n, slices))
     level = np.ones(slices)
     cursor = np.zeros(slices, dtype=int)  # first day index not yet written for the slice
+    periods = []
     for j, sd in enumerate(tranche_dates):
         k = j % slices
         t = tv.filter(pl.col("signal_date") == sd)
@@ -151,9 +152,12 @@ def simulate(ds: pl.DataFrame, scores: pl.DataFrame, score_col: str, cfg: Tranch
         slice_val[idx, k] = vals
         level[k] = vals[-1]
         cursor[k] = idx[-1] + 1
+        periods.append((k, int(idx[0]), int(idx[-1])))
     for k in range(slices):
         slice_val[cursor[k]:, k] = level[k]
     daily = pl.DataFrame({"date": days, "equity": slice_val.mean(axis=1)})
+    if detail:
+        return p, daily, {"days": days, "slices": slice_val, "periods": periods}
     return p, daily
 
 

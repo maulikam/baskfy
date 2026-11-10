@@ -40,6 +40,10 @@ MODELS = {"controls": CONTROLS, "controls_fundamentals": [*CONTROLS, *EXTRA], "c
 BLANK_FEATURES = [*F.FEATURES, "days_since_filing", *S.FEATURES]
 TTM = "pat_margin_ttm"
 MAX_BLANK_GAP = 0.10
+MIN_POSITIVES = 50
+# PM4.4: in covered mode the fundamentals arms need this many positive training rows per fold.
+COVERED_MIN_POSITIVES = 300
+FUNDAMENTAL_ARMS = ("controls_fundamentals", "all")
 
 
 def dead_names_present(data: Path) -> bool:
@@ -91,20 +95,30 @@ def covered(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.filter(pl.col(TTM).is_not_null())
 
 
-def walk_forward(frame: pl.DataFrame, features: list[str], horizon: int) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """STRATEGY §3: every fifth signal date ≤ year-end minus the horizon; test each year's labelled rows."""
+def walk_forward(frame: pl.DataFrame, features: list[str], horizon: int, min_pos: int = MIN_POSITIVES,
+                 folds: list[dict] | None = None, arm: str = "") -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """STRATEGY §3: every fifth signal date ≤ year-end minus the horizon; test each year's labelled rows.
+    A fold with fewer than `min_pos` positive training rows is skipped; each fold is appended to `folds`."""
     sessions = frame["date"].unique().sort().to_list()
     lab = frame.filter(pl.col("label").is_not_null())
     x = lambda df: df.select(features).to_numpy().astype(np.float32)  # noqa: E731
     scores, aucs, imps = [], [], []
     for y in sorted({d.year for d in sessions if d.year >= 2020}):
         before = [d for d in sessions if d.year < y]
-        if len(before) < horizon + 300:
-            continue
-        train_end = before[-(horizon + 6)]
-        train = lab.filter((pl.col("date") <= train_end) & pl.col("date").is_in(before[::TRAIN_STRIDE])).sort("date")
         test = lab.filter(pl.col("date").dt.year() == y).sort("date")
-        if test.is_empty() or train["label"].sum() < 50:
+        if len(before) < horizon + 300:
+            train, reason = lab.clear(), f"{len(before)} sessions before the year, needs {horizon + 300}"
+        else:
+            train_end = before[-(horizon + 6)]
+            train = lab.filter((pl.col("date") <= train_end) & pl.col("date").is_in(before[::TRAIN_STRIDE])).sort("date")
+            reason = "no test rows" if test.is_empty() else f"{int(train['label'].sum())} positive training rows, needs {min_pos}" if train["label"].sum() < min_pos else ""
+        positives = int(train["label"].sum())
+        if folds is not None:
+            folds.append({"arm": arm, "year": y, "train_rows": train.height, "train_positives": positives, "min_positives": min_pos,
+                          "test_rows": test.height, "trained": not reason, "skipped_because": reason})
+        if reason:
+            if not test.is_empty():
+                print(f"  {y} SKIPPED: {reason}", flush=True)
             continue
         model = lgb.train(PARAMS, lgb.Dataset(x(train), train["label"].to_numpy(), group=grp(train)), ROUNDS)
         test = test.with_columns(pl.Series("score", model.predict(x(test))))
@@ -112,6 +126,8 @@ def walk_forward(frame: pl.DataFrame, features: list[str], horizon: int) -> tupl
         aucs.append({"year": y, "auc": summarize(test, "score")["auc"]})
         imps.append(pl.DataFrame({"feature": features, "gain": model.feature_importance("gain").astype(float), "year": y}))
         print(f"  {y} auc {aucs[-1]['auc']:.3f}", flush=True)
+    if not scores:
+        sys.exit(f"REFUSED: {arm or 'model'} trained on no fold")
     return pl.concat(scores), pl.DataFrame(aucs), pl.concat(imps)
 
 
@@ -173,12 +189,20 @@ def verdict(gate: pl.DataFrame, model: str) -> bool:
     return gate.filter(pl.col("model") == model)["pass"].all()
 
 
-def evaluate(frame: pl.DataFrame, horizon: int, marks: pl.DataFrame, bench: pl.DataFrame, suffix: str) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+def min_positives(arm: str, covered_mode: bool) -> int:
+    return COVERED_MIN_POSITIVES if covered_mode and arm in FUNDAMENTAL_ARMS else MIN_POSITIVES
+
+
+def evaluate(frame: pl.DataFrame, horizon: int, marks: pl.DataFrame, bench: pl.DataFrame, suffix: str,
+             covered_mode: bool = False) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """The four models on `frame`: walk-forward, metrics, books, gate, AUCs, importance. Files carry `suffix`."""
-    scores, aucs_by, imps_by = {}, {}, {}
+    scores, aucs_by, imps_by, folds = {}, {}, {}, []
     for name, features in MODELS.items():
         print(name, flush=True)
-        scores[name], aucs_by[name], imps_by[name] = walk_forward(frame, features, horizon)
+        scores[name], aucs_by[name], imps_by[name] = walk_forward(frame, features, horizon, min_positives(name, covered_mode), folds, name)
+    fold_table = pl.DataFrame(folds)
+    fold_table.write_csv(OUT / f"folds{suffix}.csv")
+    print(fold_table)
     metrics, deciles = metric_tables(frame, scores)
     metrics.write_csv(OUT / f"model_metrics{suffix}.csv")
     deciles.write_csv(OUT / f"score_deciles{suffix}.csv")
@@ -261,7 +285,7 @@ def main(geometry: str, blanks_only: bool = False) -> int:
     marks = pl.scan_parquet(source).select("instrument_id", "date", "close", "terminal").collect()
     bench = panel.load_index_series(DATA).select("date", "nifty50", "midcap150", "smallcap250")
     print("common-coverage rows", flush=True)
-    judged = evaluate(covered(frame), horizon, marks, bench, "_covered")
+    judged = evaluate(covered(frame), horizon, marks, bench, "_covered", covered_mode=True)
     print("full universe", flush=True)
     full = evaluate(frame, horizon, marks, bench, "_full")
     gate, aucs, top = judged if where_covered else full

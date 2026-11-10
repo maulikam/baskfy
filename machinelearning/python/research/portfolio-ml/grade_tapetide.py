@@ -5,7 +5,6 @@ usage: python grade_tapetide.py <tapetide archive dir> <nse_fund.csv> <nse_shp.c
 from __future__ import annotations
 
 import bisect
-import calendar
 import collections
 import csv
 import datetime as dt
@@ -13,6 +12,8 @@ import glob
 import json
 import statistics as st
 import sys
+
+from portfolioml.screener import label_to_end
 
 TOL, VALUE_PASS, DATE_PASS, DEAD_PASS = 0.01, 0.95, 0.95, 0.80
 MIN_DEAD_QUARTERS = 8
@@ -57,12 +58,6 @@ def load_nse(path: str) -> dict:
 
 def session_gap(sessions: list[dt.date], a: dt.date, b: dt.date) -> int:
     return bisect.bisect_right(sessions, a) - bisect.bisect_right(sessions, b)
-
-
-def label_to_end(label: str) -> str:
-    month, year = label.split()
-    m = list(calendar.month_abbr).index(month)
-    return dt.date(int(year), m, calendar.monthrange(int(year), m)[1]).isoformat()
 
 
 def rate(hits: list[bool]) -> float:

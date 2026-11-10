@@ -6,6 +6,8 @@ from pathlib import Path
 
 import polars as pl
 
+from portfolioml.fundamentals import usable
+
 MIN_NAMES_PER_SESSION = 800  # below this a session is a muhurat / special Saturday print
 ETF_NAME_RE = r"(?i)\bETF\b|BEES\b|\bIETF\b|GOLDSHARE|LIQUID"
 
@@ -68,15 +70,15 @@ def load_index_series(data: Path) -> pl.DataFrame:
     )
 
 
-def load_fundamentals(data: Path) -> pl.DataFrame:
+def load_fundamentals(data: Path, lagged: bool = False) -> pl.DataFrame:
     """fundamental_pit export; ``available_on`` is the only date a feature may join on."""
     numeric = ["revenue", "ebitda", "depreciation", "pat", "total_debt", "total_equity", "cfo"]
-    return pl.read_csv(
+    return usable(pl.read_csv(
         data / "fundamental_pit.csv.gz", schema_overrides=dict.fromkeys(numeric, pl.Float64)
     ).with_columns(
         pl.col("period_end").str.to_date(), pl.col("available_on").str.to_date(),
         pl.col("filed_at").str.to_datetime(),
-    )
+    ), lagged)
 
 
 def load_shareholding(data: Path) -> pl.DataFrame:

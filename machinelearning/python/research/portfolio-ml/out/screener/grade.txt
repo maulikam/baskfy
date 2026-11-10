@@ -1,0 +1,108 @@
+== compared 8158 (name, quarter, basis) on 693 crawled names
+   Screener quarters with no NSE row on our basis, 2018 on, crawled names: 7726
+== within 1 % by year
+   year group                    revenue            net_profit                   eps
+   2018 non-bank           1     100.0%          1     100.0%          1     100.0% 
+   2019 non-bank           6     100.0%          6     100.0%          6      66.7% 
+   2020 non-bank           7     100.0%          7     100.0%          7      28.6% 
+   2021 non-bank          24      91.7%         24      95.8%         24      83.3% 
+   2022 non-bank          38     100.0%         38      94.7%         38      89.5% 
+   2023 non-bank        1200      94.0%       1200      97.2%       1200      66.2% 
+   2023 bank              51     100.0%         51      78.4%         51      56.9% 
+   2024 non-bank        2280      92.4%       2280      96.9%       2278      67.1% 
+   2024 bank             108     100.0%        108      80.6%        108      71.3% 
+   2025 non-bank        2454      94.3%       2452      96.8%       2449      73.3% 
+   2025 bank             108      97.2%        108      75.9%        108      85.2% 
+   2026 non-bank        1800      96.6%       1797      98.6%       1797      78.4% 
+   2026 bank              81     100.0%         81      76.5%         81      86.4% 
+== quarters beyond 1 % on revenue or PAT (the step 3 rate)
+   2018: 0/1 = 0.0%
+   2019: 0/6 = 0.0%
+   2020: 0/7 = 0.0%
+   2021: 3/24 = 12.5%
+   2022: 2/38 = 5.3%
+   2023: 104/1251 = 8.3%
+   2024: 221/2388 = 9.3%
+   2025: 226/2562 = 8.8%
+   2026: 101/1881 = 5.4%
+   2018-2020: 0/14 = 0.0%
+== differences by kind (revenue and PAT)
+   parser_suspect      net_profit  31
+   parser_suspect      revenue     36
+   restated_confirmed  net_profit  42
+   restated_confirmed  revenue     117
+   restated_no_third   net_profit  214
+   restated_no_third   revenue     300
+   our figure matches Screener's other basis: 51
+== parser suspects: Screener and Tapetide agree, we differ: 67
+   AEGISVOPAK  2025-06-30 cons revenue     nse       164.01 scr       208.00 tt       208.00
+   AEGISVOPAK  2025-06-30 cons net_profit  nse        47.72 scr        79.00 tt        79.00
+   APLAPOLLO   2025-12-31 cons revenue     nse      5815.13 scr      5982.00 tt      5982.00
+   APOLLOHOSP  2025-09-30 cons revenue     nse      6303.50 scr      6189.00 tt      6189.00
+   APOLLOHOSP  2026-06-30 cons revenue     nse      7043.50 scr      6932.00 tt      6932.00
+   BHEL        2023-09-30 cons net_profit  nse      -238.12 scr       -63.00 tt       -63.00
+   BHEL        2023-12-31 cons net_profit  nse      -148.77 scr        60.00 tt        60.00
+   BOSCHLTD    2025-09-30 cons revenue     nse      4794.80 scr      5969.00 tt      5969.00
+   BOSCHLTD    2025-09-30 cons net_profit  nse       554.50 scr       708.00 tt       708.00
+   BOSCHLTD    2026-06-30 cons revenue     nse      5841.90 scr      7167.00 tt      7167.00
+   BOSCHLTD    2026-06-30 cons net_profit  nse       706.10 scr       814.00 tt       814.00
+   CEMPRO      2025-03-31 cons revenue     nse      2479.72 scr      2532.00 tt      2532.00
+   CEMPRO      2025-06-30 cons revenue     nse      2542.37 scr      2576.00 tt      2576.00
+   CHENNPETRO  2025-06-30 cons revenue     nse     18683.49 scr     14812.00 tt     14812.00
+   CHENNPETRO  2025-09-30 cons revenue     nse     20033.62 scr     16327.00 tt     16327.00
+   CHENNPETRO  2026-06-30 cons revenue     nse     29358.75 scr     27369.00 tt     27369.00
+   DIACABS     2025-06-30 cons net_profit  nse        20.11 scr        16.00 tt        16.40
+   DIACABS     2025-09-30 cons net_profit  nse        27.73 scr        24.00 tt        24.00
+   DIACABS     2026-03-31 cons net_profit  nse        60.61 scr        57.00 tt        56.90
+   FEDERALBNK  2024-03-31 cons net_profit  nse       972.39 scr       996.00 tt       996.00  bank
+   FLUOROCHEM  2025-06-30 cons net_profit  nse       184.00 scr       182.00 tt       182.00
+   FLUOROCHEM  2026-03-31 cons net_profit  nse       109.00 scr       100.00 tt       100.00
+   GABRIEL     2025-06-30 cons revenue     nse      1098.38 scr      1234.00 tt      1234.00
+   GABRIEL     2025-06-30 cons net_profit  nse        61.97 scr       105.00 tt       105.00
+   ICIL        2025-03-31 cons net_profit  nse        11.20 scr        21.00 tt        21.00
+   ICIL        2025-06-30 cons net_profit  nse        37.79 scr        39.00 tt        39.00
+   INDIAGLYCO  2025-06-30 cons revenue     nse      2503.12 scr      1040.00 tt      1040.00
+   INDIAGLYCO  2025-12-31 cons revenue     nse      2551.10 scr      1102.00 tt      1102.00
+   J&KBANK     2024-03-31 cons net_profit  nse       639.80 scr       633.00 tt       633.00  bank
+   J&KBANK     2025-12-31 cons net_profit  nse       587.51 scr       581.00 tt       581.00  bank
+   JINDALSAW   2024-09-30 cons revenue     nse        55.72 scr      5572.00 tt      5572.00
+   JINDALSAW   2024-09-30 cons net_profit  nse         4.75 scr       475.00 tt       475.00
+   MAHABANK    2025-12-31 cons net_profit  nse      1779.58 scr      1799.00 tt      1799.00  bank
+   MAHABANK    2026-03-31 cons net_profit  nse      2014.46 scr      2045.00 tt      2045.00  bank
+   MANORAMA    2024-03-31 stan net_profit  nse        12.50 scr        12.00 tt        12.00
+   MARKSANS    2025-03-31 cons revenue     nse        70.85 scr       708.00 tt       708.00
+   MARKSANS    2025-03-31 cons net_profit  nse         9.07 scr        91.00 tt        91.00
+   MSTCLTD     2025-09-30 cons net_profit  nse        47.50 scr        48.00 tt        48.00
+   PAYTM       2023-09-30 cons revenue     nse       251.86 scr      2519.00 tt      2519.00
+   PAYTM       2023-09-30 cons net_profit  nse       -29.17 scr      -292.00 tt      -292.00
+== worst 30, revenue or PAT, either side at least 10 cr
+   EVEREADY    2023-09-30 cons revenue     nse         3.65 scr       365.00 tt          - gap 9903.0% restated_no_third
+   AASTHA      2026-09-30 cons revenue     nse       143.06 scr     14306.00 tt          - gap 9900.3% restated_no_third
+   JINDALSAW   2024-09-30 cons revenue     nse        55.72 scr      5572.00 tt    5572.00 gap 9900.1% parser_suspect
+   AASTHA      2026-09-30 cons net_profit  nse         7.99 scr       799.00 tt          - gap 9899.9% restated_no_third
+   JINDALSAW   2024-09-30 cons net_profit  nse         4.75 scr       475.00 tt     475.00 gap 9893.5% parser_suspect
+   ESSARSHPNG  2025-12-31 cons net_profit  nse        -0.88 scr       -88.00 tt          - gap 9877.3% restated_no_third
+   EVEREADY    2023-09-30 cons net_profit  nse         0.25 scr        25.00 tt          - gap 9727.0% restated_no_third
+   STAR        2024-06-30 cons net_profit  nse        68.31 scr      3350.00 tt          - gap 4804.0% restated_no_third
+   EMBDL       2024-03-31 cons revenue     nse        21.02 scr       380.00 tt          - gap 1707.8% restated_no_third
+   MARKSANS    2025-03-31 cons net_profit  nse         9.07 scr        91.00 tt      91.00 gap  903.0% parser_suspect
+   POWERINDIA  2023-12-31 stan net_profit  nse         2.30 scr        23.00 tt      23.00 gap  901.3% parser_suspect
+   PAYTM       2023-09-30 cons net_profit  nse       -29.17 scr      -292.00 tt    -292.00 gap  901.0% parser_suspect
+   PAYTM       2023-09-30 cons revenue     nse       251.86 scr      2519.00 tt    2519.00 gap  900.2% parser_suspect
+   POWERINDIA  2023-12-31 stan revenue     nse       127.42 scr      1274.00 tt    1274.00 gap  899.8% parser_suspect
+   MARKSANS    2025-03-31 cons revenue     nse        70.85 scr       708.00 tt     708.00 gap  899.4% parser_suspect
+   ALLCARGO    2025-03-31 cons net_profit  nse        -3.16 scr        25.00 tt          - gap  891.1% restated_no_third
+   VIYASH      2024-12-31 cons net_profit  nse         6.48 scr        42.00 tt       6.48 gap  548.1% restated_confirmed
+   EMBDL       2024-06-30 cons net_profit  nse       -28.24 scr       121.00 tt          - gap  528.5% restated_no_third
+   BRNL        2024-12-31 cons revenue     nse        47.75 scr       232.00 tt          - gap  385.9% restated_no_third
+   VIYASH      2025-09-30 cons net_profit  nse        19.60 scr        73.00 tt      19.60 gap  272.4% restated_confirmed
+   EMBDL       2024-09-30 cons net_profit  nse        24.27 scr       -34.00 tt          - gap  240.1% restated_no_third
+   EMBDL       2024-12-31 cons net_profit  nse        22.39 scr       -27.00 tt          - gap  220.6% restated_no_third
+   COHANCE     2025-03-31 cons net_profit  nse        38.73 scr       117.15 tt          - gap  202.5% restated_no_third
+   ADANIENT    2025-03-31 cons net_profit  nse      1382.17 scr      4015.00 tt    1382.17 gap  190.5% restated_confirmed
+   ESSARSHPNG  2023-09-30 cons revenue     nse         4.23 scr        12.00 tt          - gap  183.7% restated_no_third
+   ALLCARGO    2024-12-31 cons net_profit  nse        10.31 scr        -6.00 tt          - gap  158.2% restated_no_third
+   AGROPHOS    2023-12-31 cons net_profit  nse        -5.85 scr       -14.53 tt          - gap  148.5% restated_no_third
+   BHEL        2023-12-31 cons net_profit  nse      -148.77 scr        60.00 tt      60.00 gap  140.3% parser_suspect
+   COHANCE     2024-09-30 cons revenue     nse       257.72 scr       603.77 tt          - gap  134.3% restated_no_third
+   COHANCE     2024-12-31 cons revenue     nse       307.15 scr       676.23 tt          - gap  120.2% restated_no_third

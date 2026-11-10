@@ -34,6 +34,7 @@ fi
 if $PG -At -c "SELECT to_regclass('public.instrument_terminal')" | grep -q instrument_terminal; then
   copy instrument_terminal "SELECT instrument_id, status, reason, last_bar, source FROM instrument_terminal"
 fi
+copy index_close_all "SELECT m.kite_tradingsymbol AS index_name, b.date, b.close FROM index_bar_daily b JOIN index_master m ON m.id = b.index_id WHERE m.kite_tradingsymbol IS NOT NULL"
 rm -f "$OUT/ohlcv_daily.parquet" "$OUT/dataset.parquet" "$OUT/features.parquet"
 # PM0.12: known corporate actions adjusted in the research copy only; ohlcv_daily and corporate_action are never written.
 HERE="$(cd "$(dirname "$0")" && pwd)"

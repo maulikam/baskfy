@@ -1,0 +1,65 @@
+book,family,rule,pass_both,pass_either,plain,five
+investable_ew,B,NIFTY 100 100dma,false,false,false,false
+investable_ew,B,NIFTY 100 200dma,false,false,false,false
+investable_ew,B,NIFTY 50 100dma,false,false,false,false
+investable_ew,B,NIFTY 50 200dma,false,false,false,false
+investable_ew,B,NIFTY 500 100dma,false,false,false,false
+investable_ew,B,NIFTY 500 200dma,false,false,false,false
+investable_ew,B,NIFTY 500 Multicap 50:25:25 100dma,false,true,false,true
+investable_ew,B,NIFTY 500 Multicap 50:25:25 200dma,false,false,false,false
+investable_ew,B,NIFTY LargeMidcap 250 100dma,false,false,false,false
+investable_ew,B,NIFTY LargeMidcap 250 200dma,false,false,false,false
+investable_ew,B,NIFTY Microcap 250 100dma,false,true,false,true
+investable_ew,B,NIFTY Microcap 250 200dma,false,false,false,false
+investable_ew,B,NIFTY MidSmallcap 400 100dma,false,false,false,false
+investable_ew,B,NIFTY MidSmallcap 400 200dma,false,false,false,false
+investable_ew,B,NIFTY Midcap 150 100dma,false,false,false,false
+investable_ew,B,NIFTY Midcap 150 200dma,false,false,false,false
+investable_ew,B,NIFTY Next 50 100dma,false,false,false,false
+investable_ew,B,NIFTY Next 50 200dma,false,false,false,false
+investable_ew,B,NIFTY Smallcap 250 100dma,false,true,false,true
+investable_ew,B,NIFTY Smallcap 250 200dma,false,false,false,false
+investable_ew,B,NIFTY Total Market 100dma,false,false,false,false
+investable_ew,B,NIFTY Total Market 200dma,false,false,false,false
+investable_ew,B,NIFTY500 Equal Weight 100dma,false,false,false,false
+investable_ew,B,NIFTY500 Equal Weight 200dma,false,false,false,false
+investable_ew,B,NIFTY500 LargeMidSmall Equal-Cap 100dma,false,false,false,false
+investable_ew,B,NIFTY500 LargeMidSmall Equal-Cap 200dma,false,false,false,false
+investable_ew,C,"2 of 3 reps, 100dma",false,false,false,false
+investable_ew,C,"2 of 3 reps, 200dma",false,false,false,false
+investable_ew,C,"3 of 3 reps, 100dma",false,false,false,false
+investable_ew,C,"3 of 3 reps, 200dma",false,false,false,false
+investable_ew,C,"majority of all, 100dma",false,false,false,false
+investable_ew,C,"majority of all, 200dma",false,false,false,false
+top20_skip,B,NIFTY 100 100dma,false,false,false,false
+top20_skip,B,NIFTY 100 200dma,false,false,false,false
+top20_skip,B,NIFTY 50 100dma,false,false,false,false
+top20_skip,B,NIFTY 50 200dma,false,false,false,false
+top20_skip,B,NIFTY 500 100dma,false,false,false,false
+top20_skip,B,NIFTY 500 200dma,false,false,false,false
+top20_skip,B,NIFTY 500 Multicap 50:25:25 100dma,false,true,false,true
+top20_skip,B,NIFTY 500 Multicap 50:25:25 200dma,false,false,false,false
+top20_skip,B,NIFTY LargeMidcap 250 100dma,false,false,false,false
+top20_skip,B,NIFTY LargeMidcap 250 200dma,false,false,false,false
+top20_skip,B,NIFTY Microcap 250 100dma,false,false,false,false
+top20_skip,B,NIFTY Microcap 250 200dma,true,true,true,true
+top20_skip,B,NIFTY MidSmallcap 400 100dma,false,false,false,false
+top20_skip,B,NIFTY MidSmallcap 400 200dma,false,false,false,false
+top20_skip,B,NIFTY Midcap 150 100dma,false,false,false,false
+top20_skip,B,NIFTY Midcap 150 200dma,false,false,false,false
+top20_skip,B,NIFTY Next 50 100dma,false,false,false,false
+top20_skip,B,NIFTY Next 50 200dma,false,false,false,false
+top20_skip,B,NIFTY Smallcap 250 100dma,false,true,false,true
+top20_skip,B,NIFTY Smallcap 250 200dma,false,false,false,false
+top20_skip,B,NIFTY Total Market 100dma,false,false,false,false
+top20_skip,B,NIFTY Total Market 200dma,false,false,false,false
+top20_skip,B,NIFTY500 Equal Weight 100dma,false,false,false,false
+top20_skip,B,NIFTY500 Equal Weight 200dma,false,false,false,false
+top20_skip,B,NIFTY500 LargeMidSmall Equal-Cap 100dma,false,false,false,false
+top20_skip,B,NIFTY500 LargeMidSmall Equal-Cap 200dma,false,false,false,false
+top20_skip,C,"2 of 3 reps, 100dma",false,false,false,false
+top20_skip,C,"2 of 3 reps, 200dma",false,false,false,false
+top20_skip,C,"3 of 3 reps, 100dma",false,true,false,true
+top20_skip,C,"3 of 3 reps, 200dma",false,false,false,false
+top20_skip,C,"majority of all, 100dma",false,false,false,false
+top20_skip,C,"majority of all, 200dma",false,false,false,false

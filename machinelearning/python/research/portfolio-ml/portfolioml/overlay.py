@@ -19,6 +19,15 @@ def debounce(raw: np.ndarray, sessions: int = HOLD_SESSIONS) -> np.ndarray:
     return state
 
 
+def majority(above: np.ndarray) -> np.ndarray:
+    """Rows are sessions, columns indices: more than half above."""
+    return above.sum(axis=1) * 2 > above.shape[1]
+
+
+def at_least(above: np.ndarray, count: int) -> np.ndarray:
+    return above.sum(axis=1) >= count
+
+
 def positions(state: np.ndarray) -> np.ndarray:
     """Held during session i: a change at close s trades at the next session's close, s+1, so it shows from s+2."""
     out = state.copy()

@@ -53,3 +53,9 @@ def test_a_gain_held_past_a_year_is_not_taxed():
     d = [dt.date(2023, 1, 1), dt.date(2024, 6, 1), dt.date(2024, 6, 2)]
     v = O.run(np.array([[1.0], [2.0], [2.0]]), [(0, 0, 1)], np.ones(3, dtype=bool), d, tax=True)
     assert abs(v[-1] - 2.0) < 1e-12
+
+
+def test_votes_count_above_and_majority_is_strict():
+    a = np.array([[True, True, False, False], [True, True, True, False]])
+    assert O.majority(a).tolist() == [False, True]
+    assert O.at_least(a, 3).tolist() == [False, True]

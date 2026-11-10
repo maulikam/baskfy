@@ -2589,3 +2589,8 @@ session and the 18:40–21:15 nightly window:
 | INDIAGLYCO | 2026-09-02 | demerger | price × 0.203 | 0.214 |
 | VERANDA | 2026-10-06 | demerger | price × 0.133 | 0.140 |
 | BHAGYANGR | 2026-10-08 | demerger | price × 0.086 | 0.091 |
+
+## Parser case: INDSWFTLTD results XBRL is not UTF-8 (PM1.15, 11 Nov 2026)
+
+- One results filing from NSE fails to parse: "invalid utf-8 sequence of 1 bytes from index 11359"; the raw file is in the archive. The only failed name of 2,946 in the final crawl.
+- Blocks nothing; its results rows are missing until fixed (likely a Latin-1 byte; decode with a fallback). Parked until after PM4, per Maulik.

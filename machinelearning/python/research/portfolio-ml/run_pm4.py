@@ -1,9 +1,10 @@
-"""PM4: the re-run. Same walk-forward and book as STRATEGY §3/§4, price-only vs with PM1–PM3 columns,
-judged on 2024, 2025 and pooled 2024+2025, dead names included, terminal variant (b). Refuses to run until
-PM0.7 has run and the backfill has covered the universe.
+"""PM4: the re-run, a four-way comparison on the walk-forward and book of STRATEGY §3/§4 (PM4.5): controls,
+controls + fundamentals, controls + technicals, all. The gate is judged on model 4, on 2024, 2025 and pooled
+2024+2025, dead names included, terminal variant (b). Refuses to run until PM0.7 has run and the backfill has
+covered the universe.
 
 usage: python run_pm4.py mb_u100_h250 [--where-covered | --blank-rates]        (writes out/pm4/)
---where-covered judges both models on rows with a TTM figure; the full universe prints for reference only (PM4.4).
+Both the common-coverage rows and the full universe always run; --where-covered makes the first the judged one (PM4.4).
 --blank-rates reports PM1/PM2 blanks, dead vs live, by year, and stops; it needs no coverage."""
 
 from __future__ import annotations
@@ -15,10 +16,12 @@ import lightgbm as lgb
 import numpy as np
 import polars as pl
 
+from sklearn.metrics import average_precision_score, roc_auc_score
+
 from explore_multibagger import PARAMS, ROUNDS, TRAIN_STRIDE, grp, summarize
 from portfolioml import fundamentals as F
 from portfolioml import panel, sector as M, shareholding as S, tranches
-from portfolioml.features import ALL_FEATURES
+from portfolioml.features import ALL_FEATURES, MARKET_FEATURES
 
 HERE = Path(__file__).parent
 DATA, OUT = HERE / "data", HERE / "out" / "pm4"
@@ -31,6 +34,9 @@ GATES = {"2024": (2024,), "2025": (2025,), "2024+2025": (2024, 2025)}
 EXTRA = [*F.FEATURES, "days_since_filing", *S.FEATURES, *M.MCAP_FEATURES]
 KEEP = list(dict.fromkeys(["instrument_id", "date", "label", "held", "fwd_ret_h", "fwd_max_ret", "fwd_min_ret", "fwd_min_close_ret",
                            "entry_px", "close", "close_raw", "turnover20", "r21", "r63", "terminal", *ALL_FEATURES]))
+CONTROLS = ["log_px", "log_turnover20", "log_turnover20_cs", "amihud20", "amihud20_cs", "n_hist", "vol20", "vol20_cs", "vol60", "atr14_pct", "atr14_pct_cs", *MARKET_FEATURES]
+TECHNICALS = [f for f in ALL_FEATURES if f not in CONTROLS]
+MODELS = {"controls": CONTROLS, "controls_fundamentals": [*CONTROLS, *EXTRA], "controls_technicals": [*CONTROLS, *TECHNICALS], "all": [*CONTROLS, *TECHNICALS, *EXTRA]}
 BLANK_FEATURES = [*F.FEATURES, "days_since_filing", *S.FEATURES]
 TTM = "pat_margin_ttm"
 MAX_BLANK_GAP = 0.10
@@ -109,6 +115,45 @@ def walk_forward(frame: pl.DataFrame, features: list[str], horizon: int) -> tupl
     return pl.concat(scores), pl.DataFrame(aucs), pl.concat(imps)
 
 
+def _pick_stats(picks: pl.DataFrame, base_hit: float, prefix: str) -> dict:
+    hit = picks["label"].mean()
+    return {f"{prefix}_n": picks.height, f"{prefix}_hit": hit, f"{prefix}_lift": hit / base_hit if base_hit else None, f"{prefix}_halved": (picks["fwd_ret_h"] <= -0.5).mean(),
+            f"{prefix}_lost_25": (picks["fwd_ret_h"] < -0.25).mean(), f"{prefix}_median_12m": picks["fwd_ret_h"].median()}
+
+
+def _period_metrics(universe: pl.DataFrame) -> dict:
+    """AUC and average precision on the universe; top-20 and top decile each date among investable names."""
+    investable = universe.filter((pl.col("close_raw") >= 50) & (pl.col("turnover20") >= 5e7)).with_columns(
+        pl.col("score").rank("ordinal", descending=True).over("date").alias("rk"), pl.len().over("date").alias("n"))
+    base = investable["label"].mean()
+    y, s = universe["label"].to_numpy(), universe["score"].to_numpy()
+    return {"auc": float(roc_auc_score(y, s)), "average_precision": float(average_precision_score(y, s)), "investable_hit": base,
+            **_pick_stats(investable.filter(pl.col("rk") <= 20), base, "top20"), **_pick_stats(investable.filter(pl.col("rk") <= pl.col("n") * 0.1), base, "topdec")}
+
+
+def metric_tables(frame: pl.DataFrame, scores: dict[str, pl.DataFrame]) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Per model, by year and pooled: the PM4.5 metrics, and the observed 2× rate by score decile (9 is the highest)."""
+    rows, deciles = [], []
+    for model, s in scores.items():
+        scored = frame.join(s, on=["instrument_id", "date"]).filter(pl.col("label").is_not_null() & pl.col("fwd_ret_h").is_not_null()).with_columns(pl.col("date").dt.year().cast(pl.String).alias("period"))
+        ranked = scored.with_columns((((pl.col("score").rank("ordinal").over("date") - 1) * 10 / pl.len().over("date")).floor().cast(pl.Int32)).alias("decile"))
+        for period, part in [("pooled", scored), *[(k[0], g) for k, g in scored.group_by("period", maintain_order=True)]]:
+            rows.append({"model": model, "period": period, **_period_metrics(part)})
+        for scope, part in (("pooled", ranked), ("year", ranked)):
+            keys = ["decile"] if scope == "pooled" else ["period", "decile"]
+            d = part.group_by(keys).agg(pl.len().alias("n"), pl.col("label").mean().alias("observed_2x"))
+            deciles.append(d.with_columns(pl.lit(model).alias("model"), pl.lit("pooled").alias("period") if scope == "pooled" else pl.col("period")).select("model", "period", "decile", "n", "observed_2x"))
+    return pl.DataFrame(rows).sort("model", "period"), pl.concat(deciles).sort("model", "period", "decile")
+
+
+def all_vs_controls(metrics: pl.DataFrame) -> str:
+    """PM4.5: does "all" beat "controls only" on top-20 lift without a higher halved rate? Said plainly."""
+    get = lambda m, c: metrics.filter((pl.col("model") == m) & (pl.col("period") == "pooled"))[c][0]  # noqa: E731
+    a_lift, c_lift, a_half, c_half = get("all", "top20_lift"), get("controls", "top20_lift"), get("all", "top20_halved"), get("controls", "top20_halved")
+    beat = a_lift > c_lift and a_half <= c_half
+    return f"{'all BEATS controls only' if beat else 'all DOES NOT beat controls only'}: top-20 lift {a_lift:.2f} vs {c_lift:.2f}, halved {a_half:.1%} vs {c_half:.1%}"
+
+
 def gate_table(picks: dict[str, pl.DataFrame], base: pl.DataFrame) -> pl.DataFrame:
     """Each model's picks against the investable universe, for every gate window (06 PM4 AC1)."""
     rows = []
@@ -129,17 +174,23 @@ def verdict(gate: pl.DataFrame, model: str) -> bool:
 
 
 def evaluate(frame: pl.DataFrame, horizon: int, marks: pl.DataFrame, bench: pl.DataFrame, suffix: str) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Both models on `frame`: walk-forward, books, gate, AUCs, importance. Files carry `suffix`."""
-    print("price-only", flush=True)
-    price, price_auc, _ = walk_forward(frame, ALL_FEATURES, horizon)
-    print("with PM1–PM3", flush=True)
-    full, full_auc, imps = walk_forward(frame, [*ALL_FEATURES, *EXTRA], horizon)
+    """The four models on `frame`: walk-forward, metrics, books, gate, AUCs, importance. Files carry `suffix`."""
+    scores, aucs_by, imps_by = {}, {}, {}
+    for name, features in MODELS.items():
+        print(name, flush=True)
+        scores[name], aucs_by[name], imps_by[name] = walk_forward(frame, features, horizon)
+    metrics, deciles = metric_tables(frame, scores)
+    metrics.write_csv(OUT / f"model_metrics{suffix}.csv")
+    deciles.write_csv(OUT / f"score_deciles{suffix}.csv")
+    print(metrics.filter(pl.col("period") == "pooled"))
+    print(all_vs_controls(metrics))
+    imps = imps_by["all"]
 
     investable = frame.filter((pl.col("close_raw") >= 50) & (pl.col("turnover20") >= 5e7))
     book = tranches.TrancheConfig(horizon=horizon, max_per_sector=None, terminal=TERMINAL)
     capped = tranches.TrancheConfig(horizon=horizon, max_per_sector=3, terminal=TERMINAL)
-    flat = price.select("instrument_id", "date", pl.lit(0.0).alias("score"))
-    sims = {"price_only": (price, book), "with_fundamentals": (full, book), "with_fundamentals_cap3": (full, capped)}
+    flat = scores["all"].select("instrument_id", "date", pl.lit(0.0).alias("score"))
+    sims = {**{name: (s, book) for name, s in scores.items()}, "all_cap3": (scores["all"], capped)}
     picks, books = {}, []
     for name, (scores, cfg) in sims.items():
         p, eq = tranches.simulate(investable, scores, "score", cfg, marks=marks)
@@ -148,11 +199,11 @@ def evaluate(frame: pl.DataFrame, horizon: int, marks: pl.DataFrame, bench: pl.D
         p.write_csv(OUT / f"picks_{name}{suffix}.csv")
     base, _ = tranches.simulate(investable, flat, "score", tranches.TrancheConfig(top_n=10_000, horizon=horizon, max_per_sector=None, terminal=TERMINAL), marks=marks)
 
-    gate = gate_table({k: picks[k] for k in ("price_only", "with_fundamentals")}, base)
+    gate = gate_table({k: picks[k] for k in MODELS}, base)
     gate.write_csv(OUT / f"gate{suffix}.csv")
     print(gate)
-    aucs = price_auc.rename({"auc": "price_only"}).join(full_auc.rename({"auc": "with_fundamentals"}), on="year").with_columns(
-        (pl.col("with_fundamentals") - pl.col("price_only")).alias("delta"))
+    aucs = aucs_by["controls_technicals"].rename({"auc": "price_only"}).join(aucs_by["all"].rename({"auc": "all"}), on="year").with_columns(
+        (pl.col("all") - pl.col("price_only")).alias("delta"))
     aucs.write_csv(OUT / f"auc_by_year{suffix}.csv")
     print(aucs)
     pl.DataFrame(books).write_csv(OUT / f"tranche_summary{suffix}.csv")
@@ -207,12 +258,14 @@ def main(geometry: str, where_covered: bool = False, blanks_only: bool = False) 
 
     marks = pl.scan_parquet(source).select("instrument_id", "date", "close", "terminal").collect()
     bench = panel.load_index_series(DATA).select("date", "nifty50", "midcap150", "smallcap250")
-    gate, aucs, top = evaluate(covered(frame) if where_covered else frame, horizon, marks, bench, "")
-    if where_covered:
-        print("REFERENCE ONLY: full universe, not judged (PM4.4)", flush=True)
-        evaluate(frame, horizon, marks, bench, "_full_reference")
+    print("common-coverage rows", flush=True)
+    judged = evaluate(covered(frame), horizon, marks, bench, "_covered")
+    print("full universe", flush=True)
+    full = evaluate(frame, horizon, marks, bench, "_full")
+    gate, aucs, top = judged if where_covered else full
+    print(f"JUDGED: {'common-coverage rows' if where_covered else 'full universe'} (PM4.4)", flush=True)
     in_top = top.head(12).filter(pl.col("feature").is_in(EXTRA)).height
-    ac1, ac2 = verdict(gate, "with_fundamentals"), bool((aucs["delta"] >= -0.02).all())
+    ac1, ac2 = verdict(gate, "all"), bool((aucs["delta"] >= -0.02).all())
     print(f"AC1 gate (each window): {'PASS' if ac1 else 'FAIL'}")
     print(f"AC2 no year's AUC down more than 0.02: {'PASS' if ac2 else 'FAIL'}")
     print(f"AC3 PM1–PM3 features in the top 12: {in_top}")

@@ -1,4 +1,3 @@
-import { Disclaimer } from "@/components/data/disclaimer";
 import { EMPTY_CELL, formatFraction, formatTradeDate } from "@/lib/format";
 import { MB_BOOK_NAMES, MB_PAPER_EXPECT } from "@/lib/mb/copy";
 import type { MbPaper, MbPaperBook, MbPaperOutcome } from "@/lib/mb/fetch";
@@ -125,7 +124,6 @@ export function MbPaperPanel({ paper }: { paper: MbPaper | null }) {
         {back.length === 0 ? <p className="text-sm text-muted-foreground">Not seeded yet.</p> : <Books books={back} testId="mb-paper-back" />}
         {backOut.length === 0 ? null : <Outcomes rows={backOut} testId="mb-paper-back-outcomes" />}
       </section>
-      <Disclaimer variant="block" />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { Disclaimer } from "@/components/data/disclaimer";
 import { formatTradeDate } from "@/lib/format";
 import { MB_BOOK, MB_CAVEATS, MB_YEARS } from "@/lib/mb/copy";
 import type { MbModel } from "@/lib/mb/fetch";
@@ -57,7 +56,6 @@ export function MbWhatThisIs({ model }: { model: MbModel | null }) {
           {formatTradeDate(model.trained_on)}; retrained the first Saturday of each quarter.
         </p>
       ) : null}
-      <Disclaimer variant="block" />
     </section>
   );
 }

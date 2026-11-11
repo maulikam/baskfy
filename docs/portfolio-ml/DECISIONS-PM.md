@@ -216,3 +216,11 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   export; the same script on today's bars gives 16.9 % / −28.4 %. Backtest outcomes over 12 months: book lines
   touched 2× 20.4 %, halved 5.5 %, median +7.9 % (expected 20–23 %, ~7 %, ~+6 %). The seed's trigger events are
   restricted to completed outcomes, as the research's were; live lines take every firing.
+- **PM6.5** ⚠ UNREVIEWED Maulik, 11 Nov 2026: "if I have not opened the laptop at 6:45 IST, what then?" The stack lives on
+  the laptop, and Beat does not fire an entry it slept through. Added two hourly Beat entries, minute 15 and 35,
+  hours 00–17 and 21–23 (never inside the 18:00–21:00 nightly window): `session-catch-up-hourly` runs the existing
+  `session_catch_up` (sessions with no published `data_version`; a gate refusal counts as landed, so this is not a
+  retry loop around bad data; at most two sessions a run), and `mb-catch-up` scores any session of the last week that
+  published without MB scores. A missed night heals within an hour of the laptop being awake. The 06:45 entry and
+  the Kite-login trigger stay. Reverse: delete the two Beat entries. Not solved by software: a closed laptop runs
+  nothing; a scheduled wake (`pmset`) or an always-on host is Maulik's call.

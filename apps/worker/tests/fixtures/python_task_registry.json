@@ -1,6 +1,6 @@
 {
  "generated_by": "tools/parity/task_registry.py",
- "task_count": 78,
+ "task_count": 79,
  "tasks": {
   "baskfy.accounts.purge": {
    "python": "baskfy_worker.tasks.celery_tasks.purge_accounts_task",
@@ -529,6 +529,23 @@
      "default": "first"
     }
    ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.mb.catch_up": {
+   "python": "baskfy_worker.tasks.celery_tasks.mb_catch_up_task",
+   "params": [],
    "bound": false,
    "acks_late": true,
    "max_retries": 3,
@@ -3322,6 +3339,212 @@
       4,
       7,
       10
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "session-catch-up-hourly",
+   "task": "baskfy.pipeline.session_catch_up",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "15",
+     "hour": "0-17,21-23",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      15
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "default"
+   }
+  },
+  {
+   "name": "mb-catch-up",
+   "task": "baskfy.mb.catch_up",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "35",
+     "hour": "0-17,21-23",
+     "day_of_week": "*",
+     "day_of_month": "*",
+     "month_of_year": "*"
+    },
+    "expanded": {
+     "minute": [
+      35
+     ],
+     "hour": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      21,
+      22,
+      23
+     ],
+     "day_of_week": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ],
+     "month_of_year": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
      ]
     }
    },

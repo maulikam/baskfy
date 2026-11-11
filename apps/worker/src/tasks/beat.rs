@@ -497,6 +497,40 @@ pub static BEAT_SCHEDULE: &[BeatEntry] = &[
         },
     },
     BeatEntry {
+        name: "session-catch-up-hourly",
+        task: "baskfy.pipeline.session_catch_up",
+        schedule: Schedule::Crontab(Crontab {
+            minute: "15",
+            hour: "0-17,21-23",
+            day_of_week: "*",
+            day_of_month: "*",
+            month_of_year: "*",
+        }),
+        kwargs: &[],
+        options: BeatOptions {
+            queue: Queue::Default,
+            expires: None,
+            countdown: None,
+        },
+    },
+    BeatEntry {
+        name: "mb-catch-up",
+        task: "baskfy.mb.catch_up",
+        schedule: Schedule::Crontab(Crontab {
+            minute: "35",
+            hour: "0-17,21-23",
+            day_of_week: "*",
+            day_of_month: "*",
+            month_of_year: "*",
+        }),
+        kwargs: &[],
+        options: BeatOptions {
+            queue: Queue::Compute,
+            expires: None,
+            countdown: None,
+        },
+    },
+    BeatEntry {
         name: "mb-train",
         task: "baskfy.mb.train",
         schedule: Schedule::Crontab(Crontab {

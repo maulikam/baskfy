@@ -16,7 +16,10 @@ use crate::error::WorkerError;
 use crate::pyjson::{object, s};
 
 /// The tasks this lane has ported.
-pub const PORTED: &[&str] = &["baskfy.mb.score", "baskfy.mb.train"];
+pub const PORTED: &[&str] = &["baskfy.mb.catch_up", "baskfy.mb.score", "baskfy.mb.train"];
+
+/// How far back `baskfy.mb.catch_up` looks for a published session with no scores.
+pub const CATCH_UP_DAYS: i64 = 7;
 
 /// The image's entry point (`deploy/Dockerfile.rust`); `BASKFY_MB_RUN` points elsewhere in tests.
 pub const MB_RUN: &str = "/opt/mb/run";
@@ -122,6 +125,40 @@ pub async fn mb_score_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
         _ => ctx.today_ist(),
     };
     Ok(score_after_publish(day).await.json())
+}
+
+/// `baskfy.mb.catch_up()`: hourly. Scores every session of the last week that published but has no
+/// `mb_score_daily` rows (a night the laptop slept through, or a scorer that failed), oldest first.
+/// Nothing to do while no model is published.
+///
+/// # Errors
+/// The database's, on the read.
+pub async fn mb_catch_up_task(ctx: &TaskContext, _args: BoundArgs) -> TaskResult {
+    let mut tx = ctx.db.begin().await?;
+    let days: Vec<NaiveDate> = sqlx::query_scalar(
+        "SELECT DISTINCT r.trade_date FROM pipeline_run r \
+         WHERE r.data_version IS NOT NULL AND r.trade_date >= $1::DATE \
+         AND EXISTS (SELECT 1 FROM mb_model WHERE published_at IS NOT NULL) \
+         AND NOT EXISTS (SELECT 1 FROM mb_score_daily s WHERE s.date = r.trade_date) \
+         ORDER BY r.trade_date",
+    )
+    .bind(ctx.today_ist() - chrono::Duration::days(CATCH_UP_DAYS))
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| WorkerError::python("DatabaseError", e.to_string()))?;
+    tx.commit()
+        .await
+        .map_err(|e| WorkerError::python("DatabaseError", e.to_string()))?;
+    let mut done = Vec::with_capacity(days.len());
+    for day in days {
+        let out = score_after_publish(day).await;
+        done.push(object([
+            ("date", s(day.format("%Y-%m-%d").to_string())),
+            ("status", s(out.status)),
+            ("detail", s(out.detail)),
+        ]));
+    }
+    Ok(object([("scored", OrderedJson::Array(done))]))
 }
 
 /// `baskfy.mb.train()`: Beat, first Saturday of each quarter. A model whose ranking moves too far

@@ -33,7 +33,7 @@ export const MB_FLAGS = [
   {
     key: "thin",
     tone: "text-orange-500 dark:text-orange-400",
-    symbol: "◌",
+    symbol: "◑",
     label: "Thinly traded",
     meaning:
       "Under ₹5 cr traded a day (20-day average). Below the floor; hard to buy or sell in size.",
@@ -50,8 +50,8 @@ export const MB_FLAGS = [
     key: "new",
     tone: "text-violet-600 dark:text-violet-400",
     symbol: "✱",
-    label: "New listing",
-    meaning: "Under a year of trading history.",
+    label: "Young listing",
+    meaning: "Under two years of trading history (the model ranks nothing with under about a year).",
   },
   {
     key: "no_results",

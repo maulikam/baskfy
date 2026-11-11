@@ -63,9 +63,9 @@ describe("/mb", () => {
   it("flags every name instead of hiding any, with a key above the list", async () => {
     await renderPage(today);
     const flags = screen.getAllByTestId("mb-flags").map((f) => f.textContent);
-    expect(flags).toEqual(["●", "₹◌✱∅", "●▲"]);
+    expect(flags).toEqual(["●", "₹◑✱∅", "●▲"]);
     const key = screen.getByTestId("mb-flag-key").textContent ?? "";
-    for (const word of ["Investable", "Low price", "Thinly traded", "63-day high", "New listing", "No results on file"]) {
+    for (const word of ["Investable", "Low price", "Thinly traded", "63-day high", "Young listing", "No results on file"]) {
       expect(key).toContain(word);
     }
   });

@@ -81,9 +81,7 @@ def classifier(path: str, features: list[str]):
     import xgboost as xgb
     if features != ALL_FEATURES:
         raise SystemExit("REFUSED: the rr model's feature list differs from portfolioml.features.ALL_FEATURES; retrain")
-    m = xgb.XGBClassifier()
-    m.load_model(path)
-    return m
+    return xgb.Booster(model_file=path)
 
 
 def follow(b: pl.DataFrame) -> dict:
@@ -147,7 +145,7 @@ def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, da
     cut = bars.filter(pl.col("date") <= date)
     feat = P.tail_features(cut, ins, idx.filter(pl.col("date") <= date))
     day = feat.filter((pl.col("date") == date) & pl.col("universe"))
-    p = classifier(model[1], model[2]).predict_proba(clean(day.select(ALL_FEATURES).to_numpy()))[:, 1]
+    p = classifier(model[1], model[2]).inplace_predict(clean(day.select(ALL_FEATURES).to_numpy()))
     day = day.with_columns(pl.Series("score", p, dtype=pl.Float64).round(6)).sort(["score", "instrument_id"], descending=[True, False])
     day = day.with_columns(pl.int_range(1, pl.len() + 1).alias("rank"), pl.lit(day.height).alias("universe_n"),
                            ((pl.col("close_raw") >= INVESTABLE_CLOSE) & (pl.col("turnover20") >= INVESTABLE_TURNOVER)).alias("investable"),
@@ -203,7 +201,7 @@ def train(conn, raw, ca_dir: Path, schemes: Path, tmp: Path, model_dir: Path, ac
                      "horizon": CFG.horizon, "top_n": TOP_N, "switch": "ew_10_20_200"}), rows.height, int(y.sum())))
         model_id = cur.fetchone()[0]
         path = model_dir / f"rr_model_{model_id}_{trained_on}.json"
-        m.save_model(str(path))
+        m.get_booster().save_model(str(path))  # the sklearn wrapper's save fails under scikit-learn 1.9
         cur.execute("UPDATE rr_model SET path = %s, published_at = now(), published_by = %s WHERE id = %s",
                     (str(path), ack or "auto", model_id))
     seed_backtest(conn)

@@ -51,6 +51,8 @@ export interface MbName {
   sessions_listed: number | null;
   ttm_rev_yoy_fraction: string | null;
   ttm_pat_yoy_fraction: string | null;
+  /** PM11.2: "universe", or why the row is outside the model's training range. */
+  scope?: "universe" | "quarantine" | "young" | "sme" | "cheap" | "thin";
 }
 
 export interface MbToday {

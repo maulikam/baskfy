@@ -7,7 +7,7 @@ import {
   formatTradeDate,
 } from "@/lib/format";
 import type { MbName } from "@/lib/mb/fetch";
-import { MB_FLAGS, flagsOf } from "@/lib/mb/flags";
+import { MB_FLAGS, SWING_SCOPE, flagsOf } from "@/lib/mb/flags";
 
 const SYMBOL = Object.fromEntries(MB_FLAGS.map((f) => [f.key, f]));
 
@@ -120,8 +120,8 @@ export function MbRanking({
                   {flagsOf(n).map((k) => (
                     <FlagTip
                       key={k}
-                      label={SYMBOL[k]?.label ?? k}
-                      meaning={SYMBOL[k]?.meaning}
+                      label={k === "outside" && n.scope && n.scope !== "universe" ? SWING_SCOPE[n.scope].label : (SYMBOL[k]?.label ?? k)}
+                      meaning={k === "outside" && n.scope && n.scope !== "universe" ? SWING_SCOPE[n.scope].meaning : SYMBOL[k]?.meaning}
                       className={`mr-1.5 ${SYMBOL[k]?.tone ?? ""}`}
                     >
                       {SYMBOL[k]?.symbol}

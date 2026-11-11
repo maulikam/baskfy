@@ -32,7 +32,7 @@ def grid_of(bars: pl.DataFrame, terminal: pl.DataFrame) -> PP.Grid:
 
 
 def _investable(cur, d: dt.date) -> list[int]:
-    cur.execute("SELECT instrument_id FROM mb_score_daily WHERE date = %s AND investable ORDER BY rank", (d,))
+    cur.execute("SELECT instrument_id FROM mb_score_daily WHERE date = %s AND investable AND scope = 'universe' ORDER BY rank", (d,))
     return [r[0] for r in cur.fetchall()]
 
 

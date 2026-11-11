@@ -165,11 +165,17 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
       {v ? (
         <FlagTip
           label={`Doubling score ${v.score} · rank ${v.rank}${universeN ? ` of ${universeN}` : ""}`}
-          meaning="Higher is likelier to double within a year. Green: investable."
+          meaning={
+            v.scope && v.scope !== "universe"
+              ? `Outside the model's training range (${SWING_SCOPE[v.scope].label.toLowerCase()}): read it as a rough guide only.`
+              : "Higher is likelier to double within a year. Green: investable."
+          }
           className={
-            v.investable
-              ? "font-medium text-emerald-600 dark:text-emerald-400"
-              : undefined
+            v.scope && v.scope !== "universe"
+              ? "text-muted-foreground"
+              : v.investable
+                ? "font-medium text-emerald-600 dark:text-emerald-400"
+                : undefined
           }
         >
           {Number(v.score).toFixed(3)}
@@ -178,8 +184,8 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
       {flagsOf(v).map((k) => (
         <FlagTip
           key={k}
-          label={SYMBOL[k]?.label ?? k}
-          meaning={SYMBOL[k]?.meaning}
+          label={k === "outside" && v?.scope && v.scope !== "universe" ? SWING_SCOPE[v.scope].label : (SYMBOL[k]?.label ?? k)}
+          meaning={k === "outside" && v?.scope && v.scope !== "universe" ? SWING_SCOPE[v.scope].meaning : SYMBOL[k]?.meaning}
           className={`ml-1 ${SYMBOL[k]?.tone ?? ""}`}
         >
           {SYMBOL[k]?.symbol}

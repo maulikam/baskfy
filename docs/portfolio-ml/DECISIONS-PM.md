@@ -291,3 +291,8 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   extrapolation, shown grey with a ◌ flag. Picks still come only from universe ∧ investable rows, so the backtest
   still describes them. Rank: universe rows first by score, then the rest by score (their scores run higher on
   average, young 0.18 vs 0.095, and would otherwise crowd the top). The doubling model is unchanged.
+- **PM11.2** ⚠ UNREVIEWED The doubling model scores every equity too (Maulik: "apply the doubling model as well"), as
+  PM11.1: migration 0012 adds `mb_score_daily.scope`; universe rows rank first and keep exactly their old ranks, the
+  rest rank after them; out-of-range rows get the ◌ flag and never the ● investable flag. The paper record reads
+  only `scope = 'universe'` rows (`mb_paper._investable`), so its picks are unchanged; `/mb/today`'s default list
+  and `investable_n` count only universe rows.

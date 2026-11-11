@@ -81,10 +81,10 @@ pub async fn get_today(
     let rows = sqlx::query(
         "SELECT s.rank, s.instrument_id, i.symbol, i.name, sec.sector, s.score, s.investable, \
          s.hi63_trigger, s.hi63_trigger_date, s.close_raw, s.turnover20, s.r252, s.dist_ath, \
-         s.sessions_listed, s.ttm_rev_yoy, s.ttm_pat_yoy, s.model_id, s.universe_n \
+         s.sessions_listed, s.ttm_rev_yoy, s.ttm_pat_yoy, s.model_id, s.universe_n, s.scope \
          FROM mb_score_daily s JOIN instrument i ON i.id = s.instrument_id \
          LEFT JOIN instrument_sector sec ON sec.instrument_id = s.instrument_id \
-         WHERE s.date = $1 AND ($2 OR s.investable) ORDER BY s.rank LIMIT $3",
+         WHERE s.date = $1 AND ($2 OR (s.investable AND s.scope = 'universe')) ORDER BY s.rank LIMIT $3",
     )
     .bind(as_of)
     .bind(all)
@@ -115,11 +115,12 @@ pub async fn get_today(
                 .put("sessions_listed", opt_i(r, "sessions_listed")?)
                 .put("ttm_rev_yoy_fraction", J::opt_dec(odec(r, "ttm_rev_yoy")?))
                 .put("ttm_pat_yoy_fraction", J::opt_dec(odec(r, "ttm_pat_yoy")?))
+                .put("scope", J::Str(col(r, "scope")?))
                 .done(),
         );
     }
     let counts: (i64, i64, Option<i32>) = sqlx::query_as(
-        "SELECT count(*), count(*) FILTER (WHERE investable), max(model_id) \
+        "SELECT count(*), count(*) FILTER (WHERE investable AND scope = 'universe'), max(model_id) \
          FROM mb_score_daily WHERE date = $1",
     )
     .bind(as_of)
@@ -458,7 +459,7 @@ pub async fn get_lookup(
     if let Some(day) = as_of {
         let rows = sqlx::query(
             "SELECT i.symbol, s.rank, s.score, s.universe_n, s.investable, s.hi63_trigger, s.hi63_trigger_date, \
-             s.close_raw, s.turnover20, s.sessions_listed, s.ttm_rev_yoy, s.ttm_pat_yoy \
+             s.close_raw, s.turnover20, s.sessions_listed, s.ttm_rev_yoy, s.ttm_pat_yoy, s.scope \
              FROM mb_score_daily s JOIN instrument i ON i.id = s.instrument_id \
              WHERE s.date = $1 AND i.symbol = ANY($2)",
         )
@@ -485,6 +486,7 @@ pub async fn get_lookup(
                     .put("sessions_listed", opt_i(r, "sessions_listed")?)
                     .put("ttm_rev_yoy_fraction", J::opt_dec(odec(r, "ttm_rev_yoy")?))
                     .put("ttm_pat_yoy_fraction", J::opt_dec(odec(r, "ttm_pat_yoy")?))
+                    .put("scope", J::Str(col(r, "scope")?))
                     .done(),
             );
         }

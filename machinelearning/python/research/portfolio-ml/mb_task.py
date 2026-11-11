@@ -145,13 +145,17 @@ def display(day: pl.DataFrame, filings: pl.DataFrame | None) -> pl.DataFrame:
 
 
 def ranked(day: pl.DataFrame, booster: lgb.Booster) -> pl.DataFrame:
-    """Universe rows of one date → score (6 dp, rounded at write), rank, investable."""
+    """Scoped rows of one date (rr_task.scoped) → score (6 dp, rounded at write), rank, investable. PM11.2: universe
+    rows rank first by score, then the rest; a row without ``scope`` is a universe row."""
+    if "scope" not in day.columns:
+        day = day.with_columns(pl.lit("universe").alias("scope"))
     x = day.select(ALL_FEATURES).to_numpy().astype(np.float32)
-    out = day.with_columns(pl.Series("score", booster.predict(x), dtype=pl.Float64).round(6)).sort(["score", "instrument_id"], descending=[True, False])
+    out = day.with_columns(pl.Series("score", booster.predict(x), dtype=pl.Float64).round(6), (pl.col("scope") != "universe").alias("_out")).sort(
+        ["_out", "score", "instrument_id"], descending=[False, True, False]).drop("_out")
     return out.with_columns(
         pl.int_range(1, pl.len() + 1).alias("rank"),
         pl.lit(out.height).alias("universe_n"),
-        ((pl.col("close_raw") >= INVESTABLE_CLOSE) & (pl.col("turnover20") >= INVESTABLE_TURNOVER)).alias("investable"),
+        ((pl.col("close_raw") >= INVESTABLE_CLOSE) & (pl.col("turnover20") >= INVESTABLE_TURNOVER)).fill_null(False).alias("investable"),
     )
 
 
@@ -192,11 +196,12 @@ def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, da
     """Score one session from bars that end on it, and write it (idempotent)."""
     cut = bars.filter(pl.col("date") <= date)
     feat = P.tail_features(cut, ins, idx.filter(pl.col("date") <= date))
-    day = ranked(feat.filter((pl.col("date") == date) & pl.col("universe")), booster(model[1], model[2]))
+    from rr_task import scoped
+    day = ranked(scoped(feat.filter(pl.col("date") == date), ins), booster(model[1], model[2]))
     day = day.join(hi63(cut), on="instrument_id", how="left").with_columns(pl.col("hi63_trigger_date").is_not_null().alias("hi63_trigger"))
     day = display(day, filings_from_pg(conn, date))
     rows = day.select(pl.lit(date).alias("date"), "instrument_id", pl.lit(model[0]).alias("model_id"), "score", "rank", "universe_n",
-                      "investable", "hi63_trigger", "hi63_trigger_date", *DISPLAY)
+                      "investable", "hi63_trigger", "hi63_trigger_date", *DISPLAY, "scope")
     write_scores(conn, date, rows)
     return rows
 

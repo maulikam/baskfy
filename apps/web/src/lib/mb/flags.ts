@@ -10,6 +10,8 @@ export interface MbVerdict {
   sessions_listed: number | null;
   ttm_rev_yoy_fraction: string | null;
   ttm_pat_yoy_fraction: string | null;
+  /** PM11.2: "universe", or why the row is outside the model's training range. Older rows lack it. */
+  scope?: SwingScope;
 }
 
 /** PM7: what each flag on the ranking means. One symbol per fact; a name can carry several. */
@@ -62,12 +64,20 @@ export const MB_FLAGS = [
       "No quarterly revenue or profit growth on file, so those columns are blank.",
   },
   {
+    key: "outside",
+    tone: "text-amber-600 dark:text-amber-400",
+    symbol: "◌",
+    label: "Outside training range",
+    meaning:
+      "Scored, but the stock is outside what the model learned from (young, thin, under ₹20, SME series, or a recent split-like jump; hover the flag in a table for which). Read the score as a rough guide; never bought on paper.",
+  },
+  {
     key: "not_scored",
     tone: "text-slate-400 dark:text-slate-500",
     symbol: "⊘",
-    label: "Not ranked",
+    label: "Not scored",
     meaning:
-      "Outside the model's universe: under ₹20, under ₹2 cr traded a day, under 260 sessions listed, not an equity, or within 60 sessions of an unexplained price jump.",
+      "No score tonight: not an ordinary equity share (an ETF, bond or other instrument), or no trade today.",
   },
 ] as const;
 
@@ -80,7 +90,9 @@ const MIN_TURNOVER = 5e7;
 export function flagsOf(n: MbVerdict | null | undefined): MbFlagKey[] {
   if (!n) return ["not_scored"];
   const out: MbFlagKey[] = [];
-  if (n.investable) out.push("investable");
+  const outside = n.scope !== undefined && n.scope !== "universe";
+  if (outside) out.push("outside");
+  else if (n.investable) out.push("investable");
   if (n.close !== null && Number(n.close) < MIN_CLOSE) out.push("low_price");
   if (n.turnover20 !== null && Number(n.turnover20) < MIN_TURNOVER)
     out.push("thin");

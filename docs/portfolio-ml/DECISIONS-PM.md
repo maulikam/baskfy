@@ -265,3 +265,14 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   weeks of a fall, while lagging averages still read "up"; 2018 and 2022 stay negative under every switch. Seven
   switches on 11 years, so none would be adopted on a narrow pass either. Next candidate: a switch on the strategy's
   own recent trades (stop after its recent results turn bad), which reacts to these names rather than the index.
+- **PM10e** ⚠ UNREVIEWED Smallcap 250 10 > 20 and 10 > 50 (Maulik, 11 Nov 2026), same run and rule as PM10d. None
+  passes. Trail −7/12 h60: 10 > 20 +1.17 % a trade, PF 1.28, 6/11 years (ties the 100-DMA); 10 > 50 +1.00 %, PF 1.23,
+  6/11. 10 > 20 nearly removes the 2022 and 2025 losses on that setup (−0.3 %, −0.1 % a trade) but 2018 and 2024 stay
+  clearly negative.
+- **PM10f** ⚠ UNREVIEWED NIFTY500 EQUAL WEIGHT instead of the Smallcap 250 (Maulik: the typical stock, not the big
+  ones), in cash under its 200-DMA, otherwise trading on a fast crossover: ew_200, ew_10_20_200, ew_10_50_200,
+  ew_20_50_200. None passes. Best: ew_10_20_200 on trail −7/12 h60, +1.25 % a trade, PF 1.30, worst −24 %, on 49 % of
+  sessions, but 5/11 years: the 200-DMA floor keeps it out of most of 2019 and the few 2019 trades lose 4.4 %, and
+  2018, 2022 and 2024 stay negative. Sixteen index switches tested over PM10c–f; none passes 8/11 years. Conclusion:
+  an index-trend switch raises the average trade and trims the worst losses but cannot remove this strategy's bad
+  years; they begin before any index average turns. Not adopted.

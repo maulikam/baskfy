@@ -8,6 +8,10 @@ Seven switches, all on information at the signal session's close (entry the next
   sc_200_both  sc_200 and sc_50_200
   sc_200_up    its 200-session average higher than 20 sessions earlier
   breadth_50   at least half the liquid universe above its own 200-session average (features.breadth200)
+  sc_10_20     its 10-session average above its 20-session average (PM10e, added after PM10d's run)
+  sc_10_50     its 10-session average above its 50-session average (PM10e)
+  ew_*         PM10f (Maulik): the same on NIFTY500 EQUAL WEIGHT, in cash whenever it is under its 200-session average:
+               ew_200 (that floor alone), ew_10_20_200, ew_10_50_200, ew_20_50_200 (a fast crossover up and above the 200)
 Setups: PM10b's trail −7 % / 12 % h60 and fixed −7/+25 h40, the model's top 5 a day. Pass rule as PM10c: net ≥ +0.5 % a
 trade, profit factor ≥ 1.2, ≥ 8 of 11 years positive. Seven switches on 11 years: a pass earns a paper trial, not
 adoption. Also written: each switch's share of sessions on, by year.
@@ -38,15 +42,27 @@ def switches(breadth: pl.DataFrame) -> pl.DataFrame:
     sc = pl.col("smallcap250")
     ma = lambda n: sc.rolling_mean(n, min_samples=n)  # noqa: E731
     idx = panel.load_index_series(Path("data")).select("date", "smallcap250").drop_nulls().sort("date")
-    g = idx.with_columns(ma(20).alias("m20"), ma(50).alias("m50"), ma(100).alias("m100"), ma(200).alias("m200")).with_columns(
+    g = idx.with_columns(ma(10).alias("m10"), ma(20).alias("m20"), ma(50).alias("m50"), ma(100).alias("m100"), ma(200).alias("m200")).with_columns(
         (sc > pl.col("m100")).alias("sc_100"),
         (sc > pl.col("m200")).alias("sc_200"),
         (pl.col("m50") > pl.col("m200")).alias("sc_50_200"),
         (pl.col("m20") > pl.col("m50")).alias("sc_20_50"),
+        (pl.col("m10") > pl.col("m20")).alias("sc_10_20"),
+        (pl.col("m10") > pl.col("m50")).alias("sc_10_50"),
         (pl.col("m200") > pl.col("m200").shift(20)).alias("sc_200_up"),
     ).with_columns((pl.col("sc_200") & pl.col("sc_50_200")).alias("sc_200_both"))
+    ew = pl.read_csv("data/index_close_all.csv.gz", try_parse_dates=True).filter(pl.col("index_name") == "NIFTY500 EQUAL WEIGHT").select(
+        "date", pl.col("close").alias("ew")).sort("date")
+    e, ema = pl.col("ew"), lambda n: pl.col("ew").rolling_mean(n, min_samples=n)  # noqa: E731
+    ew = ew.with_columns(ema(10).alias("e10"), ema(20).alias("e20"), ema(50).alias("e50"), ema(200).alias("e200")).with_columns(
+        (e > pl.col("e200")).alias("ew_200")).with_columns(
+        (pl.col("ew_200") & (pl.col("e10") > pl.col("e20"))).alias("ew_10_20_200"),
+        (pl.col("ew_200") & (pl.col("e10") > pl.col("e50"))).alias("ew_10_50_200"),
+        (pl.col("ew_200") & (pl.col("e20") > pl.col("e50"))).alias("ew_20_50_200"),
+    ).select("date", "ew_200", "ew_10_20_200", "ew_10_50_200", "ew_20_50_200")
+    g = g.join(ew, on="date", how="left")
     g = g.join(breadth, on="date", how="left").with_columns((pl.col("breadth200") >= 0.5).alias("breadth_50"))
-    names = ["sc_100", "sc_200", "sc_50_200", "sc_20_50", "sc_200_both", "sc_200_up", "breadth_50"]
+    names = ["sc_100", "sc_200", "sc_50_200", "sc_20_50", "sc_200_both", "sc_200_up", "breadth_50", "sc_10_20", "sc_10_50", "ew_200", "ew_10_20_200", "ew_10_50_200", "ew_20_50_200"]
     return g.select("date", *[pl.col(n).fill_null(True) for n in names]), names
 
 

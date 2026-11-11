@@ -111,17 +111,24 @@ export function MbScoreHead({
 }
 
 function MbOnlyHead({ className }: { className: string }) {
-  const title = MB_FLAGS.map((f) => `${f.symbol} ${f.label}`).join(" · ");
   return (
-    <th
-      scope="col"
-      className={className}
-      title={`The doubling model's score: higher is likelier to double within a year; hover a value for its rank. ${title}`}
-    >
-      <a href="/mb" className="underline decoration-dotted underline-offset-2">
-        Model
-      </a>
+    <th scope="col" className={className}>
+      <MbScoreHeadLink />
     </th>
+  );
+}
+
+/** The Model column's header: the doubling model, linked to `/mb` (the key to the flags). */
+export function MbScoreHeadLink() {
+  const flags = MB_FLAGS.map((f) => `${f.symbol} ${f.label}`).join(" · ");
+  return (
+    <a
+      href="/mb"
+      className="underline decoration-dotted underline-offset-2"
+      title={`The doubling model's score: higher is likelier to double within a year; hover a value for its rank. ${flags}`}
+    >
+      Model
+    </a>
   );
 }
 

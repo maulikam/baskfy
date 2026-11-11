@@ -3,6 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 
 import {
+  MbScoreHeadLink,
   MbScoresProvider,
   MbScoreValue,
   SwingScoreHeadLink,
@@ -391,7 +392,7 @@ export { Button as ResultsAction };
 /** PM7 (Maulik, 11 Nov 2026): the doubling model's rank and flags first on every Build table. Information only. */
 const MB_COLUMN: ColumnDef<ResultRow, unknown> = {
   id: "mb_model",
-  header: "Model",
+  header: () => <MbScoreHeadLink />,
   size: 120,
   enableSorting: false,
   cell: (info) => (

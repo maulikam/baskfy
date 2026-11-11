@@ -169,7 +169,7 @@ def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, da
     p = classifier(model[1], model[2]).inplace_predict(clean(day.select(ALL_FEATURES).to_numpy()))
     day = day.with_columns(pl.Series("score", p, dtype=pl.Float64).round(6)).sort(["score", "instrument_id"], descending=[True, False])
     day = day.with_columns(pl.int_range(1, pl.len() + 1).alias("rank"), pl.lit(day.height).alias("universe_n"),
-                           ((pl.col("close_raw") >= INVESTABLE_CLOSE) & (pl.col("turnover20") >= INVESTABLE_TURNOVER)).alias("investable"),
+                           ((pl.col("close_raw") >= INVESTABLE_CLOSE) & (pl.col("turnover20") >= INVESTABLE_TURNOVER)).fill_null(False).alias("investable"),
                            pl.col("close_raw").round(2))
     rows = day.select(pl.lit(date).alias("date"), "instrument_id", pl.lit(model[0]).alias("model_id"), "score", "rank", "universe_n",
                       "investable", "close_raw", "scope")

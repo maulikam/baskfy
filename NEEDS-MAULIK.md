@@ -2608,7 +2608,10 @@ bash export_bars_local.sh
 
 It prints `BLANK CHECK: gap above 10%: YES` or `no` and the judged run (PM4.4); `run_pm4.py` without the flag runs the same check first, every time; the full table is in `out/pm4/blank_rates.csv`. It does not run PM4.
 
-## Portfolio-ML (PM6) — ship the MB scorer (11 Nov 2026)
+## Portfolio-ML (PM6) — ship the MB scorer (11 Nov 2026) — ✅ DONE by the agent, 11 Nov 18:06 IST
+
+Shipped at Maulik's request ("You do everything for me"): api, worker, ingest-worker, beat on `baskfy-rs:rel-e250fb1`, web on `baskfy-web:mb-3ef7679`; schema 9; model 1 published; seed loaded; 9 Nov scored. Desk and monitors untouched (still `rel-822124b`); `rs.tag.prev-mb` / `web.tag.prev-mb` hold the old tags. The next `local.sh up` moves the desk services to the new image too. Original request kept below.
+
 
 **Needed:** build and ship the Rust and web images (the Rust one now carries `/opt/mb`, a Python 3.12 runtime, ~0.8 GB more), let it
 run migrations (0006–0009 are pending locally), then once: `docker exec baskfy-local-worker-1 /opt/mb/run train`

@@ -24,6 +24,7 @@ import polars as pl
 
 from audit_moves import correct_bars
 from explore_multibagger import PARAMS, ROUNDS, TRAIN_STRIDE, grp
+from portfolioml import fundamentals as FU
 from portfolioml import panel
 from portfolioml import pipeline as P
 from portfolioml.features import ALL_FEATURES
@@ -35,6 +36,7 @@ TERMINAL = "b"  # PM0.8: dead names held DEATH_SESSIONS then −100 %
 MIN_SPEARMAN = 0.7
 HI_WINDOW, HI_RECENT = 63, 21
 INVESTABLE_CLOSE, INVESTABLE_TURNOVER = 50.0, 5e7
+DISPLAY = ["close_raw", "turnover20", "r252", "dist_ath", "sessions_listed", "ttm_rev_yoy", "ttm_pat_yoy"]
 OHLCV_SCHEMA = {"upper_circuit": pl.Float64, "lower_circuit": pl.Float64}
 
 Q_OHLCV = ("SELECT instrument_id, date, open, high, low, close, volume, close_raw, volume_raw, adj_factor, upper_circuit, lower_circuit "
@@ -42,6 +44,9 @@ Q_OHLCV = ("SELECT instrument_id, date, open, high, low, close, volume, close_ra
 Q_INSTRUMENT = "SELECT id, symbol, name, isin, instrument_type, series, listed_on, delisted_on, is_active FROM instrument"
 Q_MEMBERS = "SELECT index_id, date, instrument_id FROM index_member_daily WHERE index_id IN (SELECT id FROM index_def WHERE slug = 'etf')"
 Q_DEFS = "SELECT id, slug, name, is_universe FROM index_def"
+Q_FILINGS = ("SELECT instrument_id, period_end, filed_on, period_type, filed_at, available_on, is_revision, revenue, ebitda, "
+             "depreciation, pat, total_debt, total_equity, cfo FROM fundamental_pit WHERE available_on <= {d}")
+FILING_NUMERIC = ["revenue", "ebitda", "depreciation", "pat", "total_debt", "total_equity", "cfo"]
 Q_TERMINAL = "SELECT instrument_id, status, reason, last_bar, source FROM instrument_terminal"
 Q_INDEX = ("SELECT m.kite_tradingsymbol AS index_name, b.date, b.open, b.high, b.low, b.close FROM index_bar_daily b "
            "JOIN index_master m ON m.id = b.index_id WHERE m.kite_tradingsymbol IN ('NIFTY 50','NIFTY MIDCAP 150','NIFTY SMLCAP 250') "
@@ -113,6 +118,28 @@ def hi63(bars: pl.DataFrame) -> pl.DataFrame:
     return hits.group_by("instrument_id").agg(pl.col("date").max().alias("hi63_trigger_date"))
 
 
+def filings_from_pg(conn, through: dt.date) -> pl.DataFrame | None:
+    """fundamental_pit as panel.load_fundamentals reads it; None where the table is absent."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass('public.fundamental_pit')")
+        if cur.fetchone()[0] is None:
+            return None
+    f = _csv(_copy(conn, Q_FILINGS.format(d=f"'{through.isoformat()}'::date")), schema_overrides=dict.fromkeys(FILING_NUMERIC, pl.Float64))
+    return f.with_columns(pl.col("period_end").str.to_date(), pl.col("available_on").str.to_date(), pl.col("filed_at").str.to_datetime())
+
+
+def display(day: pl.DataFrame, filings: pl.DataFrame | None) -> pl.DataFrame:
+    """PM7's display-only columns; TTM growth from filings available on the day (never a model input)."""
+    out = day.with_columns(pl.col("close_raw").round(2), pl.col("turnover20").cast(pl.Float64).round(2).alias("turnover20"),
+                           pl.col("r252").cast(pl.Float64).round(4), pl.col("dist_ath").cast(pl.Float64).round(4),
+                           pl.col("n_hist").cast(pl.Int32).alias("sessions_listed"))
+    if filings is None or filings.is_empty():
+        return out.with_columns(pl.lit(None, pl.Float64).alias("ttm_rev_yoy"), pl.lit(None, pl.Float64).alias("ttm_pat_yoy"))
+    snaps = FU.snapshots(filings.filter(pl.col("instrument_id").is_in(day["instrument_id"].implode())))
+    got = FU.join_features(day.select("instrument_id", "date"), snaps).select("instrument_id", "ttm_rev_yoy", "ttm_pat_yoy")
+    return out.join(got, on="instrument_id", how="left").with_columns(pl.col("ttm_rev_yoy").round(4), pl.col("ttm_pat_yoy").round(4))
+
+
 def ranked(day: pl.DataFrame, booster: lgb.Booster) -> pl.DataFrame:
     """Universe rows of one date → score (6 dp, rounded at write), rank, investable."""
     x = day.select(ALL_FEATURES).to_numpy().astype(np.float32)
@@ -168,8 +195,9 @@ def score(date: dt.date) -> int:
         feat = P.tail_features(bars, ins, idx)
         day = ranked(feat.filter((pl.col("date") == date) & pl.col("universe")), booster(model[1], model[2]))
         day = day.join(hi63(bars), on="instrument_id", how="left").with_columns(pl.col("hi63_trigger_date").is_not_null().alias("hi63_trigger"))
+        day = display(day, filings_from_pg(conn, date))
         rows = day.select(pl.lit(date).alias("date"), "instrument_id", pl.lit(model[0]).alias("model_id"), "score", "rank", "universe_n",
-                          "investable", "hi63_trigger", "hi63_trigger_date")
+                          "investable", "hi63_trigger", "hi63_trigger_date", *DISPLAY)
         write_scores(conn, date, rows)
     print(f"mb_score_daily {date}: {rows.height} names, model {model[0]}, investable {rows['investable'].sum()}, hi63 {rows['hi63_trigger'].sum()}")
     return 0
@@ -179,7 +207,8 @@ def write_scores(conn, date: dt.date, rows: pl.DataFrame) -> None:
     """Idempotent: the date's rows are replaced in one transaction."""
     with conn.transaction(), conn.cursor() as cur:
         cur.execute("DELETE FROM mb_score_daily WHERE date = %s", (date,))
-        with cur.copy("COPY mb_score_daily (date, instrument_id, model_id, score, rank, universe_n, investable, hi63_trigger, hi63_trigger_date) FROM STDIN") as cp:
+        cols = ", ".join(rows.columns)
+        with cur.copy(f"COPY mb_score_daily ({cols}) FROM STDIN") as cp:
             for r in rows.iter_rows():
                 cp.write_row(r)
 

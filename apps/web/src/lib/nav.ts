@@ -219,6 +219,8 @@ export const SECTION_TABS = {
     { href: "/twt" as Route, label: "Today" },
     { href: "/twt/backtest" as Route, label: "Backtest" },
   ],
+  /* The MB sleeve (PM7): read-only ranking; PM8 adds the paper book. */
+  mb: [{ href: "/mb" as Route, label: "Today" }],
   /*
     The NIFTY options tab (OP5, `docs/options/05` §2): "Today | Journal | Calendar". The settings
     sit under Me with the other sleeves' (`/me/options`), for the same reason — they are about a
@@ -278,6 +280,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   swing: "Build",
   vbt: "Build",
   twt: "Build",
+  mb: "Build",
   options: "Build",
   opportunities: "Build",
   portfolio: "Portfolio",
@@ -369,6 +372,7 @@ export const DESK_MENU: readonly (readonly DeskMenuLink[])[] = [
   ],
   [
     { label: "Swing", href: "/swing" },
+    { label: "Doubling", href: "/mb" },
     { label: "NIFTY Options", href: "/options/nifty" },
     { label: "F&O Overnight", href: "/options/desk" },
   ],
@@ -393,6 +397,8 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/swing", label: "Swing" },
   { href: "/vbt", label: "Volume" },
   { href: "/twt", label: "Tight" },
+  /* PM7: the MB ranking, read-only. */
+  { href: "/mb" as Route, label: "Doubling" },
   /* `docs/options/05` §1: appended after Tight. The Overlap matrix gains no Options column — an
      option contract is never an equity name several sleeves hold. */
   { href: "/options", label: "Options" },
@@ -406,6 +412,7 @@ export function isSleeveSection(section: SectionKey): boolean {
     section === "swing" ||
     section === "vbt" ||
     section === "twt" ||
+    section === "mb" ||
     section === "options" ||
     section === "opportunities"
   );
@@ -456,6 +463,7 @@ export function primarySection(pathname: string): SectionKey | null {
   if (pathname === "/vbt" || pathname.startsWith("/vbt/")) return "vbt";
   // `docs/twt/05` §1: the fourth sleeve, by the same argument again.
   if (pathname === "/twt" || pathname.startsWith("/twt/")) return "twt";
+  if (pathname === "/mb" || pathname.startsWith("/mb/")) return "mb";
   // `docs/options/05` §1: the options tab, by the same argument — it lights Build.
   if (pathname === "/options" || pathname.startsWith("/options/")) return "options";
   if (pathname === "/opportunities" || pathname.startsWith("/opportunities/")) return "opportunities";

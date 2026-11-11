@@ -179,3 +179,15 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
 - **PM6.4** Evidence: features equal the research dataset on 14 Jun 2019, 1 Mar 2023 and 7 Nov 2025, all 95 within
   1e-5, from bars cut at each date (`tests/test_mb_task.py`); score of 9 Nov 2026 re-run gives the same md5 over 1,215
   rows, from macOS and from the image's Python stage; a date with no session exits 3 and writes nothing.
+- **PM7.1** ⚠ UNREVIEWED Display columns (close, 20-day turnover, 12-month return, distance from ATH, sessions listed,
+  TTM revenue and PAT growth) are written by the scorer beside each score (migration 0008), computed as research
+  computes them (`fundamentals.snapshots`/`join_features`, `available_on ≤ date`); display only, never a model input.
+  The API is GET-only (`/mb/today`, `/mb/history/{id}`, `/mb/model`) behind the other sleeves' gate: signed in and
+  the sole tenant (a second account gets the marked 404, not data). `/mb/today` lists the top 50 investable names by
+  default (`all=true` for every name). Web copy says "Doubling candidates": the copy lint bans "multibagger" outright.
+- **PM7.2** ⚠ UNREVIEWED The brief's "desk `/mb` with a link that pre-fills a manual `/analyze`" is scoped down.
+  `/analyze` is the weekly book's and takes a momentum scan whose required factor columns an MB row does not have;
+  producing them would be building plan input, which Track C forbids. Since DESK-UI the desk's pages render in the web
+  app, so the desk view is a staff-only watchlist section on `/mb` (top 20 investable, closes) with a link to the
+  weekly desk (`/rebalance`) and the Desk menu entry "Doubling". No plan line is created. Reverse: a desk route that
+  writes a scan in `/analyze`'s shape, if Maulik wants one.

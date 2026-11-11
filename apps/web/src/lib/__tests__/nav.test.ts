@@ -280,6 +280,7 @@ describe("the primary consumer IA", () => {
       "/swing",
       "/vbt",
       "/twt",
+      "/mb",
       "/options",
       "/build/desk",
     ]);
@@ -292,6 +293,8 @@ describe("the primary consumer IA", () => {
       "Swing",
       "Volume",
       "Tight",
+      // PM7: the MB ranking, read-only, after Tight.
+      "Doubling",
       // `docs/options/05` §1: Options is appended after Tight (OP5).
       "Options",
       "Desk",
@@ -354,6 +357,7 @@ describe("the sidebar IA", () => {
       "/reconcile",
       "/lifecycle",
       "/swing",
+      "/mb",
       "/options/nifty",
       "/options/desk",
       "/ops",

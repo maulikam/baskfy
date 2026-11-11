@@ -42,6 +42,7 @@ pub mod instruments;
 pub mod kite;
 pub mod managers;
 pub mod market_data;
+pub mod mb;
 pub mod meta;
 pub mod opportunities;
 pub mod ops;
@@ -108,6 +109,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(swing::router())
         .merge(vbt::router())
         .merge(twt::router())
+        .merge(mb::router())
         .merge(options::router())
         .merge(opportunities::router())
         .merge(fno::router())

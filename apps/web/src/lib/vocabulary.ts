@@ -121,6 +121,11 @@ export const PAGES = {
     title: "Backtest · Three weeks tight",
     blurb: "What the rule did over nine years, with the conditions on it read first.",
   },
+  /* —— The MB sleeve (PM7): a read-only ranking. No plan, no order path. —— */
+  "/mb": {
+    title: "Doubling candidates",
+    blurb: "Which liquid names the model thinks most likely to double within a year, and how far to trust it.",
+  },
   /* —— The NIFTY options tab (OP5, docs/options/05 §2). Read-only where money is concerned:
      every plan is confirmed in the desk console and nowhere else (docs/options/02 Track C §4).
      Everything on it is a scan or paper — no option sleeve has traded real money. —— */

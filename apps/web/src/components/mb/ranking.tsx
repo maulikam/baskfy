@@ -57,7 +57,7 @@ export function MbRanking({
       >
         {MB_FLAGS.map((f) => (
           <div key={f.key} className="flex gap-2">
-            <dt className="w-5 shrink-0 text-center text-sm text-foreground">
+            <dt className={`w-5 shrink-0 text-center text-sm ${f.tone}`}>
               {f.symbol}
             </dt>
             <dd>
@@ -103,7 +103,10 @@ export function MbRanking({
                 className="border-b border-border/40"
                 data-testid="mb-row"
               >
-                <td className="py-2 pr-3 tabular-nums" data-testid="mb-rank">
+                <td
+                  className={`py-2 pr-3 tabular-nums ${n.investable ? "font-medium text-emerald-600 dark:text-emerald-400" : ""}`}
+                  data-testid="mb-rank"
+                >
                   {n.rank}
                 </td>
                 <td className="py-2 pr-3">
@@ -116,7 +119,7 @@ export function MbRanking({
                   {flagsOf(n).map((k) => (
                     <span
                       key={k}
-                      className="mr-1.5"
+                      className={`mr-1.5 ${SYMBOL[k]?.tone ?? ""}`}
                       title={`${SYMBOL[k]?.label}: ${SYMBOL[k]?.meaning}`}
                       aria-label={SYMBOL[k]?.label}
                     >

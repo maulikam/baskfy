@@ -19,8 +19,8 @@ export function MbWhatThisIs({ model }: { model: MbModel | null }) {
       <p className="max-w-[80ch] text-sm">
         A ranking of liquid NSE names by how likely the model thinks each is to
         touch twice its price within about a year. Backtested from{" "}
-        {MB_BOOK.from} with delisted and merged names included, a monthly set
-        of the top 20 investable names returned{" "}
+        {MB_BOOK.from} with delisted and merged names included, a monthly set of
+        the top 20 investable names returned{" "}
         <strong data-testid="mb-cagr">{MB_BOOK.cagrPct}% a year</strong> with a
         worst fall of{" "}
         <strong data-testid="mb-dd">{MB_BOOK.maxDrawdownPct}%</strong> (Sharpe{" "}

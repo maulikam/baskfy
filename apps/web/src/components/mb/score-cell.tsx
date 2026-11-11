@@ -59,7 +59,14 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
       data-testid="mb-score-cell"
     >
       {v ? (
-        <span title={`Score ${v.score}`}>
+        <span
+          title={`Score ${v.score}`}
+          className={
+            v.investable
+              ? "font-medium text-emerald-600 dark:text-emerald-400"
+              : undefined
+          }
+        >
           {v.rank}
           {universeN ? (
             <span className="text-xs text-muted-foreground">/{universeN}</span>
@@ -69,7 +76,7 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
       {flagsOf(v).map((k) => (
         <span
           key={k}
-          className="ml-1"
+          className={`ml-1 ${SYMBOL[k]?.tone ?? ""}`}
           title={`${SYMBOL[k]?.label}: ${SYMBOL[k]?.meaning}`}
           aria-label={SYMBOL[k]?.label}
         >

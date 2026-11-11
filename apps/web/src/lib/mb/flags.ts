@@ -16,6 +16,7 @@ export interface MbVerdict {
 export const MB_FLAGS = [
   {
     key: "investable",
+    tone: "text-emerald-600 dark:text-emerald-400",
     symbol: "●",
     label: "Investable",
     meaning:
@@ -23,6 +24,7 @@ export const MB_FLAGS = [
   },
   {
     key: "low_price",
+    tone: "text-red-600 dark:text-red-400",
     symbol: "₹",
     label: "Low price",
     meaning:
@@ -30,6 +32,7 @@ export const MB_FLAGS = [
   },
   {
     key: "thin",
+    tone: "text-orange-500 dark:text-orange-400",
     symbol: "◌",
     label: "Thinly traded",
     meaning:
@@ -37,6 +40,7 @@ export const MB_FLAGS = [
   },
   {
     key: "high63",
+    tone: "text-sky-600 dark:text-sky-400",
     symbol: "▲",
     label: "63-day high",
     meaning:
@@ -44,12 +48,14 @@ export const MB_FLAGS = [
   },
   {
     key: "new",
+    tone: "text-violet-600 dark:text-violet-400",
     symbol: "✱",
     label: "New listing",
     meaning: "Under a year of trading history.",
   },
   {
     key: "no_results",
+    tone: "text-amber-600 dark:text-amber-400",
     symbol: "∅",
     label: "No results on file",
     meaning:
@@ -57,6 +63,7 @@ export const MB_FLAGS = [
   },
   {
     key: "not_scored",
+    tone: "text-slate-400 dark:text-slate-500",
     symbol: "⊘",
     label: "Not ranked",
     meaning:

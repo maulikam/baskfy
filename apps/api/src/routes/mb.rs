@@ -502,9 +502,194 @@ pub async fn get_lookup(
     ))
 }
 
+/// Sessions of switch history `/mb/swing` returns.
+pub const SWITCH_HISTORY: i64 = 250;
+/// The most paper picks `/mb/swing` lists.
+pub const MAX_PICKS: i64 = 300;
+
+/// `GET /mb/swing?all=` — PM11's swing picks: the model, the NIFTY500 Equal Weight switch (latest and
+/// history), every paper pick, the newest session's top 50 scores (`all=true`: not only investable) and
+/// the walk-forward record. Paper only.
+///
+/// # Errors
+/// 401, 404 not the sole tenant.
+#[allow(clippy::too_many_lines)]
+pub async fn get_swing(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    RawQuery(raw): RawQuery,
+) -> Result<Response, Problem> {
+    require_authenticated(&principal)?;
+    let q = QueryParams::parse(raw.as_deref());
+    let all = q.get("all").is_some_and(|s| s == "true");
+    scoped_sole_user_id(&state, principal.user_id, None).await?;
+    let pool = state.db.pool();
+    let as_of: Option<chrono::NaiveDate> =
+        sqlx::query_scalar("SELECT max(date) FROM rr_score_daily")
+            .fetch_one(pool)
+            .await
+            .map_err(db)?;
+    let model = match sqlx::query(
+        "SELECT id, trained_on, label, rows, positives, published_at FROM rr_model \
+         WHERE published_at IS NOT NULL ORDER BY published_at DESC, id DESC LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(db)?
+    {
+        Some(r) => Obj::new()
+            .put("id", J::Int(i64::from(col::<i32>(&r, "id")?)))
+            .put("trained_on", J::Date(col(&r, "trained_on")?))
+            .put("label", J::Str(col(&r, "label")?))
+            .put("rows", J::Int(i64::from(col::<i32>(&r, "rows")?)))
+            .put("positives", J::Int(i64::from(col::<i32>(&r, "positives")?)))
+            .put("published_at", J::opt_dt(col(&r, "published_at")?))
+            .done(),
+        None => J::Null,
+    };
+    let gate_rows = sqlx::query(
+        "SELECT date, ew_close, ma10, ma20, ma200, above_200, up_10_20, is_on FROM rr_gate_daily \
+         WHERE ($1::date IS NULL OR date <= $1) ORDER BY date DESC LIMIT $2",
+    )
+    .bind(as_of)
+    .bind(SWITCH_HISTORY)
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let mut switch = J::Null;
+    let mut history = Vec::with_capacity(gate_rows.len());
+    for r in &gate_rows {
+        if switch == J::Null {
+            switch = Obj::new()
+                .put("date", J::Date(col(r, "date")?))
+                .put("is_on", J::Bool(col(r, "is_on")?))
+                .put("above_200", J::Bool(col(r, "above_200")?))
+                .put("up_10_20", J::Bool(col(r, "up_10_20")?))
+                .put("ew_close", J::Dec(dec(r, "ew_close")?))
+                .put("ma10", J::opt_dec(odec(r, "ma10")?))
+                .put("ma20", J::opt_dec(odec(r, "ma20")?))
+                .put("ma200", J::opt_dec(odec(r, "ma200")?))
+                .done();
+        }
+        history.push(J::Arr(vec![
+            J::Date(col(r, "date")?),
+            J::Bool(col(r, "is_on")?),
+        ]));
+    }
+    history.reverse();
+    let pick_rows = sqlx::query(
+        "SELECT p.signal_date, p.instrument_id, i.symbol, i.name, p.pick_rank, p.score, p.status, \
+         p.entry_date, p.entry_px, p.stop_px, p.peak_px, p.last_date, p.last_px, p.ret, \
+         p.sessions_held, p.exit_date, p.exit_px, p.exit_reason \
+         FROM rr_pick p JOIN instrument i ON i.id = p.instrument_id \
+         ORDER BY p.signal_date DESC, p.pick_rank LIMIT $1",
+    )
+    .bind(MAX_PICKS)
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let mut picks = Vec::with_capacity(pick_rows.len());
+    for r in &pick_rows {
+        picks.push(
+            Obj::new()
+                .put("signal_date", J::Date(col(r, "signal_date")?))
+                .put("instrument_id", J::Int(col(r, "instrument_id")?))
+                .put("symbol", J::Str(col(r, "symbol")?))
+                .put("name", J::opt_str(col(r, "name")?))
+                .put("pick_rank", J::Int(i64::from(col::<i16>(r, "pick_rank")?)))
+                .put("score", J::Dec(dec(r, "score")?))
+                .put("status", J::Str(col(r, "status")?))
+                .put("entry_date", J::opt_date(col(r, "entry_date")?))
+                .put("entry_px", J::opt_dec(odec(r, "entry_px")?))
+                .put("stop_px", J::opt_dec(odec(r, "stop_px")?))
+                .put("peak_px", J::opt_dec(odec(r, "peak_px")?))
+                .put("last_date", J::opt_date(col(r, "last_date")?))
+                .put("last_px", J::opt_dec(odec(r, "last_px")?))
+                .put("return_fraction", J::opt_dec(odec(r, "ret")?))
+                .put("sessions_held", opt_i(r, "sessions_held")?)
+                .put("exit_date", J::opt_date(col(r, "exit_date")?))
+                .put("exit_px", J::opt_dec(odec(r, "exit_px")?))
+                .put("exit_reason", J::opt_str(col(r, "exit_reason")?))
+                .done(),
+        );
+    }
+    let mut names = Vec::new();
+    let mut counts = (0_i64, 0_i64);
+    if let Some(day) = as_of {
+        let rows = sqlx::query(
+            "SELECT s.rank, s.instrument_id, i.symbol, i.name, sec.sector, s.score, s.investable, s.close_raw \
+             FROM rr_score_daily s JOIN instrument i ON i.id = s.instrument_id \
+             LEFT JOIN instrument_sector sec ON sec.instrument_id = s.instrument_id \
+             WHERE s.date = $1 AND ($2 OR s.investable) ORDER BY s.rank LIMIT $3",
+        )
+        .bind(day)
+        .bind(all)
+        .bind(TOP_N)
+        .fetch_all(pool)
+        .await
+        .map_err(db)?;
+        for r in &rows {
+            names.push(
+                Obj::new()
+                    .put("rank", J::Int(i64::from(col::<i32>(r, "rank")?)))
+                    .put("instrument_id", J::Int(col(r, "instrument_id")?))
+                    .put("symbol", J::Str(col(r, "symbol")?))
+                    .put("name", J::opt_str(col(r, "name")?))
+                    .put("sector", J::opt_str(col(r, "sector")?))
+                    .put("score", J::Dec(dec(r, "score")?))
+                    .put("investable", J::Bool(col(r, "investable")?))
+                    .put("close", J::opt_dec(odec(r, "close_raw")?))
+                    .done(),
+            );
+        }
+        counts = sqlx::query_as(
+            "SELECT count(*), count(*) FILTER (WHERE investable) FROM rr_score_daily WHERE date = $1",
+        )
+        .bind(day)
+        .fetch_one(pool)
+        .await
+        .map_err(db)?;
+    }
+    let bt_rows = sqlx::query(
+        "SELECT period, trades, net, win_rate, profit_factor, worst, on_share FROM rr_backtest \
+         ORDER BY period = 'all' DESC, period",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let mut backtest = Vec::with_capacity(bt_rows.len());
+    for r in &bt_rows {
+        backtest.push(
+            Obj::new()
+                .put("period", J::Str(col(r, "period")?))
+                .put("trades", J::Int(i64::from(col::<i32>(r, "trades")?)))
+                .put("net_fraction", J::Dec(dec(r, "net")?))
+                .put("win_rate_fraction", J::opt_dec(odec(r, "win_rate")?))
+                .put("profit_factor", J::opt_dec(odec(r, "profit_factor")?))
+                .put("worst_fraction", J::opt_dec(odec(r, "worst")?))
+                .put("on_share_fraction", J::opt_dec(odec(r, "on_share")?))
+                .done(),
+        );
+    }
+    Ok(canonical_response(
+        &Obj::new()
+            .put("as_of", J::opt_date(as_of))
+            .put("model", model)
+            .put("switch", switch)
+            .put("switch_history", J::Arr(history))
+            .put("universe_n", J::Int(counts.0))
+            .put("investable_n", J::Int(counts.1))
+            .put("picks", J::Arr(picks))
+            .put("names", J::Arr(names))
+            .put("backtest", J::Arr(backtest))
+            .done(),
+    ))
+}
+
 /// The `/mb` routes: GET only.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/mb/swing", get(get_swing))
         .route("/mb/today", get(get_today))
         .route("/mb/history/{instrument_id}", get(get_history))
         .route("/mb/model", get(get_model))

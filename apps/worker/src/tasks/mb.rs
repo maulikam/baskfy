@@ -174,7 +174,15 @@ pub async fn mb_train_task(_ctx: &TaskContext, _args: BoundArgs) -> TaskResult {
             format!("mb train: {}", out.detail),
         ));
     }
-    Ok(out.json())
+    // PM11: the swing-picks model retrains on the same quarter.
+    let rr = run_mb(&program(), &["rr-train".to_owned()], TRAIN_TIMEOUT).await;
+    if rr.status == "failed" {
+        return Err(WorkerError::python(
+            "RuntimeError",
+            format!("rr train: {}", rr.detail),
+        ));
+    }
+    Ok(object([("mb", out.json()), ("rr", rr.json())]))
 }
 
 #[cfg(test)]

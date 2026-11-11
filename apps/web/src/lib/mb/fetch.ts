@@ -157,3 +157,75 @@ export interface MbPaper {
 export async function fetchMbPaper(): Promise<MbPaper | null> {
   return readOrNull<MbPaper>("/mb/paper");
 }
+
+/** PM11: the swing-picks model. Paper only; prices are rupees as stored, in today's split-adjusted terms. */
+export interface MbSwingPick {
+  signal_date: string;
+  instrument_id: number;
+  symbol: string;
+  name: string | null;
+  pick_rank: number;
+  score: string;
+  status: "waiting" | "open" | "closed";
+  entry_date: string | null;
+  entry_px: string | null;
+  /** The stop in force for the next session. */
+  stop_px: string | null;
+  peak_px: string | null;
+  last_date: string | null;
+  last_px: string | null;
+  return_fraction: string | null;
+  sessions_held: number | null;
+  exit_date: string | null;
+  exit_px: string | null;
+  exit_reason: "stop" | "trail" | "time" | null;
+}
+
+export interface MbSwingName {
+  rank: number;
+  instrument_id: number;
+  symbol: string;
+  name: string | null;
+  sector: string | null;
+  score: string;
+  investable: boolean;
+  close: string | null;
+}
+
+export interface MbSwingSwitch {
+  date: string;
+  is_on: boolean;
+  above_200: boolean;
+  up_10_20: boolean;
+  ew_close: string;
+  ma10: string | null;
+  ma20: string | null;
+  ma200: string | null;
+}
+
+export interface MbSwingBacktest {
+  period: string;
+  trades: number;
+  net_fraction: string;
+  win_rate_fraction: string | null;
+  profit_factor: string | null;
+  worst_fraction: string | null;
+  on_share_fraction: string | null;
+}
+
+export interface MbSwing {
+  as_of: string | null;
+  model: { id: number; trained_on: string; label: string; rows: number; positives: number; published_at: string | null } | null;
+  switch: MbSwingSwitch | null;
+  /** [date, is_on], oldest first. */
+  switch_history: readonly (readonly [string, boolean])[];
+  universe_n: number;
+  investable_n: number;
+  picks: readonly MbSwingPick[];
+  names: readonly MbSwingName[];
+  backtest: readonly MbSwingBacktest[];
+}
+
+export async function fetchMbSwing(options: { all?: boolean } = {}): Promise<MbSwing | null> {
+  return readOrNull<MbSwing>("/mb/swing", options.all ? { all: "true" } : {});
+}

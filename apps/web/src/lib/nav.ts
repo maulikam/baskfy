@@ -223,6 +223,7 @@ export const SECTION_TABS = {
   mb: [
     { href: "/mb" as Route, label: "Today" },
     { href: "/mb/paper" as Route, label: "Paper" },
+    { href: "/mb/swing" as Route, label: "Swing picks" },
   ],
   /*
     The NIFTY options tab (OP5, `docs/options/05` §2): "Today | Journal | Calendar". The settings

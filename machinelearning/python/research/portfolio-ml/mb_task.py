@@ -4,6 +4,8 @@ usage: python mb_task.py score --date YYYY-MM-DD      (the nightly, after publis
        python mb_task.py paper-seed out/paper/seed.json   (once: the backtest history, labelled backtest)
        python mb_task.py train [--ack WHO]            (quarterly; publishes itself unless Spearman < 0.7)
        python mb_task.py publish MODEL_ID --ack WHO   (operator ack for a model the train step held back)
+       python mb_task.py rr-train [--ack WHO]         (PM11 swing picks: train and publish; quarterly after train)
+       python mb_task.py rr-seed                      (PM11: rewrite rr_backtest from rr_backtest.json)
 Exit codes: 0 done, 3 nothing to do (no model, no bars for the date), 4 model held for an ack, other = error.
 Env: BASKFY_DATABASE_URL; BASKFY_MB_DIR (models, default /var/lib/baskfy/state/mb);
      BASKFY_ARCHIVE (default /var/lib/baskfy/archive); BASKFY_MB_SCHEMES (nse_schemes.csv)."""
@@ -217,7 +219,25 @@ def score(date: dt.date) -> int:
         if has_table(conn, "mb_paper_tranche"):
             import mb_paper
             print(mb_paper.nightly(conn, bars, ins, idx, raw.terminal, date, model, score_day))
+        import rr_task
+        if rr_task.has_tables(conn):
+            print(rr_task.score_day(conn, bars, ins, idx, date))
     return 0
+
+
+def rr_train(ack: str | None) -> int:
+    import rr_task
+    mb_dir, ca_dir, schemes = paths()
+    mb_dir.mkdir(parents=True, exist_ok=True)
+    with connect() as conn:
+        if not rr_task.has_tables(conn):
+            print("no rr_* tables (migration 0010); nothing trained")
+            return 3
+        with conn.cursor() as cur:
+            cur.execute("SELECT max(date) FROM ohlcv_daily")
+            through = cur.fetchone()[0]
+        with tempfile.TemporaryDirectory(dir=mb_dir) as tmp:
+            return rr_task.train(conn, raw_from_pg(conn, through, Path(tmp)), ca_dir, schemes, Path(tmp), mb_dir, ack)
 
 
 def paper_seed(path: str) -> int:
@@ -253,19 +273,22 @@ def write_scores(conn, date: dt.date, rows: pl.DataFrame) -> None:
                 cp.write_row(r)
 
 
-def training_frame(raw: Raw, ca_dir: Path, schemes: Path, tmp: Path) -> tuple[pl.DataFrame, pl.DataFrame]:
+def training_frame(raw: Raw, ca_dir: Path, schemes: Path, tmp: Path, label_chunk=None, stride_n: int = TRAIN_STRIDE) -> tuple[pl.DataFrame, pl.DataFrame]:
     """build_dataset.py's dataset (variant b): stride-5 universe rows with a completed label, and the last
     session's universe rows. Labels first, then features, each in chunks spilled to ``tmp``; nothing kept
-    that training does not read (the worker shares an 8 GB VM)."""
+    that training does not read (the worker shares an 8 GB VM). ``label_chunk`` (bars chunk → instrument_id,
+    date, label) replaces the MB label for another model (PM11)."""
     bars, ins, idx = prepared(raw, ca_dir, schemes)
     raw.ohlcv = pl.DataFrame()
-    cfg = MultibaggerConfig(up=1.0, horizon=250)
-    status = raw.terminal.select("instrument_id", pl.col("status").alias("terminal"))
-    lb = bars.select("instrument_id", "date", "open", "high", "low", "close").join(status, on="instrument_id", how="left").with_columns(
-        pl.col("terminal").fill_null("alive"))
-    last_complete = lb["date"].unique().sort()[-(cfg.horizon + 1)]
+    lb = bars.select("instrument_id", "date", "open", "high", "low", "close")
+    if label_chunk is None:
+        cfg = MultibaggerConfig(up=1.0, horizon=250)
+        status = raw.terminal.select("instrument_id", pl.col("status").alias("terminal"))
+        lb = lb.join(status, on="instrument_id", how="left").with_columns(pl.col("terminal").fill_null("alive"))
+        last_complete = lb["date"].unique().sort()[-(cfg.horizon + 1)]
+        label_chunk = lambda ch: multibagger(ch, cfg, TERMINAL, last_complete).select("instrument_id", "date", "label")  # noqa: E731
     for i, ch in enumerate(P.chunks(lb, 12)):
-        multibagger(ch, cfg, TERMINAL, last_complete).select("instrument_id", "date", "label").write_parquet(tmp / f"l{i:02d}.parquet")
+        label_chunk(ch).write_parquet(tmp / f"l{i:02d}.parquet")
     del lb
     named = P.with_names(bars, ins)
     del bars
@@ -275,7 +298,7 @@ def training_frame(raw: Raw, ca_dir: Path, schemes: Path, tmp: Path) -> tuple[pl
     stride: list = []
 
     def keep(days: pl.Series) -> pl.Series:  # every fifth universe session, plus the last for the Spearman check
-        stride.append(days[::TRAIN_STRIDE])
+        stride.append(days[::stride_n])
         return pl.concat([stride[0], days[-1:]]).unique().sort()
 
     feat = P.finish_kept(pl.scan_parquet(str(tmp / "f*.parquet")), idx, keep)
@@ -346,6 +369,13 @@ def main(argv: list[str]) -> int:
         return paper_seed(rest[0])
     if cmd == "train":
         return train(opt("--ack"))
+    if cmd == "rr-train":
+        return rr_train(opt("--ack"))
+    if cmd == "rr-seed":
+        import rr_task
+        with connect() as conn:
+            print(f"rr_backtest: {rr_task.seed_backtest(conn)} rows")
+        return 0
     if cmd == "publish" and rest and opt("--ack"):
         with connect() as conn:
             return publish(conn, int(rest[0]), opt("--ack"))

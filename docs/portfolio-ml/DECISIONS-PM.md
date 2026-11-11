@@ -276,3 +276,11 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   2018, 2022 and 2024 stay negative. Sixteen index switches tested over PM10c–f; none passes 8/11 years. Conclusion:
   an index-trend switch raises the average trade and trims the worst losses but cannot remove this strategy's bad
   years; they begin before any index average turns. Not adopted.
+- **PM11** ⚠ UNREVIEWED Swing picks built from PM10f's ew_10_20_200 row, by Maulik's decision ("keep this and build the
+  model", 11 Nov 2026) although it failed the pre-set 8/11-years rule; the page says so. `rr_task.py` (run inside
+  `mb_task.py score`): XGBoost, research parameters, stride 3, label trail −7 % / 12 % h60 exit ≥ +14 %; switch on when
+  NIFTY500 Equal Weight (`index_snapshot_daily`, slug nifty500-equal-weight, matches the research series) closes above its
+  200-session average and its 10 over its 20; while on, the top 5 investable names not held become paper picks
+  (`rr_pick`), followed nightly by the same rule as `labels.trailing` (400/400 sampled exits identical). Migration 0010;
+  `GET /mb/swing`; web `/mb/swing`; retrains with the quarterly `mb.train` (auto-published, no Spearman hold — reverse
+  by adding one). Backtest numbers seeded from `rr_backtest.json` (PM10f output). Paper only; no order path.

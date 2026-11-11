@@ -15,6 +15,8 @@
 !machinelearning/python/research/portfolio-ml/portfolioml
 !machinelearning/python/research/portfolio-ml/mb_task.py
 !machinelearning/python/research/portfolio-ml/mb_paper.py
+!machinelearning/python/research/portfolio-ml/rr_task.py
+!machinelearning/python/research/portfolio-ml/rr_backtest.json
 !machinelearning/python/research/portfolio-ml/out/paper/seed.json
 !machinelearning/python/research/portfolio-ml/mb_run.sh
 !machinelearning/python/research/portfolio-ml/audit_moves.py

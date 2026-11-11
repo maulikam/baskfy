@@ -1,0 +1,113 @@
+{
+ "source": "PM10f explore_rr_regime.py, setup 'trail -7 / 12% h60', switch ew_10_20_200, model top 5 a day, 0.5% costs",
+ "rows": [
+  {
+   "period": "all",
+   "trades": 6475,
+   "net": 0.0125,
+   "win_rate": 0.3512,
+   "profit_factor": 1.3002,
+   "worst": -0.2404,
+   "on_share": 0.4939
+  },
+  {
+   "period": "2016",
+   "trades": 645,
+   "net": -0.009,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.5263
+  },
+  {
+   "period": "2017",
+   "trades": 950,
+   "net": 0.0307,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.7702
+  },
+  {
+   "period": "2018",
+   "trades": 175,
+   "net": -0.0437,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.1423
+  },
+  {
+   "period": "2019",
+   "trades": 120,
+   "net": -0.0439,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.098
+  },
+  {
+   "period": "2020",
+   "trades": 655,
+   "net": 0.0259,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.5198
+  },
+  {
+   "period": "2021",
+   "trades": 915,
+   "net": 0.0249,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.7379
+  },
+  {
+   "period": "2022",
+   "trades": 565,
+   "net": -0.0194,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.4556
+  },
+  {
+   "period": "2023",
+   "trades": 810,
+   "net": 0.0616,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.6585
+  },
+  {
+   "period": "2024",
+   "trades": 870,
+   "net": -0.0096,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.7068
+  },
+  {
+   "period": "2025",
+   "trades": 440,
+   "net": -0.0049,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.3534
+  },
+  {
+   "period": "2026",
+   "trades": 330,
+   "net": 0.008,
+   "win_rate": null,
+   "profit_factor": null,
+   "worst": null,
+   "on_share": 0.3679
+  }
+ ]
+}

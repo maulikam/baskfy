@@ -126,6 +126,10 @@ export const PAGES = {
     title: "Doubling candidates",
     blurb: "Which liquid names the model thinks most likely to double within a year, and how far to trust it.",
   },
+  "/mb/swing": {
+    title: "Swing picks",
+    blurb: "Five stocks a night the model rates most likely to run +14% under a trailing stop, only while the equal-weight NIFTY 500 trend is up.",
+  },
   "/mb/paper": {
     title: "Paper record · Doubling candidates",
     blurb: "The ranking held on paper each month, marked every session, against what the backtest said to expect.",

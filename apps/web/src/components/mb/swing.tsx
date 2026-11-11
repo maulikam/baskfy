@@ -1,6 +1,6 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FlagTip } from "@/components/mb/flag-tip";
-import { SWING_SCOPE } from "@/lib/mb/scores";
+import { SWING_SCOPE } from "@/lib/mb/flags";
 import {
   EMPTY_CELL,
   formatFraction,

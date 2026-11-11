@@ -3,11 +3,10 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 import { FlagTip } from "@/components/mb/flag-tip";
-import { MB_FLAGS, flagsOf } from "@/lib/mb/flags";
+import { MB_FLAGS, SWING_SCOPE, flagsOf } from "@/lib/mb/flags";
 import {
   EMPTY_MB_SCORES,
   type MbScores,
-  SWING_SCOPE,
   useMbScores,
 } from "@/lib/mb/scores";
 

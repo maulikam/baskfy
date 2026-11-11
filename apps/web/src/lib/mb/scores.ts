@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { accessToken } from "@/lib/api/browser";
 import { apiOrigin } from "@/lib/api/config";
-import type { MbVerdict } from "@/lib/mb/flags";
+import type { MbVerdict, SwingScope } from "@/lib/mb/flags";
 
 /**
  * The model's verdict for the stocks a Build table shows (PM7, Maulik 11 Nov 2026): one request per
@@ -18,32 +18,6 @@ export interface MbScores {
   /** PM11: the swing-picks model's verdicts, from its own newest session. */
   swing: SwingScores;
 }
-
-export type SwingScope = "universe" | "quarantine" | "young" | "sme" | "cheap" | "thin";
-
-/** PM11.1: why a swing score is outside the model's training universe (it is still scored, never picked). */
-export const SWING_SCOPE: Record<Exclude<SwingScope, "universe">, { label: string; meaning: string }> = {
-  quarantine: {
-    label: "Recent price jump",
-    meaning: "Within 60 sessions of a one-day move over 60% (usually a split or bonus). Scored, but less reliable and never picked.",
-  },
-  young: {
-    label: "Young listing",
-    meaning: "Under 260 sessions of history, so the one-year inputs are missing. Scored, but less reliable and never picked.",
-  },
-  sme: {
-    label: "SME or special series",
-    meaning: "Not in the EQ/BE/BZ series the model was trained on. Scored, but less reliable and never picked.",
-  },
-  cheap: {
-    label: "Under ₹20",
-    meaning: "Below the model's training floor of ₹20. Scored, but less reliable and never picked.",
-  },
-  thin: {
-    label: "Thinly traded",
-    meaning: "Under ₹2 cr traded a day, below the model's training floor. Scored, but less reliable and never picked.",
-  },
-};
 
 export interface SwingVerdict {
   rank: number;

@@ -284,3 +284,9 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   (`rr_pick`), followed nightly by the same rule as `labels.trailing` (400/400 sampled exits identical). Migration 0010;
   `GET /mb/swing`; web `/mb/swing`; retrains with the quarterly `mb.train` (auto-published, no Spearman hold — reverse
   by adding one). Backtest numbers seeded from `rr_backtest.json` (PM10f output). Paper only; no order path.
+- **PM11.1** ⚠ UNREVIEWED The swing model scores every equity of the session, not only its training universe (Maulik:
+  "fix this so the model can predict"; 11 Nov 2026 the universe held 1,221 of 4,249 names). ETFs and non-EQ
+  instruments stay unscored. `rr_score_daily.scope` (migration 0011) names the first reason a row is outside:
+  quarantine, young (< 260 sessions), sme (series not EQ/BE/BZ), cheap (< ₹20), thin (< ₹2 cr a day); those scores are
+  extrapolation, shown grey with a ◌ flag. Picks still come only from universe ∧ investable rows, so the backtest
+  still describes them. Rank is over every scored row. The doubling model is unchanged.

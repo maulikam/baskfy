@@ -507,7 +507,7 @@ pub async fn get_lookup(
                 .map_err(db)?;
         swing_on = on.map_or(J::Null, J::Bool);
         let rows = sqlx::query(
-            "SELECT i.symbol, s.rank, s.score, s.universe_n, s.investable, \
+            "SELECT i.symbol, s.rank, s.score, s.universe_n, s.investable, s.scope, \
              EXISTS (SELECT 1 FROM rr_pick p WHERE p.signal_date = s.date AND p.instrument_id = s.instrument_id) AS picked \
              FROM rr_score_daily s JOIN instrument i ON i.id = s.instrument_id \
              WHERE s.date = $1 AND i.symbol = ANY($2)",
@@ -526,6 +526,7 @@ pub async fn get_lookup(
                     .put("score", J::Dec(dec(r, "score")?))
                     .put("investable", J::Bool(col(r, "investable")?))
                     .put("picked", J::Bool(col(r, "picked")?))
+                    .put("scope", J::Str(col(r, "scope")?))
                     .done(),
             );
         }
@@ -662,7 +663,7 @@ pub async fn get_swing(
     let mut counts = (0_i64, 0_i64);
     if let Some(day) = as_of {
         let rows = sqlx::query(
-            "SELECT s.rank, s.instrument_id, i.symbol, i.name, sec.sector, s.score, s.investable, s.close_raw \
+            "SELECT s.rank, s.instrument_id, i.symbol, i.name, sec.sector, s.score, s.investable, s.close_raw, s.scope \
              FROM rr_score_daily s JOIN instrument i ON i.id = s.instrument_id \
              LEFT JOIN instrument_sector sec ON sec.instrument_id = s.instrument_id \
              WHERE s.date = $1 AND ($2 OR s.investable) ORDER BY s.rank LIMIT $3",
@@ -684,11 +685,12 @@ pub async fn get_swing(
                     .put("score", J::Dec(dec(r, "score")?))
                     .put("investable", J::Bool(col(r, "investable")?))
                     .put("close", J::opt_dec(odec(r, "close_raw")?))
+                    .put("scope", J::Str(col(r, "scope")?))
                     .done(),
             );
         }
         counts = sqlx::query_as(
-            "SELECT count(*), count(*) FILTER (WHERE investable) FROM rr_score_daily WHERE date = $1",
+            "SELECT count(*), count(*) FILTER (WHERE investable AND scope = 'universe') FROM rr_score_daily WHERE date = $1",
         )
         .bind(day)
         .fetch_one(pool)

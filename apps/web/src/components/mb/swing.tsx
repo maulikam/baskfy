@@ -1,5 +1,6 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FlagTip } from "@/components/mb/flag-tip";
+import { SWING_SCOPE } from "@/lib/mb/scores";
 import {
   EMPTY_CELL,
   formatFraction,
@@ -383,7 +384,7 @@ function Ranking({ names }: { names: readonly MbSwingName[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-[40rem] border-collapse text-sm" data-testid="swing-ranking">
-        <Head cols={["Rank", "Stock", "Score", "Close", "Sector", "Liquid"]} />
+        <Head cols={["Rank", "Stock", "Score", "Close", "Sector", "Can be picked"]} />
         <tbody>
           {names.map((n) => (
             <tr key={n.instrument_id} className="border-b border-border/40 tabular-nums">
@@ -395,7 +396,9 @@ function Ranking({ names }: { names: readonly MbSwingName[] }) {
               <td className={TD}>{rupees(n.close)}</td>
               <td className={`${TD} text-muted-foreground`}>{n.sector ?? EMPTY_CELL}</td>
               <td className={TD}>
-                {n.investable ? (
+                {n.scope !== "universe" ? (
+                  <FlagTip label={SWING_SCOPE[n.scope].label} meaning={SWING_SCOPE[n.scope].meaning} className="text-amber-600 dark:text-amber-400">◌</FlagTip>
+                ) : n.investable ? (
                   <FlagTip label="Investable" meaning="Close at least ₹50 and at least ₹5 cr traded a day: can become a pick." className="text-emerald-600 dark:text-emerald-400">●</FlagTip>
                 ) : (
                   <FlagTip label="Not investable" meaning="Close under ₹50 or under ₹5 cr traded a day: scored, but never picked." className="text-red-600 dark:text-red-400">✗</FlagTip>
@@ -441,7 +444,7 @@ export function MbSwingPanel({ data }: { data: MbSwing | null }) {
       </section>
       <Section
         id="swing-rank-h"
-        title={`The model's top ${data.names.length} · ${data.investable_n} liquid of ${data.universe_n} scored`}
+        title={`The model's top ${data.names.length} · ${data.investable_n} can be picked of ${data.universe_n} scored`}
       >
         <Ranking names={data.names} />
       </Section>

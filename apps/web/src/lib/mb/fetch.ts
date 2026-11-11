@@ -190,6 +190,8 @@ export interface MbSwingName {
   score: string;
   investable: boolean;
   close: string | null;
+  /** PM11.1: "universe", or why the row is outside it (scored, never picked). */
+  scope: "universe" | "quarantine" | "young" | "sme" | "cheap" | "thin";
 }
 
 export interface MbSwingSwitch {

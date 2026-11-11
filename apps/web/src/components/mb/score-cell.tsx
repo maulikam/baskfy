@@ -4,7 +4,12 @@ import { createContext, useContext, type ReactNode } from "react";
 
 import { FlagTip } from "@/components/mb/flag-tip";
 import { MB_FLAGS, flagsOf } from "@/lib/mb/flags";
-import { EMPTY_MB_SCORES, type MbScores, useMbScores } from "@/lib/mb/scores";
+import {
+  EMPTY_MB_SCORES,
+  type MbScores,
+  SWING_SCOPE,
+  useMbScores,
+} from "@/lib/mb/scores";
 
 const MbScoresContext = createContext<MbScores>(EMPTY_MB_SCORES);
 const SYMBOL = Object.fromEntries(MB_FLAGS.map((f) => [f.key, f]));
@@ -52,10 +57,26 @@ export function SwingScoreValue({ symbol }: { symbol: string }) {
       <span data-testid="swing-score-cell">
         <FlagTip
           label="Not scored"
-          meaning="The swing model scored no row for this stock tonight (outside its universe, or too little history)."
+          meaning="The swing model has no price row for this stock tonight: not an ordinary equity share (an ETF, bond or other instrument), or no trade today."
           className="text-slate-400"
         >
           ⊘
+        </FlagTip>
+      </span>
+    );
+  const out = v.scope && v.scope !== "universe" ? SWING_SCOPE[v.scope] : null;
+  if (out)
+    return (
+      <span className="whitespace-nowrap tabular-nums" data-testid="swing-score-cell">
+        <FlagTip
+          label={`Swing score ${v.score} · rank ${v.rank}${swing.universeN ? ` of ${swing.universeN}` : ""}`}
+          meaning={`Outside the model's training range: ${out.label.toLowerCase()}. Read it as a rough guide only.`}
+          className="text-muted-foreground"
+        >
+          {Number(v.score).toFixed(3)}
+        </FlagTip>
+        <FlagTip label={out.label} meaning={out.meaning} className="ml-1 text-amber-600 dark:text-amber-400">
+          ◌
         </FlagTip>
       </span>
     );

@@ -16,10 +16,11 @@ import numpy as np
 import polars as pl
 
 from portfolioml import pipeline as P
-from portfolioml.features import ALL_FEATURES
+from portfolioml.features import ALL_FEATURES, UniverseConfig
 from portfolioml.labels import TrailConfig, trailing
 
 HERE = Path(__file__).resolve().parent
+UCFG = UniverseConfig()
 CFG = TrailConfig(stop=0.07, trail=0.12, horizon=60)
 LABEL = "trail_7_12_h60_gain_14"
 TOP_N, STRIDE = 5, 3
@@ -135,6 +136,26 @@ def refresh(conn, bars: pl.DataFrame, through: dt.date) -> int:
     return len(todo)
 
 
+SCOPES = ("quarantine", "young", "sme", "cheap", "thin")  # first reason that applies, in this order
+
+
+def scoped(day: pl.DataFrame, ins: pl.DataFrame) -> pl.DataFrame:
+    """PM11.1: every equity of the session (ETFs and non-equity left out), with why it is outside the training universe."""
+    kind = ins.select("instrument_id", "instrument_type", "series")
+    d = day.join(kind, on="instrument_id", how="left")
+    main = pl.col("series").is_in(["EQ", "BE", "BZ"])
+    etf = (pl.col("instrument_type") == "EQ") & main & ~pl.col("eligible")
+    d = d.filter((pl.col("instrument_type") == "EQ") & ~etf)
+    u = UCFG
+    return d.with_columns(
+        pl.when(pl.col("universe")).then(pl.lit("universe"))
+        .when(pl.col("near_sus_gap")).then(pl.lit("quarantine"))
+        .when(pl.col("n_hist") < u.min_history).then(pl.lit("young"))
+        .when(~main).then(pl.lit("sme"))
+        .when(pl.col("close_raw") < u.min_close_raw).then(pl.lit("cheap"))
+        .otherwise(pl.lit("thin")).alias("scope"))
+
+
 def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, date: dt.date) -> str:
     """Score one session, write the switch, follow open picks, then add tonight's picks (idempotent for the date)."""
     model = published(conn)
@@ -144,14 +165,14 @@ def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, da
     write_gate(conn, gate)
     cut = bars.filter(pl.col("date") <= date)
     feat = P.tail_features(cut, ins, idx.filter(pl.col("date") <= date))
-    day = feat.filter((pl.col("date") == date) & pl.col("universe"))
+    day = scoped(feat.filter(pl.col("date") == date), ins)
     p = classifier(model[1], model[2]).inplace_predict(clean(day.select(ALL_FEATURES).to_numpy()))
     day = day.with_columns(pl.Series("score", p, dtype=pl.Float64).round(6)).sort(["score", "instrument_id"], descending=[True, False])
     day = day.with_columns(pl.int_range(1, pl.len() + 1).alias("rank"), pl.lit(day.height).alias("universe_n"),
                            ((pl.col("close_raw") >= INVESTABLE_CLOSE) & (pl.col("turnover20") >= INVESTABLE_TURNOVER)).alias("investable"),
                            pl.col("close_raw").round(2))
     rows = day.select(pl.lit(date).alias("date"), "instrument_id", pl.lit(model[0]).alias("model_id"), "score", "rank", "universe_n",
-                      "investable", "close_raw")
+                      "investable", "close_raw", "scope")
     with conn.transaction(), conn.cursor() as cur:
         cur.execute("DELETE FROM rr_score_daily WHERE date = %s", (date,))
         with cur.copy(f"COPY rr_score_daily ({', '.join(rows.columns)}) FROM STDIN") as cp:
@@ -166,14 +187,15 @@ def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, da
         if on:
             cur.execute("SELECT instrument_id FROM rr_pick WHERE signal_date < %s AND (status <> 'closed' OR exit_date >= %s)", (date, date))
             held = {r[0] for r in cur.fetchall()}
-            for iid, score in rows.filter(pl.col("investable")).select("instrument_id", "score").iter_rows():
+            for iid, score in rows.filter(pl.col("investable") & (pl.col("scope") == "universe")).select("instrument_id", "score").iter_rows():
                 if len(picks) == TOP_N:
                     break
                 if iid not in held:
                     picks.append((date, iid, model[0], len(picks) + 1, score, "waiting"))
             cur.executemany("INSERT INTO rr_pick (signal_date, instrument_id, model_id, pick_rank, score, status) VALUES (%s,%s,%s,%s,%s,%s)", picks)
+    n_in = rows.filter(pl.col("scope") == "universe").height
     state = "no switch row" if g.is_empty() else ("ON" if on else "off")
-    return f"rr_score_daily {date}: {rows.height} names, model {model[0]}, switch {state}, picks {len(picks)}"
+    return f"rr_score_daily {date}: {rows.height} names ({n_in} in the universe), model {model[0]}, switch {state}, picks {len(picks)}"
 
 
 # ---- training and the backtest record --------------------------------------------------------------------------------

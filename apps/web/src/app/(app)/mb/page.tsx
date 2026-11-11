@@ -23,23 +23,39 @@ export const metadata: Metadata = {
 };
 
 export default async function MbPage() {
-  const [today, me] = await Promise.all([fetchMbToday(), fetchMe()]);
+  const [ranked, investable, me] = await Promise.all([
+    fetchMbToday({ all: true }),
+    fetchMbToday(),
+    fetchMe(),
+  ]);
+  const today = ranked ?? investable;
   const asOf = today?.as_of ?? null;
   return (
     <div className="space-y-8">
       <PageHeader
         title={PAGES["/mb"].title}
         blurb={PAGES["/mb"].blurb}
-        meta={asOf ? <span data-testid="mb-as-of">Closes of {formatTradeDate(asOf)}</span> : null}
+        meta={
+          asOf ? (
+            <span data-testid="mb-as-of">
+              Closes of {formatTradeDate(asOf)}
+            </span>
+          ) : null
+        }
       />
       <SectionTabs section="mb" />
       <section aria-labelledby="mb-list-heading" className="space-y-3">
-        <h2 id="mb-list-heading" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-          Top 50 investable names
+        <h2
+          id="mb-list-heading"
+          className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
+        >
+          The model's top 50
         </h2>
         <MbRanking names={today?.names ?? []} asOf={asOf} />
       </section>
-      {me?.is_staff ? <MbDeskWatchlist names={today?.names ?? []} asOf={asOf} /> : null}
+      {me?.is_staff ? (
+        <MbDeskWatchlist names={investable?.names ?? []} asOf={asOf} />
+      ) : null}
       <MbWhatThisIs model={today?.model ?? null} />
     </div>
   );

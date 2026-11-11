@@ -1,8 +1,14 @@
 import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
-import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
-import { SleeveUnavailableError, sleeveUnavailable } from "@/lib/api/sleeve-read";
+import {
+  ServerFetchTimeoutError,
+  serverFetchJson,
+} from "@/lib/api/server-fetch";
+import {
+  SleeveUnavailableError,
+  sleeveUnavailable,
+} from "@/lib/api/sleeve-read";
 import { auth } from "@/lib/auth";
 
 /**
@@ -56,11 +62,15 @@ export interface MbToday {
   names: readonly MbName[];
 }
 
-async function readJson(path: string, search: Record<string, string> = {}): Promise<unknown> {
+async function readJson(
+  path: string,
+  search: Record<string, string> = {},
+): Promise<unknown> {
   const session = await auth();
   const token = session?.accessToken;
   const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
-  for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(search))
+    url.searchParams.set(key, value);
   try {
     return await serverFetchJson({
       url: url.toString(),
@@ -73,12 +83,18 @@ async function readJson(path: string, search: Record<string, string> = {}): Prom
     }
     // A refusal, a degraded deployment and a 500 are not "nothing scored yet" (sleeve-read C7).
     const unavailable = sleeveUnavailable(error);
-    if (unavailable !== null) throw new SleeveUnavailableError(path, unavailable);
-    throw new MbUnavailable(error instanceof Error ? error.message : `${path} unavailable`);
+    if (unavailable !== null)
+      throw new SleeveUnavailableError(path, unavailable);
+    throw new MbUnavailable(
+      error instanceof Error ? error.message : `${path} unavailable`,
+    );
   }
 }
 
-async function readOrNull<T>(path: string, search: Record<string, string> = {}): Promise<T | null> {
+async function readOrNull<T>(
+  path: string,
+  search: Record<string, string> = {},
+): Promise<T | null> {
   try {
     return (await readJson(path, search)) as T;
   } catch (error) {
@@ -87,8 +103,14 @@ async function readOrNull<T>(path: string, search: Record<string, string> = {}):
   }
 }
 
-export async function fetchMbToday(date?: string): Promise<MbToday | null> {
-  return readOrNull<MbToday>("/mb/today", date ? { date } : {});
+/** `all`: the model's top 50 as ranked; otherwise the top 50 investable names. */
+export async function fetchMbToday(
+  options: { date?: string; all?: boolean } = {},
+): Promise<MbToday | null> {
+  const search: Record<string, string> = {};
+  if (options.date) search.date = options.date;
+  if (options.all) search.all = "true";
+  return readOrNull<MbToday>("/mb/today", search);
 }
 
 /** PM8: one paper book's marks, summarised. `source` "backtest" is the seeded walk-forward history. */

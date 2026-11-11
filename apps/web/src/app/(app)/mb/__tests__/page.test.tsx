@@ -27,6 +27,12 @@ const today: MbToday = {
       ttm_rev_yoy_fraction: "-0.5123", ttm_pat_yoy_fraction: null,
     },
     {
+      rank: 2, instrument_id: 9001, symbol: "IMAGICAA", name: null, sector: null, score: "0.600000",
+      investable: false, hi63_trigger: false, hi63_trigger_date: null, close: "43.41",
+      turnover20: "23500000.00", r252_fraction: "0.1000", dist_ath_fraction: "-0.5000", sessions_listed: 120,
+      ttm_rev_yoy_fraction: null, ttm_pat_yoy_fraction: null,
+    },
+    {
       rank: 3, instrument_id: 1673, symbol: "MANAKCOAT", name: null, sector: null, score: "0.560223",
       investable: true, hi63_trigger: true, hi63_trigger_date: "2026-11-09", close: "163.20",
       turnover20: "87429032.00", r252_fraction: "0.0706", dist_ath_fraction: "-0.1070", sessions_listed: 2630,
@@ -46,13 +52,22 @@ describe("/mb", () => {
     await renderPage(today);
     expect(screen.getByTestId("mb-as-of").textContent).toBe("Closes of 9 Nov 2026");
     const rows = screen.getAllByTestId("mb-row");
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(within(rows[0] as HTMLElement).getByText("SALSTEEL")).toBeTruthy();
     expect(within(rows[0] as HTMLElement).getByText("369%")).toBeTruthy();
-    expect(within(rows[1] as HTMLElement).getByTestId("mb-hi63").textContent).toBe("9 Nov 2026");
-    expect(rows.map((r) => within(r).getByTestId("mb-rank").textContent)).toEqual(["1", "2"]);
-    expect(rows.map((r) => within(r).getByTestId("mb-overall").textContent)).toEqual(["1", "3"]);
+    expect(within(rows[2] as HTMLElement).getByTestId("mb-hi63").textContent).toBe("9 Nov 2026");
+    expect(rows.map((r) => within(r).getByTestId("mb-rank").textContent)).toEqual(["1", "2", "3"]);
     expect(document.body.textContent?.toLowerCase()).not.toContain("live");
+  });
+
+  it("flags every name instead of hiding any, with a key above the list", async () => {
+    await renderPage(today);
+    const flags = screen.getAllByTestId("mb-flags").map((f) => f.textContent);
+    expect(flags).toEqual(["●", "₹◌✱∅", "●▲"]);
+    const key = screen.getByTestId("mb-flag-key").textContent ?? "";
+    for (const word of ["Investable", "Low price", "Thinly traded", "63-day high", "New listing", "No results on file"]) {
+      expect(key).toContain(word);
+    }
   });
 
   it("states the honest numbers and the failures beside the list", async () => {

@@ -6,6 +6,9 @@ import {
   formatTradeDate,
 } from "@/lib/format";
 import type { MbName } from "@/lib/mb/fetch";
+import { MB_FLAGS, flagsOf } from "@/lib/mb/flags";
+
+const SYMBOL = Object.fromEntries(MB_FLAGS.map((f) => [f.key, f]));
 
 const SESSIONS_A_YEAR = 250;
 
@@ -42,21 +45,28 @@ export function MbRanking({
   if (names.length === 0) {
     return (
       <p className="text-sm text-muted-foreground" data-testid="mb-empty">
-        No investable name was scored on {formatTradeDate(asOf)}.
+        No name was scored on {formatTradeDate(asOf)}.
       </p>
     );
   }
   return (
     <div className="space-y-2">
-      <p
-        className="max-w-[80ch] text-xs text-muted-foreground"
-        data-testid="mb-rank-note"
+      <dl
+        className="grid max-w-[90ch] gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2"
+        data-testid="mb-flag-key"
       >
-        Rank counts investable names only: a close of at least ₹50 and at least
-        ₹5 cr traded a day, the floor the backtest bought at. Overall is the
-        model&rsquo;s rank among every name it scored; the gaps are names under
-        that floor, which it often likes and the book never buys.
-      </p>
+        {MB_FLAGS.map((f) => (
+          <div key={f.key} className="flex gap-2">
+            <dt className="w-5 shrink-0 text-center text-sm text-foreground">
+              {f.symbol}
+            </dt>
+            <dd>
+              <span className="font-medium text-foreground">{f.label}.</span>{" "}
+              {f.meaning}
+            </dd>
+          </div>
+        ))}
+      </dl>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[64rem] border-collapse text-sm">
           <caption className="sr-only">
@@ -67,8 +77,8 @@ export function MbRanking({
             <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
               {[
                 "Rank",
-                "Overall",
                 "Stock",
+                "Flags",
                 "Sector",
                 "Close",
                 "Traded a day",
@@ -87,31 +97,32 @@ export function MbRanking({
             </tr>
           </thead>
           <tbody>
-            {names.map((n, k) => (
+            {names.map((n) => (
               <tr
                 key={n.instrument_id}
                 className="border-b border-border/40"
                 data-testid="mb-row"
               >
                 <td className="py-2 pr-3 tabular-nums" data-testid="mb-rank">
-                  {k + 1}
-                </td>
-                <td
-                  className="py-2 pr-3 tabular-nums text-muted-foreground"
-                  data-testid="mb-overall"
-                >
                   {n.rank}
                 </td>
                 <td className="py-2 pr-3">
                   <InstrumentLink symbol={n.symbol} flag={false} />
-                  {n.investable ? null : (
+                </td>
+                <td
+                  className="py-2 pr-3 whitespace-nowrap"
+                  data-testid="mb-flags"
+                >
+                  {flagsOf(n).map((k) => (
                     <span
-                      className="ml-1.5 text-xs text-muted-foreground"
-                      title="Under ₹50 or under ₹5 cr a day"
+                      key={k}
+                      className="mr-1.5"
+                      title={`${SYMBOL[k]?.label}: ${SYMBOL[k]?.meaning}`}
+                      aria-label={SYMBOL[k]?.label}
                     >
-                      not investable
+                      {SYMBOL[k]?.symbol}
                     </span>
-                  )}
+                  ))}
                 </td>
                 <td className="py-2 pr-3 text-muted-foreground">
                   {n.sector ?? EMPTY_CELL}

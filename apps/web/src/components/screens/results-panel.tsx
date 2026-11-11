@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import {
   MbScoresProvider,
   MbScoreValue,
+  SwingScoreHeadLink,
   SwingScoreValue,
 } from "@/components/mb/score-cell";
 import type { ScreenDefinition, ScreenRunResponse } from "@baskfy/api-client";
@@ -401,7 +402,7 @@ const MB_COLUMN: ColumnDef<ResultRow, unknown> = {
 /** PM11: the swing-picks model's score, right after the doubling model's. */
 const SWING_COLUMN: ColumnDef<ResultRow, unknown> = {
   id: "swing_model",
-  header: "Swing",
+  header: () => <SwingScoreHeadLink />,
   size: 90,
   enableSorting: false,
   cell: (info) => <SwingScoreValue symbol={symbolOf(info.row.original)} />,

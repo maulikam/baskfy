@@ -130,3 +130,40 @@ def multibagger(bars: pl.DataFrame, cfg: MultibaggerConfig = MultibaggerConfig()
         pl.when(dead & written_off).then(pl.lit(-1.0)).when(dead).then(worst / entered - 1).otherwise(pl.col("fwd_min_ret")).alias("fwd_min_ret"),
         pl.when(dead & written_off).then(pl.lit(-1.0)).when(dead).then(worst_close / entered - 1).otherwise(pl.col("fwd_min_close_ret")).alias("fwd_min_close_ret"),
     )
+
+
+@dataclass(frozen=True)
+class TrailConfig:
+    stop: float = 0.05  # initial stop below the entry
+    trail: float = 0.10  # exit this far below the highest high since entry
+    horizon: int = 40  # sessions; still open then, sold at that close
+
+
+def trailing(bars: pl.DataFrame, cfg: TrailConfig = TrailConfig()) -> pl.DataFrame:
+    """Entry at the next open; out at the first low under max(initial stop, trail below the highest high of the
+    sessions *before* this one), filled at that level or the open if it gapped through; else the horizon's close.
+    Adds entry_px, exit_k, exit_ret; null where the horizon runs past the data."""
+    g = pl.col("instrument_id")
+    entry = pl.col("open").shift(-1).over(g)
+    floor = entry * (1 - cfg.stop)
+    level, hit_k, fill = floor, None, None
+    peak = None
+    for k in range(1, cfg.horizon + 1):
+        if k > 1:
+            hk = pl.col("high").shift(-(k - 1)).over(g)
+            peak = hk if peak is None else pl.max_horizontal(peak, hk)
+            level = pl.max_horizontal(floor, peak * (1 - cfg.trail))
+        lo, op = pl.col("low").shift(-k).over(g), pl.col("open").shift(-k).over(g)
+        hit = lo <= level
+        px = pl.min_horizontal(level, op)
+        hit_k = pl.when(hit).then(pl.lit(k)) if hit_k is None else hit_k.when(hit).then(pl.lit(k))
+        fill = pl.when(hit).then(px) if fill is None else fill.when(hit).then(px)
+    close_h = pl.col("close").shift(-cfg.horizon).over(g)
+    complete = close_h.is_not_null() & entry.is_not_null()
+    k_exit = hit_k.otherwise(pl.lit(cfg.horizon))
+    px_exit = fill.otherwise(close_h)
+    return bars.with_columns(
+        entry.alias("entry_px"),
+        pl.when(complete).then(k_exit).alias("exit_k"),
+        pl.when(complete).then(px_exit / entry - 1).alias("exit_ret"),
+    )

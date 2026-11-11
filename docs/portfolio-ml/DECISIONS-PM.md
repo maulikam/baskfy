@@ -235,3 +235,15 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   (gap through the stop). Hit rates of 15–19 % sit below the ~21 % a +15/−4 trade needs. Top features are volatility
   (vol60, ATR) and market state: it finds names that move a lot, both ways. Same verdict as STRATEGY §2. Not adopted;
   nothing reaches the product. XGBoost added to the research requirements only.
+- **PM10b** ⚠ UNREVIEWED Payoff-first swing setups (Maulik, 11 Nov 2026: small losses, larger winners).
+  `explore_rr_swing.py`, `out/rr_swing/`; new pure label `labels.trailing` (initial stop, trail under the prior
+  sessions' highest high, gap fills at the open). Eight setups, XGBoost walk-forward 2016–2026 as PM10a, target "made
+  2× its initial risk" (fixed: hit the target). Every row reported in `summary.csv`. The design works as designed:
+  payoff 2.2–3.5 at 22–34 % win rates. Net per trade, model top 5 / top 10 / every investable entry (no model):
+  fixed −3/+15 h20 +0.02 / −0.03 / −0.41 %; −4/+20 h30 +0.18 / +0.06 / −0.21; −5/+20 h30 +0.20 / +0.05 / −0.15;
+  −5/+25 h40 +0.33 / +0.30 / +0.04; −7/+25 h40 +0.56 / +0.44 / +0.23; trail −4/8 % h30 +0.25 / +0.11 / −0.30;
+  trail −5/10 % h40 +0.41 / +0.30 / −0.13; trail −7/12 % h60 +0.85 / +0.57 / +0.25 (PF 1.20 / 1.13, 6 of 11 years).
+  The model adds +0.3 to +0.6 points a trade over random entry in every setup; most of what makes the wide setups
+  positive is the market's own drift, and every setup loses in 2018, 2024 and 2025 with the universe. Worst single
+  trades −28 % to −67 % (gaps through the stop). Not adopted; candidate next test: the same setups with a market
+  regime gate fixed in advance.

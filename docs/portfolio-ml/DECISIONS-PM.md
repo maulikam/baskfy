@@ -224,3 +224,14 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   published without MB scores. A missed night heals within an hour of the laptop being awake. The 06:45 entry and
   the Kite-login trigger stay. Reverse: delete the two Beat entries. Not solved by software: a closed laptop runs
   nothing; a scheduled wake (`pmset`) or an always-on host is Maulik's call.
+- **PM10a** ⚠ UNREVIEWED Swing label with XGBoost (Maulik, 11 Nov 2026: "stocks that might go more than 15% before going
+  down 4% in the next 10 to 15 days"). `explore_xgb_swing.py`, `out/xgb_swing/`. Triple barrier +15 % / −4 % at 15 and 10
+  sessions (entry next open, a gapped stop fills at the open), same 95 price features, walk-forward 2016–2026 (every
+  third session, purged by horizon + 1), fixed parameters, XGBoost and LightGBM on identical rows (inf → missing for
+  both). Trades: each session's top 5/10/20 investable names, never a name still held, 0.5 % round trip.
+  Ranking is real: AUC 0.63 (15 sessions) and 0.67 (10), base rate 12.1 % and 8.6 %; XGBoost and LightGBM within
+  0.003. Trades do not pay: pooled net per trade −0.09 % to −0.41 % in all 12 rows (best: XGBoost top-5, 15 sessions,
+  hit 19.3 %, gross +0.41 %, net −0.09 %); 3–5 of 11 years positive; about 70 % of trades stopped; worst −66 %
+  (gap through the stop). Hit rates of 15–19 % sit below the ~21 % a +15/−4 trade needs. Top features are volatility
+  (vol60, ATR) and market state: it finds names that move a lot, both ways. Same verdict as STRATEGY §2. Not adopted;
+  nothing reaches the product. XGBoost added to the research requirements only.

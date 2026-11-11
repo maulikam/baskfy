@@ -4,3 +4,4 @@ pyarrow>=17
 lightgbm>=4.5
 scikit-learn>=1.5
 pytest>=8
+xgboost>=3.1

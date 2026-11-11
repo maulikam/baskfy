@@ -39,7 +39,7 @@ export function MbScoreHead({
     <th
       scope="col"
       className={className}
-      title={`The doubling model's rank among every name it scored. ${title}`}
+      title={`The doubling model's score: higher is likelier to double within a year; hover a value for its rank. ${title}`}
     >
       <a href="/mb" className="underline decoration-dotted underline-offset-2">
         Model
@@ -60,17 +60,14 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
     >
       {v ? (
         <span
-          title={`Score ${v.score}`}
+          title={`Rank ${v.rank}${universeN ? ` of ${universeN}` : ""} · score ${v.score}`}
           className={
             v.investable
               ? "font-medium text-emerald-600 dark:text-emerald-400"
               : undefined
           }
         >
-          {v.rank}
-          {universeN ? (
-            <span className="text-xs text-muted-foreground">/{universeN}</span>
-          ) : null}
+          {Number(v.score).toFixed(3)}
         </span>
       ) : null}
       {flagsOf(v).map((k) => (

@@ -75,7 +75,7 @@ function columns(status: DataStatus) {
         <a
           href="/mb"
           className="underline decoration-dotted underline-offset-2"
-          title="The doubling model's rank among every name it scored, with its flags"
+          title="The doubling model's score (higher is likelier to double within a year) and its flags"
         >
           Model
         </a>

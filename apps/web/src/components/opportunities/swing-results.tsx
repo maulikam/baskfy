@@ -12,7 +12,12 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 
-import { MbScoresProvider, MbScoreValue } from "@/components/mb/score-cell";
+import {
+  MbScoresProvider,
+  MbScoreValue,
+  SwingScoreHeadLink,
+  SwingScoreValue,
+} from "@/components/mb/score-cell";
 import { SwingBuyButton } from "@/components/opportunities/buy-panel";
 import { MultiBuyButton } from "@/components/opportunities/multi-buy";
 import { SortableHeader } from "@/components/opportunities/sortable-header";
@@ -81,6 +86,11 @@ function columns(status: DataStatus) {
         </a>
       ),
       cell: ({ row }) => <MbScoreValue symbol={row.original.symbol} />,
+    }),
+    column.display({
+      id: "swing_model",
+      header: () => <SwingScoreHeadLink />,
+      cell: ({ row }) => <SwingScoreValue symbol={row.original.symbol} />,
     }),
     column.display({
       id: "select",

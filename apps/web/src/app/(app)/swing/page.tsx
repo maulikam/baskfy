@@ -220,7 +220,7 @@ function SetupTable({
           </thead>
           <tbody>
             <RegimeRows
-              colSpan={16}
+              colSpan={17}
               rows={rows.map((row) => {
                 const watch = watched.get(row.instrument_id);
                 const bars = charts.get(row.instrument_id);

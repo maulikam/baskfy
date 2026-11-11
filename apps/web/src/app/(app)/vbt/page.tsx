@@ -133,7 +133,7 @@ function CandidateTable({
           </thead>
           <tbody>
             <RegimeRows
-              colSpan={14}
+              colSpan={15}
               rows={rows.map((row) => ({
                 key: String(row.instrument_id),
                 signal: row.regime_signal,
@@ -288,7 +288,7 @@ function RejectTable({
               </thead>
               <tbody className="divide-y divide-border/60">
                 <RegimeRows
-                  colSpan={6}
+                  colSpan={7}
                   rows={rows.map((row) => ({
                     key: String(row.instrument_id),
                     signal: row.regime_signal,

@@ -2,7 +2,11 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { MbScoresProvider, MbScoreValue } from "@/components/mb/score-cell";
+import {
+  MbScoresProvider,
+  MbScoreValue,
+  SwingScoreValue,
+} from "@/components/mb/score-cell";
 import type { ScreenDefinition, ScreenRunResponse } from "@baskfy/api-client";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
@@ -160,7 +164,7 @@ function ScreenResultsTable({
     <MbScoresProvider symbols={rows.map((row) => symbolOf(row))}>
       <DataTable
         data={rows}
-        columns={[MB_COLUMN, ...columns]}
+        columns={[MB_COLUMN, SWING_COLUMN, ...columns]}
         label={`Screen results, ${count} rows`}
         density={density}
         loading={loading}
@@ -392,6 +396,15 @@ const MB_COLUMN: ColumnDef<ResultRow, unknown> = {
   cell: (info) => (
     <MbScoreValue symbol={symbolOf(info.row.original)} />
   ),
+};
+
+/** PM11: the swing-picks model's score, right after the doubling model's. */
+const SWING_COLUMN: ColumnDef<ResultRow, unknown> = {
+  id: "swing_model",
+  header: "Swing",
+  size: 90,
+  enableSorting: false,
+  cell: (info) => <SwingScoreValue symbol={symbolOf(info.row.original)} />,
 };
 
 function symbolOf(row: ResultRow): string {

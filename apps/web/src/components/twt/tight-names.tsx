@@ -12,6 +12,7 @@ import {
   MbScoreHead,
   MbScoresProvider,
   MbScoreValue,
+  SwingScoreValue,
 } from "@/components/mb/score-cell";
 import {
   LiveMarksProvider,
@@ -146,7 +147,8 @@ export function TightNames({
               {watchOnly.map((row) => (
                 <li key={row.instrumentId} data-testid="twt-watch-only-row">
                   <span className="mr-2 text-xs">
-                    <MbScoreValue symbol={row.symbol} />
+                    <MbScoreValue symbol={row.symbol} />{" "}
+                    <SwingScoreValue symbol={row.symbol} />
                   </span>
                   <RegimeDot signal={row.regimeSignal} />
                   <InstrumentLink symbol={row.symbol} flag={false} />
@@ -216,7 +218,7 @@ function NameTable({
           </thead>
           <tbody>
             <RegimeRows
-              colSpan={11}
+              colSpan={12}
               rows={rows.map((row) => ({
                 key: String(row.instrumentId),
                 signal: row.regimeSignal,

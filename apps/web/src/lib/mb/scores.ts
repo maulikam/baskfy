@@ -15,19 +15,43 @@ export interface MbScores {
   bySymbol: Readonly<Record<string, MbVerdict>>;
   /** False until an answer arrives; a cell shows nothing rather than "not ranked" while waiting. */
   loaded: boolean;
+  /** PM11: the swing-picks model's verdicts, from its own newest session. */
+  swing: SwingScores;
 }
+
+export interface SwingVerdict {
+  rank: number;
+  score: string;
+  investable: boolean;
+  /** One of that session's five paper picks. */
+  picked: boolean;
+}
+
+export interface SwingScores {
+  asOf: string | null;
+  universeN: number | null;
+  switchOn: boolean | null;
+  bySymbol: Readonly<Record<string, SwingVerdict>>;
+}
+
+const EMPTY_SWING: SwingScores = { asOf: null, universeN: null, switchOn: null, bySymbol: {} };
 
 export const EMPTY_MB_SCORES: MbScores = {
   asOf: null,
   universeN: null,
   bySymbol: {},
   loaded: false,
+  swing: EMPTY_SWING,
 };
 
 interface Payload {
   as_of: string | null;
   universe_n: number | null;
   names: readonly (MbVerdict & { symbol: string })[];
+  swing_as_of?: string | null;
+  swing_universe_n?: number | null;
+  swing_switch_on?: boolean | null;
+  swing?: readonly (SwingVerdict & { symbol: string })[];
 }
 
 export function mbScoresKey(symbols: readonly string[]): string {
@@ -41,11 +65,19 @@ export function mbScoresKey(symbols: readonly string[]): string {
 export function parseMbScores(payload: Payload): MbScores {
   const bySymbol: Record<string, MbVerdict> = {};
   for (const n of payload.names ?? []) bySymbol[n.symbol.toUpperCase()] = n;
+  const swingBy: Record<string, SwingVerdict> = {};
+  for (const n of payload.swing ?? []) swingBy[n.symbol.toUpperCase()] = n;
   return {
     asOf: payload.as_of,
     universeN: payload.universe_n,
     bySymbol,
     loaded: true,
+    swing: {
+      asOf: payload.swing_as_of ?? null,
+      universeN: payload.swing_universe_n ?? null,
+      switchOn: payload.swing_switch_on ?? null,
+      bySymbol: swingBy,
+    },
   };
 }
 

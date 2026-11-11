@@ -489,6 +489,47 @@ pub async fn get_lookup(
             );
         }
     }
+    // PM11: the swing-picks model's score beside it, from its own newest session.
+    let swing_as_of: Option<chrono::NaiveDate> =
+        sqlx::query_scalar("SELECT max(date) FROM rr_score_daily")
+            .fetch_one(pool)
+            .await
+            .map_err(db)?;
+    let mut swing = Vec::new();
+    let mut swing_universe_n = J::Null;
+    let mut swing_on = J::Null;
+    if let Some(day) = swing_as_of {
+        let on: Option<bool> =
+            sqlx::query_scalar("SELECT is_on FROM rr_gate_daily WHERE date = $1")
+                .bind(day)
+                .fetch_optional(pool)
+                .await
+                .map_err(db)?;
+        swing_on = on.map_or(J::Null, J::Bool);
+        let rows = sqlx::query(
+            "SELECT i.symbol, s.rank, s.score, s.universe_n, s.investable, \
+             EXISTS (SELECT 1 FROM rr_pick p WHERE p.signal_date = s.date AND p.instrument_id = s.instrument_id) AS picked \
+             FROM rr_score_daily s JOIN instrument i ON i.id = s.instrument_id \
+             WHERE s.date = $1 AND i.symbol = ANY($2)",
+        )
+        .bind(day)
+        .bind(&symbols)
+        .fetch_all(pool)
+        .await
+        .map_err(db)?;
+        for r in &rows {
+            swing_universe_n = J::Int(i64::from(col::<i32>(r, "universe_n")?));
+            swing.push(
+                Obj::new()
+                    .put("symbol", J::Str(col(r, "symbol")?))
+                    .put("rank", J::Int(i64::from(col::<i32>(r, "rank")?)))
+                    .put("score", J::Dec(dec(r, "score")?))
+                    .put("investable", J::Bool(col(r, "investable")?))
+                    .put("picked", J::Bool(col(r, "picked")?))
+                    .done(),
+            );
+        }
+    }
     Ok(canonical_response(
         &Obj::new()
             .put("as_of", J::opt_date(as_of))
@@ -498,6 +539,10 @@ pub async fn get_lookup(
                 J::Int(i64::try_from(symbols.len()).unwrap_or(0)),
             )
             .put("names", J::Arr(names))
+            .put("swing_as_of", J::opt_date(swing_as_of))
+            .put("swing_universe_n", swing_universe_n)
+            .put("swing_switch_on", swing_on)
+            .put("swing", J::Arr(swing))
             .done(),
     ))
 }

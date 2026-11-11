@@ -717,13 +717,14 @@ describe("CandidatesTable sorting (OV12)", () => {
     render(<CandidatesTable candidates={payload} scope="all" />);
     expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
     const headers = screen.getAllByRole("columnheader");
-    expect(headers).toHaveLength(10); // the model column comes first (PM7)
-    for (const header of headers.slice(1, 9))
+    expect(headers).toHaveLength(11); // the model columns come first (PM7, PM11)
+    for (const header of headers.slice(2, 10))
       expect(header).toHaveAttribute("aria-sort", "none");
     expect(
       headers.map((h) => h.textContent?.replace(/[▲▼]/g, "").trim()),
     ).toEqual([
       "Model",
+      "Swing",
       "Name",
       "On",
       "Strategies",

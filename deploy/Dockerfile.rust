@@ -70,6 +70,8 @@ COPY machinelearning/python/research/portfolio-ml/mb_task.py machinelearning/pyt
      machinelearning/python/research/portfolio-ml/audit_moves.py machinelearning/python/research/portfolio-ml/out/paper/seed.json \
      machinelearning/python/research/portfolio-ml/explore_multibagger.py crates/providers/src/reference/nse_schemes.csv /opt/mb/app/
 COPY --chmod=0755 machinelearning/python/research/portfolio-ml/mb_run.sh /opt/mb/run
+# Source modes come from the checkout (some are 0600); the worker runs as baskfy.
+RUN chmod -R a+rX /opt/mb
 # Same BASKFY_ -> desk credential mapping as Dockerfile.desk's desk-entrypoint.
 RUN cat > /usr/local/bin/baskfy-rs-entrypoint <<'EOF'
 #!/bin/sh

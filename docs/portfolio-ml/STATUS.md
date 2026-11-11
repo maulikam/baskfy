@@ -16,7 +16,7 @@
 | PM6 | nightly scorer | ✅ live locally (11 Nov) | migration 0007, `mb_task.py`, post-commit hook, Beat `mb-train`; needs the image and a first `train` (`NEEDS-MAULIK.md`) |
 | PM7 | pages | ✅ live locally (11 Nov) | API `/mb/*` GET, web `/mb` (staff watchlist), migration 0008 (PM7.1–7.2) |
 | PM8 | paper book | ✅ live locally (11 Nov) | migration 0009, nightly with the score, seed of 143 backtest tranches, web `/mb/paper` (PM8.1–8.3) |
-| PM11 | swing picks | building (11 Nov) | migration 0010, `rr_task.py` in the nightly score, `/mb/swing` (PM11) |
+| PM11 | swing picks | ✅ live locally (11 Nov), model 2 | migration 0010, `rr_task.py` in the nightly score, `/mb/swing` (PM11) |
 | PM5, PM9 | | not started | after PM8 |
 
 **Plan on (PM0.8, from 2014, dead included, every line marked, variant b):** top-20 skip-held 17.2 % CAGR / −66.3 % / Sharpe 0.75; top-10 skip-held 17.0 % / −72.6 % / 0.69; investable equal-weight 13.0 % / −55.8 %; Smallcap 250 16.3 % / −60.8 %.

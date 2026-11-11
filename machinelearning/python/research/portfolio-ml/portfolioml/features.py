@@ -96,7 +96,7 @@ def market_features(index: pl.DataFrame) -> pl.DataFrame:
             (c / c.shift(1) - 1).rolling_std(20).alias(f"{k}_vol20"),
             (c / c.rolling_max(252) - 1).alias(f"{k}_dd252"),
         ]
-    return index.sort("date").with_columns(cols).drop("nifty50", "midcap150", "smallcap250", "mom50")
+    return index.sort("date").with_columns(cols).drop("nifty50", "midcap150", "smallcap250", "mom50", strict=False)
 
 
 def breadth(feat: pl.DataFrame) -> pl.DataFrame:

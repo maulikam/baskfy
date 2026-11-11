@@ -1,0 +1,7 @@
+# PM6.1: the worker image's MB runtime (deploy/Dockerfile.rust), pinned to the research venv that produced PM4.
+polars==2.1.0
+numpy==2.5.4
+lightgbm==4.7.0
+scikit-learn==1.9.1
+scipy==1.18.1
+psycopg[binary]==3.3.8

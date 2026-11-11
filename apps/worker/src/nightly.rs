@@ -110,6 +110,11 @@ pub async fn run_nightly(
     };
     match chained {
         Ok(outcome) => {
+            // PM6.1: after the commit, so the subprocess sees tonight's bars; its result is
+            // logged and cannot touch the outcome, the alert or the payload.
+            if outcome.data_version.is_some() {
+                let _ = crate::tasks::mb::score_after_publish(day).await;
+            }
             let alert = alert_for_outcome(&outcome);
             if let Some(alert) = &alert {
                 dispatch(alert, settings).await;

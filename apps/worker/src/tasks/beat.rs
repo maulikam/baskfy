@@ -497,6 +497,23 @@ pub static BEAT_SCHEDULE: &[BeatEntry] = &[
         },
     },
     BeatEntry {
+        name: "mb-train",
+        task: "baskfy.mb.train",
+        schedule: Schedule::Crontab(Crontab {
+            minute: "0",
+            hour: "7",
+            day_of_week: "sat",
+            day_of_month: "1-7",
+            month_of_year: "1,4,7,10",
+        }),
+        kwargs: &[],
+        options: BeatOptions {
+            queue: Queue::Compute,
+            expires: None,
+            countdown: None,
+        },
+    },
+    BeatEntry {
         name: "fno-weekly",
         task: "baskfy.fno.weekly",
         schedule: Schedule::Crontab(Crontab {

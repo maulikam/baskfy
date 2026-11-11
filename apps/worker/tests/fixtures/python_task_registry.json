@@ -1,6 +1,6 @@
 {
  "generated_by": "tools/parity/task_registry.py",
- "task_count": 76,
+ "task_count": 78,
  "tasks": {
   "baskfy.accounts.purge": {
    "python": "baskfy_worker.tasks.celery_tasks.purge_accounts_task",
@@ -529,6 +529,47 @@
      "default": "first"
     }
    ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.mb.score": {
+   "python": "baskfy_worker.tasks.celery_tasks.mb_score_task",
+   "params": [
+    {
+     "name": "trade_date",
+     "annotation": "str | None",
+     "required": false,
+     "default": null
+    }
+   ],
+   "bound": false,
+   "acks_late": true,
+   "max_retries": 3,
+   "default_retry_delay": 180,
+   "autoretry_for": [],
+   "retry_backoff": false,
+   "retry_backoff_max": 600,
+   "retry_jitter": true,
+   "time_limit": null,
+   "soft_time_limit": null,
+   "queue_option": null,
+   "queue_by_name": "compute",
+   "queue_via_task": "compute"
+  },
+  "baskfy.mb.train": {
+   "python": "baskfy_worker.tasks.celery_tasks.mb_train_task",
+   "params": [],
    "bound": false,
    "acks_late": true,
    "max_retries": 3,
@@ -3263,6 +3304,51 @@
      ],
      "hour": [
       6
+     ],
+     "day_of_week": [
+      6
+     ],
+     "day_of_month": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+     ],
+     "month_of_year": [
+      1,
+      4,
+      7,
+      10
+     ]
+    }
+   },
+   "args": [],
+   "kwargs": {},
+   "options": {
+    "queue": "compute"
+   }
+  },
+  {
+   "name": "mb-train",
+   "task": "baskfy.mb.train",
+   "schedule": {
+    "kind": "crontab",
+    "written": {
+     "minute": "0",
+     "hour": "7",
+     "day_of_week": "sat",
+     "day_of_month": "1-7",
+     "month_of_year": "1,4,7,10"
+    },
+    "expanded": {
+     "minute": [
+      0
+     ],
+     "hour": [
+      7
      ],
      "day_of_week": [
       6
@@ -7205,6 +7291,10 @@
   ],
   [
    "baskfy.fno.retest",
+   "compute"
+  ],
+  [
+   "baskfy.mb.*",
    "compute"
   ],
   [

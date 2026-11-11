@@ -2607,3 +2607,12 @@ bash export_bars_local.sh
 ```
 
 It prints `BLANK CHECK: gap above 10%: YES` or `no` and the judged run (PM4.4); `run_pm4.py` without the flag runs the same check first, every time; the full table is in `out/pm4/blank_rates.csv`. It does not run PM4.
+
+## Portfolio-ML (PM6) — ship the MB scorer (11 Nov 2026)
+
+**Needed:** build and ship the Rust image (it now carries `/opt/mb`, a Python 3.12 runtime, ~0.8 GB more), let it
+run migrations (0006 and 0007 are pending locally), then once: `docker exec baskfy-local-worker-1 /opt/mb/run train`
+(about a minute, ~5 GB RAM). After that every published nightly scores itself. To see that a failing scorer cannot
+fail the night, re-run one published date with `BASKFY_MB_RUN=/bin/false` set on the worker: the run should still
+publish and the log carry `mb score failed`. **Blocks:** PM6's live rows, PM7's pages showing data, PM8's live book.
+**Meanwhile:** PM7 and PM8 are built against the scratch database.

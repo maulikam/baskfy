@@ -13,7 +13,8 @@
 | PM4 | four-way re-run | ❌ red for fundamentals (11 Nov) | price-only kept as the sleeve's model (PM6.0) though it also fails the 2024 and pooled gate natively (PM4.10); `out/pm4/PM4-RESULT.md` |
 | PM9a | TimesFM-3 zero-shot features | ❌ not adopted (11 Nov) | raw forecast anti-predictive; as features, noise |
 | PM0.18–0.19 | indicators (CMO/CCI/chop/ER); average-Sharpe features | ❌ no gain as inputs | Sharpe as a stand-alone ranker halves less; untested as a book |
-| PM6–PM8 | scorer, pages, paper book | ▶ commissioned 11 Nov (PM6.0) | brief: `KICKOFF-PROMPT-PM6-PM8.md`; not started |
+| PM6 | nightly scorer | code complete, not shipped (11 Nov) | migration 0007, `mb_task.py`, post-commit hook, Beat `mb-train`; needs the image and a first `train` (`NEEDS-MAULIK.md`) |
+| PM7–PM8 | pages, paper book | ▶ commissioned 11 Nov (PM6.0) | brief: `KICKOFF-PROMPT-PM6-PM8.md` |
 | PM5, PM9 | | not started | after PM8 |
 
 **Plan on (PM0.8, from 2014, dead included, every line marked, variant b):** top-20 skip-held 17.2 % CAGR / −66.3 % / Sharpe 0.75; top-10 skip-held 17.0 % / −72.6 % / 0.69; investable equal-weight 13.0 % / −55.8 %; Smallcap 250 16.3 % / −60.8 %.

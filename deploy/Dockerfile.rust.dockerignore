@@ -12,6 +12,13 @@
 !db/migrations
 !legacy/python/kite-momentum-rebalancer/app/templates
 !legacy/python/kite-momentum-rebalancer/app/static
+!machinelearning/python/research/portfolio-ml/portfolioml
+!machinelearning/python/research/portfolio-ml/mb_task.py
+!machinelearning/python/research/portfolio-ml/mb_run.sh
+!machinelearning/python/research/portfolio-ml/audit_moves.py
+!machinelearning/python/research/portfolio-ml/explore_multibagger.py
+!machinelearning/python/research/portfolio-ml/requirements-mb.txt
+**/__pycache__
 **/.env
 **/.env.*
 **/*.pem

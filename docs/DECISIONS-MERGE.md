@@ -8719,3 +8719,12 @@ under MTF. Porting Python `POST /{id}/rebalance` (still R6.23).
 **Reverse.** Restore from `repair_20261109.ohlcv_deep_before`, or `backups/pre-seamfix-20261109`.
 **Second pass, same day.** 30 names had a `source='kite'` block whose vendor-adjusted `close_raw` was adjusted again: block rows now `close = close_raw`, `source='kite_adjusted'`, prior deep rows rescaled. GOODLUCK deep rows x3 (one of its two 3x actions counted twice; seam measured 3.19). Copies in `repair_20261109.kite_before` and `goodluck_before`.
 **Open.** 11 names keep multi-month holes across the seam, where a level change is not evidence of an error. Stored factors are being recomputed outside market hours.
+
+## PM6.1 — A Python runtime in the worker image for the MB scorer · ⚠ UNREVIEWED (11 Nov 2026)
+
+**Dependency (house rule 1).** `lightgbm` 4.7, `polars` 2.1, `numpy`, `scikit-learn`, `scipy`, `psycopg[binary]`
+3.3, pinned in `machinelearning/python/research/portfolio-ml/requirements-mb.txt`, in a uv-managed Python 3.12 venv
+at `/opt/mb` (`deploy/Dockerfile.rust`, stage `mb`; runtime adds `libgomp1`). Why: the MB ranker is a LightGBM
+booster over features computed by `portfolioml`; nothing in the locked stack scores one, and a Rust port of the
+features and a tree walker is a later module. The worker runs it as a subprocess after the nightly commits; it writes
+only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `run_nightly` hook. Details: DECISIONS-PM PM6.1.

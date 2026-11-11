@@ -36,6 +36,7 @@ pub mod clis;
 pub mod context;
 pub mod curated;
 pub mod fno;
+pub mod mb;
 pub mod ops_alerts;
 pub mod options;
 pub mod pipeline;
@@ -119,6 +120,7 @@ pub const TASK_ROUTES: &[(&str, Queue)] = &[
     ("baskfy.vbt.backtest", Queue::Compute),
     ("baskfy.overlap.catalyst_scan", Queue::Compute),
     ("baskfy.fno.retest", Queue::Compute),
+    ("baskfy.mb.*", Queue::Compute),
     ("baskfy.vbt.rescan", Queue::Compute),
     ("baskfy.vbt.rescan_sweep", Queue::Default),
     ("baskfy.twt.scan", Queue::Compute),
@@ -179,6 +181,8 @@ pub enum Lane {
     Backfills,
     /// [`clis`].
     Clis,
+    /// [`mb`].
+    Mb,
 }
 
 impl Lane {
@@ -202,6 +206,7 @@ impl Lane {
             Self::Options => "options",
             Self::Backfills => "backfills",
             Self::Clis => "clis",
+            Self::Mb => "mb",
         }
     }
 
@@ -225,6 +230,7 @@ impl Lane {
             Self::Options => options::PORTED,
             Self::Backfills => backfills::PORTED,
             Self::Clis => clis::PORTED,
+            Self::Mb => mb::PORTED,
         }
     }
 }

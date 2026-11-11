@@ -158,3 +158,24 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
 - **PM6.0** Maulik, 11 Nov 2026: "our model is good enough, let's integrate into Baskfy." Scope taken: the
   price-only ranker as a read-only sleeve (PM6 scorer, PM7 pages, PM8 paper book with three shadow lines);
   no order path, no flag. Brief: `KICKOFF-PROMPT-PM6-PM8.md`.
+- **PM6.1** ⚠ UNREVIEWED Where the scorer runs. The nightly chain is one transaction committed at its end, so a
+  subprocess inside a post-publish step would not see tonight's bars. Taken: `run_nightly` calls `/opt/mb/run score
+  --date D` **after the commit**, only when the run published; the result is logged and discarded, so it cannot change
+  the outcome, alert or payload (unit test: missing runtime, non-zero exit and timeout all return a value). The
+  script is `mb_task.py`, reusing `portfolioml` unchanged plus the PM0.12 correction (`audit_moves.correct_bars`), so
+  production and research share one feature path (`portfolioml/pipeline.py`, now also what `build_dataset.py` calls).
+  Runtime: a uv-managed Python 3.12 venv at `/opt/mb` in the worker image (`requirements-mb.txt`, pinned to the PM4
+  venv; libgomp1). Rejected: a step inside the chain (sees stale data); a separate service (more to run); the Rust
+  tree walker (later module). Reverse: drop the `run_nightly` hook and the image stage.
+- **PM6.2** ⚠ UNREVIEWED Model and label: price-only, `ALL_FEATURES` (95), PARAMS/ROUNDS/TRAIN_STRIDE imported from
+  `explore_multibagger.py`, touch 2× in 250 sessions, terminal variant (b), every universe row with a completed label
+  on every fifth session. First model (scratch copy of the local DB, 9 Nov bars): 418,077 rows, 58,129 positives,
+  labels through 4 Nov 2025 — identical to the research dataset's training set. Train 37 s, 5.0 GB peak RSS.
+- **PM6.3** ⚠ UNREVIEWED Publish rule: `mb_model.published_at` marks the scoring model. `train` publishes the first
+  model itself, and a later one when its Spearman against the published model's scores on the same day is ≥ 0.7;
+  below that it exits 4 and waits for `mb_task.py publish ID --ack WHO`. Beat `mb-train`: 07:00 IST, first Saturday
+  of Jan/Apr/Jul/Oct. Scores 6 dp, rank by score then id, `universe_n` = scored names, investable ≥ ₹50 and ≥ ₹5 cr
+  20-day turnover; `hi63_trigger` = a close at its 63-session high (PM0.16's definition) in the last 21 sessions.
+- **PM6.4** Evidence: features equal the research dataset on 14 Jun 2019, 1 Mar 2023 and 7 Nov 2025, all 95 within
+  1e-5, from bars cut at each date (`tests/test_mb_task.py`); score of 9 Nov 2026 re-run gives the same md5 over 1,215
+  rows, from macOS and from the image's Python stage; a date with no session exits 3 and writes nothing.

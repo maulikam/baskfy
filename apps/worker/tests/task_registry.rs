@@ -254,6 +254,7 @@ fn ported_lists_name_only_their_own_lanes_tasks() {
         Lane::Options,
         Lane::Backfills,
         Lane::Clis,
+        Lane::Mb,
     ];
     for lane in lanes {
         for name in lane.ported() {

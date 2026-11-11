@@ -39,6 +39,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
  && install -d /out \
  && install -m 0755 target/release/baskfy-api target/release/baskfy-worker target/release/baskfy-desk /out/
 
+# PM6.1: the MB sleeve's scorer (Python, run by the worker as /opt/mb/run). Relocatable interpreter from uv.
+FROM ${DEBIAN_IMAGE} AS mb
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+ENV UV_PYTHON_INSTALL_DIR=/opt/mb/python UV_LINK_MODE=copy UV_PYTHON_PREFERENCE=only-managed
+COPY machinelearning/python/research/portfolio-ml/requirements-mb.txt /opt/mb/requirements.txt
+RUN uv venv --python 3.12 /opt/mb/venv \
+ && uv pip install --python /opt/mb/venv/bin/python --no-cache -r /opt/mb/requirements.txt
+
 FROM ${DEBIAN_IMAGE} AS runtime
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.revision=$GIT_SHA
@@ -47,7 +55,7 @@ ENV TZ=Asia/Kolkata \
     DESK_DB_BACKEND=postgres \
     RUST_BACKTRACE=1
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tzdata curl ca-certificates openssh-client \
+ && apt-get install -y --no-install-recommends tzdata curl ca-certificates openssh-client libgomp1 \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 1001 baskfy \
  && useradd --system --uid 1001 --gid baskfy --home /desk baskfy \
@@ -56,6 +64,11 @@ RUN apt-get update \
 COPY --from=build /out/ /usr/local/bin/
 COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app/templates /desk/app/templates
 COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app/static    /desk/app/static
+COPY --from=mb /opt/mb /opt/mb
+COPY machinelearning/python/research/portfolio-ml/portfolioml /opt/mb/app/portfolioml
+COPY machinelearning/python/research/portfolio-ml/mb_task.py machinelearning/python/research/portfolio-ml/audit_moves.py \
+     machinelearning/python/research/portfolio-ml/explore_multibagger.py crates/providers/src/reference/nse_schemes.csv /opt/mb/app/
+COPY --chmod=0755 machinelearning/python/research/portfolio-ml/mb_run.sh /opt/mb/run
 # Same BASKFY_ -> desk credential mapping as Dockerfile.desk's desk-entrypoint.
 RUN cat > /usr/local/bin/baskfy-rs-entrypoint <<'EOF'
 #!/bin/sh

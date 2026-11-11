@@ -70,15 +70,8 @@ def nearby(r: dict, meta: dict, by_symbol: dict, by_issuer: dict) -> list:
     return [(c, f) for ex, c, f in found if A.in_window(ex, r["prev_date"], r["date"])]
 
 
-def main(export: str, ca_dir: str, schemes: str, dest: str) -> int:
-    data = Path(export)
-    OUT.mkdir(parents=True, exist_ok=True)
-    in_place = Path(dest).resolve() == data.resolve()
-    bars = read_bars(data, in_place)
-    ins = pl.read_csv(data / "instrument.csv.gz", columns=["id", "symbol", "isin"], schema_overrides={"isin": pl.String})
-    terminal = pl.read_csv(data / "instrument_terminal.csv.gz").select("instrument_id", "status")
-    meta = {r["id"]: r for r in ins.to_dicts()}
-    by_symbol, by_issuer = events(ca_dir, schemes)
+def classified(bars: pl.DataFrame, meta: dict, terminal: pl.DataFrame, by_symbol: dict, by_issuer: dict) -> pl.DataFrame:
+    """Every move beyond 60 % and every matched 20–60 % fall, with its class and multiplier."""
     m = moves(bars).join(terminal, on="instrument_id", how="left")
     rows = []
     for r in m.to_dicts():
@@ -96,7 +89,37 @@ def main(export: str, ca_dir: str, schemes: str, dest: str) -> int:
         if got:
             rows.append({"instrument_id": r["instrument_id"], "symbol": meta.get(r["instrument_id"], {}).get("symbol"), "date": r["date"], "prev_date": r["prev_date"], "step": r["step"], "close_raw": r["close_raw"],
                          "class": got[0], "multiplier": got[1], "candidates": 1, "dead": r["status"] is not None, "terminal": r["status"] or "alive", "band": "fall_20_60"})
-    t = pl.DataFrame(rows)
+    return pl.DataFrame(rows)
+
+
+def corrected(bars: pl.DataFrame, t: pl.DataFrame) -> tuple[pl.DataFrame, int]:
+    """Bars before each explained move scaled by its multiplier; the database is never written."""
+    if t.is_empty():
+        return bars, 0
+    known = t.filter(pl.col("multiplier").is_not_null()).select("instrument_id", pl.col("date").alias("move"), "multiplier")
+    hit = bars.join(known, on="instrument_id").filter(pl.col("date") < pl.col("move")).group_by("instrument_id", "date").agg(pl.col("multiplier").product().alias("mult"))
+    fixed = bars.join(hit, on=["instrument_id", "date"], how="left").with_columns(pl.col("mult").fill_null(1.0)).with_columns(
+        *[(pl.col(c) * pl.col("mult")).alias(c) for c in ("open", "high", "low", "close")], (pl.col("volume") / pl.col("mult")).round(0).cast(pl.Int64).alias("volume")).drop("mult")
+    return fixed, hit.height
+
+
+def correct_bars(bars: pl.DataFrame, ins: pl.DataFrame, terminal: pl.DataFrame, ca_dir: str, schemes: str) -> tuple[pl.DataFrame, int]:
+    """The nightly's entry: ins has id, symbol, isin; terminal has instrument_id, status."""
+    meta = {r["id"]: r for r in ins.to_dicts()}
+    by_symbol, by_issuer = events(ca_dir, schemes)
+    return corrected(bars, classified(bars, meta, terminal, by_symbol, by_issuer))
+
+
+def main(export: str, ca_dir: str, schemes: str, dest: str) -> int:
+    data = Path(export)
+    OUT.mkdir(parents=True, exist_ok=True)
+    in_place = Path(dest).resolve() == data.resolve()
+    bars = read_bars(data, in_place)
+    ins = pl.read_csv(data / "instrument.csv.gz", columns=["id", "symbol", "isin"], schema_overrides={"isin": pl.String})
+    terminal = pl.read_csv(data / "instrument_terminal.csv.gz").select("instrument_id", "status")
+    meta = {r["id"]: r for r in ins.to_dicts()}
+    by_symbol, by_issuer = events(ca_dir, schemes)
+    t = classified(bars, meta, terminal, by_symbol, by_issuer)
     t.write_csv(OUT / "moves.csv")
     print("moves", t.height, "names", t["instrument_id"].n_unique())
     summary = t.group_by("band", "class", "dead").len().pivot(on="dead", index=["band", "class"], values="len").fill_null(0).sort("band", "class")
@@ -105,10 +128,7 @@ def main(export: str, ca_dir: str, schemes: str, dest: str) -> int:
     print("unexplained with an action nearby that did not fit:", t.filter((pl.col("class") == "unexplained") & (pl.col("candidates") > 0)).height)
     print("unexplained under ₹2:", t.filter((pl.col("class") == "unexplained") & (pl.col("close_raw") < 2)).height)
     print("unexplained after a gap of 30+ days:", t.filter((pl.col("class") == "unexplained") & ((pl.col("date") - pl.col("prev_date")).dt.total_days() >= 30)).height)
-    known = t.filter(pl.col("multiplier").is_not_null()).select("instrument_id", pl.col("date").alias("move"), "multiplier")
-    hit = bars.join(known, on="instrument_id").filter(pl.col("date") < pl.col("move")).group_by("instrument_id", "date").agg(pl.col("multiplier").product().alias("mult"))
-    fixed = bars.join(hit, on=["instrument_id", "date"], how="left").with_columns(pl.col("mult").fill_null(1.0)).with_columns(
-        *[(pl.col(c) * pl.col("mult")).alias(c) for c in ("open", "high", "low", "close")], (pl.col("volume") / pl.col("mult")).round(0).cast(pl.Int64).alias("volume")).drop("mult")
+    fixed, adjusted = corrected(bars, t)
     out = Path(dest)
     out.mkdir(parents=True, exist_ok=True)
     if not in_place:
@@ -117,7 +137,7 @@ def main(export: str, ca_dir: str, schemes: str, dest: str) -> int:
             if f.name != "ohlcv_daily.parquet" and not f.name.startswith(("dataset_", "features")) and not target.exists():
                 os.symlink(f, target)
     fixed.write_parquet(out / "ohlcv_daily.parquet")
-    print("rows", fixed.height, "adjusted bars", hit.height, "residual moves beyond 60 %", moves(fixed).height)
+    print("rows", fixed.height, "adjusted bars", adjusted, "residual moves beyond 60 %", moves(fixed).height)
     return 0
 
 

@@ -21,6 +21,11 @@ def load_bars(data: Path) -> pl.DataFrame:
             schema_overrides={"upper_circuit": pl.Float64, "lower_circuit": pl.Float64},
         ).with_columns(pl.col("date").str.to_date())
         o.write_parquet(p)
+    return bars_frame(o)
+
+
+def bars_frame(o: pl.DataFrame) -> pl.DataFrame:
+    """ohlcv_daily rows → the panel: thin sessions dropped, turnover on the raw print."""
     counts = o.group_by("date").agg(pl.len().alias("n"))
     good = counts.filter(pl.col("n") >= MIN_NAMES_PER_SESSION).select("date")
     o = o.join(good, on="date", how="semi")
@@ -38,11 +43,17 @@ def load_instruments(data: Path) -> pl.DataFrame:
     ins = pl.read_csv(data / "instrument.csv.gz")
     members = pl.read_csv(data / "index_member_daily.csv.gz")
     defs = pl.read_csv(data / "index_def.csv.gz")
+    ins = ins.with_columns(pl.col("listed_on").str.to_date(strict=False), pl.col("delisted_on").str.to_date(strict=False))
+    return instruments_frame(ins, members, defs)
+
+
+def instruments_frame(ins: pl.DataFrame, members: pl.DataFrame, defs: pl.DataFrame) -> pl.DataFrame:
+    """instrument rows (dates parsed) + ETF membership → instrument_id, symbol, eligible, ..."""
     etf_id = defs.filter(pl.col("slug") == "etf")["id"].to_list()
     etf_ids = set(members.filter(pl.col("index_id").is_in(etf_id))["instrument_id"].to_list())
     return ins.select(
         pl.col("id").alias("instrument_id"), "symbol", "name", "instrument_type", "series",
-        pl.col("listed_on").str.to_date(strict=False), pl.col("delisted_on").str.to_date(strict=False),
+        "listed_on", "delisted_on",
     ).with_columns(
         (
             (pl.col("instrument_type") == "EQ")
@@ -55,7 +66,11 @@ def load_instruments(data: Path) -> pl.DataFrame:
 
 def load_index_series(data: Path) -> pl.DataFrame:
     """Benchmark closes as a wide frame on date: nifty50, midcap150, smallcap250, mom50."""
-    isr = pl.read_csv(data / "index_series.csv").with_columns(pl.col("date").str.to_date())
+    return index_frame(pl.read_csv(data / "index_series.csv").with_columns(pl.col("date").str.to_date()))
+
+
+def index_frame(isr: pl.DataFrame) -> pl.DataFrame:
+    """index_name, date, close rows → wide on date."""
     names = {
         "NIFTY 50": "nifty50", "NIFTY MIDCAP 150": "midcap150",
         "NIFTY SMLCAP 250": "smallcap250", "NIFTY 500 MOMENTUM 50": "mom50",

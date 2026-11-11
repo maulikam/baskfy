@@ -12,53 +12,33 @@ from pathlib import Path
 
 import polars as pl
 
-from portfolioml import features as F
+from portfolioml import pipeline as P
 from portfolioml import panel
 from portfolioml.labels import BarrierConfig, MultibaggerConfig, multibagger, triple_barrier
 
 DATA = Path(os.environ.get("PM_DATA", Path(__file__).parent / "data"))
 OUT = Path(__file__).parent / "out"
 CHUNKS = 12
-PRICE = ["instrument_id", "date", "open", "high", "low", "close", "volume", "close_raw", "turnover"]
-KEEP = ["instrument_id", "date", "symbol", "eligible", "close", "close_raw", "open", "high", "low", "liquid", "n_hist"]
-
-
 def _chunks(bars: pl.DataFrame) -> list[pl.DataFrame]:
-    ids = bars["instrument_id"].unique().sort()
-    step = (len(ids) + CHUNKS - 1) // CHUNKS
-    return [bars.filter(pl.col("instrument_id").is_in(ids[i:i + step].implode())) for i in range(0, len(ids), step)]
+    return P.chunks(bars, CHUNKS)
 
 
 def build_features(t0: float) -> pl.DataFrame:
-    bars = panel.load_bars(DATA).select(PRICE)
+    bars = panel.load_bars(DATA)
     ins = panel.load_instruments(DATA)
     idx = panel.load_index_series(DATA)
     print(f"bars {bars.shape} sessions {bars['date'].n_unique()}  {time.time()-t0:.0f}s", flush=True)
-    bars = bars.join(ins.select("instrument_id", "eligible", "symbol"), on="instrument_id", how="left")
-    bars = bars.with_columns(pl.col("eligible").fill_null(False))
+    bars = P.with_names(bars, ins)
     tmp = DATA / "_chunks"; tmp.mkdir(exist_ok=True)
     for old in tmp.glob("*.parquet"):  # a stale chunk would join the glob below
         old.unlink()
     for i, ch in enumerate(_chunks(bars)):
-        f = F.name_features(ch)
-        f32 = [c for c in F.NAME_FEATURES if c in f.columns and c not in ("rs21", "rs63", "n_hist")] + ["turnover20"]
-        part = f.select(*KEEP, *f32).with_columns([pl.col(c).cast(pl.Float32) for c in f32])
+        part = P.name_part(ch)
         part.write_parquet(tmp / f"{i:02d}.parquet")
         print(f"  chunk {i+1}/{CHUNKS} {part.shape}  {time.time()-t0:.0f}s", flush=True)
-        del f, part
+        del part
     del bars
-    feat = pl.scan_parquet(str(tmp / "*.parquet")).sort("instrument_id", "date").collect()
-    feat = feat.join(F.market_features(idx), on="date", how="left")
-    feat = feat.join(F.breadth(feat), on="date", how="left")
-    feat = F.cross_sectional(feat)
-    cs = [c for c in F.CS_FEATURES + F.MARKET_FEATURES + ["rs21", "rs63"] if c in feat.columns]
-    feat = feat.with_columns([pl.col(c).cast(pl.Float32) for c in cs])
-    # suspicious overnight gaps = unadjusted corporate actions (VBT §1); quarantine the 60 sessions
-    # *after* one — backward-looking only, so the universe never knows about a gap still to come
-    sus = ((pl.col("r1").abs() > 0.6) | (pl.col("gap").abs() > 0.6)).cast(pl.Int8)
-    feat = feat.with_columns(
-        (sus.rolling_max(61, min_samples=1).over("instrument_id") > 0).alias("near_sus_gap")
-    ).with_columns((pl.col("liquid") & pl.col("eligible") & ~pl.col("near_sus_gap")).alias("universe"))
+    feat = P.finish(pl.scan_parquet(str(tmp / "*.parquet")).sort("instrument_id", "date").collect(), idx)
     print(f"features {feat.shape}  {time.time()-t0:.0f}s", flush=True)
     return feat
 

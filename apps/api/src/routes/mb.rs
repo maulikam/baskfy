@@ -735,9 +735,109 @@ pub async fn get_swing(
     ))
 }
 
+/// `GET /mb/explorer` — every name either model scored on its newest session, both verdicts side by side
+/// with the display columns, for the explorer page to filter and sort in the browser. Read-only.
+///
+/// # Errors
+/// 401, 404 not the sole tenant.
+#[allow(clippy::too_many_lines)]
+pub async fn get_explorer(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+) -> Result<Response, Problem> {
+    require_authenticated(&principal)?;
+    scoped_sole_user_id(&state, principal.user_id, None).await?;
+    let pool = state.db.pool();
+    let dates: (Option<chrono::NaiveDate>, Option<chrono::NaiveDate>) = sqlx::query_as(
+        "SELECT (SELECT max(date) FROM mb_score_daily), (SELECT max(date) FROM rr_score_daily)",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(db)?;
+    let rows = sqlx::query(
+        "WITH m AS (SELECT * FROM mb_score_daily WHERE date = $1), \
+              r AS (SELECT s.*, EXISTS (SELECT 1 FROM rr_pick p WHERE p.signal_date = s.date \
+                     AND p.instrument_id = s.instrument_id) AS picked FROM rr_score_daily s WHERE date = $2) \
+         SELECT COALESCE(m.instrument_id, r.instrument_id) AS instrument_id, i.symbol, i.name, sec.sector, \
+           COALESCE(m.close_raw, r.close_raw) AS close_raw, m.turnover20, m.r252, m.dist_ath, m.sessions_listed, \
+           m.ttm_rev_yoy, m.ttm_pat_yoy, m.hi63_trigger, \
+           m.score AS mb_score, m.rank AS mb_rank, m.scope AS mb_scope, m.investable AS mb_investable, \
+           r.score AS rr_score, r.rank AS rr_rank, r.scope AS rr_scope, r.investable AS rr_investable, r.picked \
+         FROM m FULL OUTER JOIN r ON r.instrument_id = m.instrument_id \
+         JOIN instrument i ON i.id = COALESCE(m.instrument_id, r.instrument_id) \
+         LEFT JOIN instrument_sector sec ON sec.instrument_id = i.id \
+         ORDER BY COALESCE(m.rank, 1000000), COALESCE(r.rank, 1000000)",
+    )
+    .bind(dates.0)
+    .bind(dates.1)
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let mut out = Vec::with_capacity(rows.len());
+    for r in &rows {
+        let mb = match col::<Option<i32>>(r, "mb_rank")? {
+            Some(rank) => Obj::new()
+                .put("rank", J::Int(i64::from(rank)))
+                .put("score", J::opt_dec(odec(r, "mb_score")?))
+                .put("scope", J::opt_str(col(r, "mb_scope")?))
+                .put(
+                    "investable",
+                    col::<Option<bool>>(r, "mb_investable")?.map_or(J::Null, J::Bool),
+                )
+                .done(),
+            None => J::Null,
+        };
+        let rr = match col::<Option<i32>>(r, "rr_rank")? {
+            Some(rank) => Obj::new()
+                .put("rank", J::Int(i64::from(rank)))
+                .put("score", J::opt_dec(odec(r, "rr_score")?))
+                .put("scope", J::opt_str(col(r, "rr_scope")?))
+                .put(
+                    "investable",
+                    col::<Option<bool>>(r, "rr_investable")?.map_or(J::Null, J::Bool),
+                )
+                .put(
+                    "picked",
+                    col::<Option<bool>>(r, "picked")?.map_or(J::Null, J::Bool),
+                )
+                .done(),
+            None => J::Null,
+        };
+        out.push(
+            Obj::new()
+                .put("instrument_id", J::Int(col(r, "instrument_id")?))
+                .put("symbol", J::Str(col(r, "symbol")?))
+                .put("name", J::opt_str(col(r, "name")?))
+                .put("sector", J::opt_str(col(r, "sector")?))
+                .put("close", J::opt_dec(odec(r, "close_raw")?))
+                .put("turnover20", J::opt_dec(odec(r, "turnover20")?))
+                .put("r252_fraction", J::opt_dec(odec(r, "r252")?))
+                .put("dist_ath_fraction", J::opt_dec(odec(r, "dist_ath")?))
+                .put("sessions_listed", opt_i(r, "sessions_listed")?)
+                .put("ttm_rev_yoy_fraction", J::opt_dec(odec(r, "ttm_rev_yoy")?))
+                .put("ttm_pat_yoy_fraction", J::opt_dec(odec(r, "ttm_pat_yoy")?))
+                .put(
+                    "hi63_trigger",
+                    col::<Option<bool>>(r, "hi63_trigger")?.map_or(J::Null, J::Bool),
+                )
+                .put("doubling", mb)
+                .put("swing", rr)
+                .done(),
+        );
+    }
+    Ok(canonical_response(
+        &Obj::new()
+            .put("doubling_as_of", J::opt_date(dates.0))
+            .put("swing_as_of", J::opt_date(dates.1))
+            .put("names", J::Arr(out))
+            .done(),
+    ))
+}
+
 /// The `/mb` routes: GET only.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/mb/explorer", get(get_explorer))
         .route("/mb/swing", get(get_swing))
         .route("/mb/today", get(get_today))
         .route("/mb/history/{instrument_id}", get(get_history))

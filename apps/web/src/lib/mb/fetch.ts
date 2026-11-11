@@ -233,3 +233,40 @@ export interface MbSwing {
 export async function fetchMbSwing(options: { all?: boolean } = {}): Promise<MbSwing | null> {
   return readOrNull<MbSwing>("/mb/swing", options.all ? { all: "true" } : {});
 }
+
+/** PM11: one name's verdict from one model on the explorer page. */
+export interface MbExplorerVerdict {
+  rank: number;
+  score: string | null;
+  scope: "universe" | "quarantine" | "young" | "sme" | "cheap" | "thin" | null;
+  investable: boolean | null;
+  /** Swing only: one of that session's five picks. */
+  picked?: boolean | null;
+}
+
+export interface MbExplorerName {
+  instrument_id: number;
+  symbol: string;
+  name: string | null;
+  sector: string | null;
+  close: string | null;
+  turnover20: string | null;
+  r252_fraction: string | null;
+  dist_ath_fraction: string | null;
+  sessions_listed: number | null;
+  ttm_rev_yoy_fraction: string | null;
+  ttm_pat_yoy_fraction: string | null;
+  hi63_trigger: boolean | null;
+  doubling: MbExplorerVerdict | null;
+  swing: MbExplorerVerdict | null;
+}
+
+export interface MbExplorer {
+  doubling_as_of: string | null;
+  swing_as_of: string | null;
+  names: readonly MbExplorerName[];
+}
+
+export async function fetchMbExplorer(): Promise<MbExplorer | null> {
+  return readOrNull<MbExplorer>("/mb/explorer");
+}

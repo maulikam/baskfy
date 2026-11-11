@@ -59,6 +59,8 @@ const BROWSER_CONSUMERS: Record<string, string> = {
   "middleware.ts": "builds the CSP's connect-src, which the browser enforces",
   "components/billing/invoice-table.tsx": "renders an <a href> the reader clicks",
   "lib/api/config.ts": "defines both functions",
+  "lib/screens/invest.ts":
+    "browser-only: imported only by the client component screens/screen-invest.tsx, with lib/api/browser's token",
 };
 
 describe("the two origins do not get mixed up", () => {

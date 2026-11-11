@@ -296,3 +296,7 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   rest rank after them; out-of-range rows get the ◌ flag and never the ● investable flag. The paper record reads
   only `scope = 'universe'` rows (`mb_paper._investable`), so its picks are unchanged; `/mb/today`'s default list
   and `investable_n` count only universe rows.
+- **PM11.3** Model explorer (Maulik, 12 Nov 2026): `GET /mb/explorer` returns every name either model scored on its
+  newest session with both verdicts; web `/mb/explore` filters (search, sector, price, turnover, 1-yr return, distance
+  from high, listing age, revenue/profit growth, training range, investable, 63-day high, swing picks, rank caps) and
+  sorts in the browser; "both models" = the mean of the two rank shares. Read-only.

@@ -126,6 +126,10 @@ export const PAGES = {
     title: "Doubling candidates",
     blurb: "Which liquid names the model thinks most likely to double within a year, and how far to trust it.",
   },
+  "/mb/explore": {
+    title: "Model explorer",
+    blurb: "Every scored stock with both models side by side: filter on price, liquidity, returns, growth and sector, then rank by either model or both.",
+  },
   "/mb/swing": {
     title: "Swing picks",
     blurb: "Five stocks a night the model rates most likely to run +14% under a trailing stop, only while the equal-weight NIFTY 500 trend is up.",

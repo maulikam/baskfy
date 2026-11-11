@@ -80,7 +80,7 @@ describe("Activity honest copy (AF I.6)", () => {
 
 describe("BACKLOG titles (AF I.BACKLOG)", () => {
   const backlog = readFileSync(
-    resolve(WEB_ROOT, "../../../docs/audit-fix/BACKLOG.md"),
+    resolve(WEB_ROOT, "../../docs/audit/audit-fix/BACKLOG.md"),
     "utf8",
   );
 

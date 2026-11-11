@@ -50,6 +50,8 @@ describe("/mb", () => {
     expect(within(rows[0] as HTMLElement).getByText("SALSTEEL")).toBeTruthy();
     expect(within(rows[0] as HTMLElement).getByText("369%")).toBeTruthy();
     expect(within(rows[1] as HTMLElement).getByTestId("mb-hi63").textContent).toBe("9 Nov 2026");
+    expect(rows.map((r) => within(r).getByTestId("mb-rank").textContent)).toEqual(["1", "2"]);
+    expect(rows.map((r) => within(r).getByTestId("mb-overall").textContent)).toEqual(["1", "3"]);
     expect(document.body.textContent?.toLowerCase()).not.toContain("live");
   });
 

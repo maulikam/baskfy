@@ -21,9 +21,9 @@ export function MbDeskWatchlist({ names, asOf }: { names: readonly MbName[]; asO
         <p className="text-sm text-muted-foreground">Nothing scored yet.</p>
       ) : (
         <ol className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4" data-testid="mb-desk-list">
-          {top.map((n) => (
+          {top.map((n, k) => (
             <li key={n.instrument_id} className="flex gap-2 tabular-nums">
-              <span className="w-6 text-muted-foreground">{n.rank}</span>
+              <span className="w-6 text-muted-foreground">{k + 1}</span>
               <InstrumentLink symbol={n.symbol} flag={false} />
               <span className="text-muted-foreground">{formatNumber(n.close, { decimals: 2 })}</span>
             </li>

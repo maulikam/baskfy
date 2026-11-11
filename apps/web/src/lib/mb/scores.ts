@@ -83,18 +83,52 @@ export function parseMbScores(payload: Payload): MbScores {
   };
 }
 
-async function fetchMbScores(key: string): Promise<MbScores> {
-  const token = await accessToken();
-  if (!token) return EMPTY_MB_SCORES;
+/** The API answers at most this many symbols a request (`MAX_LOOKUP`); a bigger table asks in batches. */
+export const LOOKUP_BATCH = 500;
+
+/** Merges batch answers; the session facts come from the first batch that has them. */
+export function mergeMbScores(parts: readonly MbScores[]): MbScores {
+  if (parts.length === 0) return EMPTY_MB_SCORES;
+  const pick = <T,>(f: (p: MbScores) => T | null): T | null => {
+    for (const p of parts) {
+      const v = f(p);
+      if (v !== null) return v;
+    }
+    return null;
+  };
+  return {
+    asOf: pick((p) => p.asOf),
+    universeN: pick((p) => p.universeN),
+    bySymbol: Object.fromEntries(parts.flatMap((p) => Object.entries(p.bySymbol))),
+    loaded: parts.every((p) => p.loaded),
+    swing: {
+      asOf: pick((p) => p.swing.asOf),
+      universeN: pick((p) => p.swing.universeN),
+      switchOn: pick((p) => p.swing.switchOn),
+      bySymbol: Object.fromEntries(parts.flatMap((p) => Object.entries(p.swing.bySymbol))),
+    },
+  };
+}
+
+async function fetchBatch(token: string, symbols: readonly string[]): Promise<MbScores> {
   const url = new URL("/api/v1/mb/lookup", apiOrigin());
-  url.searchParams.set("symbols", key.split(",").slice(0, 500).join(","));
+  url.searchParams.set("symbols", symbols.join(","));
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) return EMPTY_MB_SCORES;
   return parseMbScores((await response.json()) as Payload);
+}
+
+async function fetchMbScores(key: string): Promise<MbScores> {
+  const token = await accessToken();
+  if (!token) return EMPTY_MB_SCORES;
+  const all = key.split(",");
+  const batches: string[][] = [];
+  for (let i = 0; i < all.length; i += LOOKUP_BATCH) batches.push(all.slice(i, i + LOOKUP_BATCH));
+  return mergeMbScores(await Promise.all(batches.map((b) => fetchBatch(token, b))));
 }
 
 /** Scores change once a day, after the nightly; a 10-minute refresh is plenty. No react-query: the

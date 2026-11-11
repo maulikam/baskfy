@@ -105,7 +105,7 @@ function Outcomes({
               className="border-b border-border/40 tabular-nums"
             >
               <td className="py-1.5 pr-4">
-                {o.line === "book" ? "Book of record" : "63-day trigger"}
+                {o.line === "book" ? "Monthly picks" : "63-day trigger"}
               </td>
               <td className="py-1.5 pr-4 text-muted-foreground">
                 {o.matured ? "held 12 months" : "so far"}
@@ -123,7 +123,7 @@ function Outcomes({
             </tr>
           ))}
           <tr className="text-muted-foreground" data-testid="mb-paper-expect">
-            <td className="py-1.5 pr-4">Expected, book</td>
+            <td className="py-1.5 pr-4">Expected, monthly picks</td>
             <td className="py-1.5 pr-4">held 12 months</td>
             <td className="py-1.5 pr-4">{EMPTY_CELL}</td>
             <td className="py-1.5 pr-4">{MB_PAPER_EXPECT.touched2x}</td>

@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CandidatesTable } from "@/components/overlap/candidates-table";
@@ -29,11 +36,20 @@ afterEach(cleanup);
  * string. `parseCandidates` is the one place that reconciles the two.
  */
 const payload = parseCandidates({
-  sessions: { swing: "2026-09-11", volume_breakout: "2026-09-10", three_weeks_tight: "2026-09-10" },
+  sessions: {
+    swing: "2026-09-11",
+    volume_breakout: "2026-09-10",
+    three_weeks_tight: "2026-09-10",
+  },
   scope: "actionable",
   strategies_read: true,
   screens_checked: 6,
-  laya: { last_pass_at: "2026-09-25T06:12:31+05:30", answered: 1, shown: 1, of: 1 },
+  laya: {
+    last_pass_at: "2026-09-25T06:12:31+05:30",
+    answered: 1,
+    shown: 1,
+    of: 1,
+  },
   data: [
     {
       instrument_id: 1,
@@ -138,11 +154,19 @@ describe("CandidatesTable", () => {
     render(<CandidatesTable candidates={payload} scope="all" />);
 
     const rows = screen.getAllByTestId("overlap-candidate-row");
-    expect(rows.map((row) => row.getAttribute("data-symbol"))).toEqual(["BOTH", "QUIET"]);
-    expect(rows.map((row) => row.getAttribute("data-actionable"))).toEqual(["true", "false"]);
+    expect(rows.map((row) => row.getAttribute("data-symbol"))).toEqual([
+      "BOTH",
+      "QUIET",
+    ]);
+    expect(rows.map((row) => row.getAttribute("data-actionable"))).toEqual([
+      "true",
+      "false",
+    ]);
 
     const both = rows[0]!;
-    expect(within(both).getByTestId("overlap-candidate-count")).toHaveTextContent("2");
+    expect(
+      within(both).getByTestId("overlap-candidate-count"),
+    ).toHaveTextContent("2");
     const chips = within(both).getAllByTestId("overlap-candidate-strategy");
     expect(chips.map((chip) => chip.textContent)).toEqual([
       "Swing· EP · GAP_DAY",
@@ -152,30 +176,47 @@ describe("CandidatesTable", () => {
     /* The close, at its stored precision — no live session was mocked, so no live cell. */
     expect(within(both).getByTestId("close-price")).toHaveTextContent("144.75");
     expect(within(both).queryByTestId("live-price")).toBeNull();
-    expect(within(both).getByTestId("overlap-candidate-earnings")).toHaveTextContent("15 Sept 2026");
+    expect(
+      within(both).getByTestId("overlap-candidate-earnings"),
+    ).toHaveTextContent("15 Sept 2026");
 
     /* The filing is a link out to the exchange's own copy, in a new tab — never the text. */
     const filing = within(both).getByTestId("overlap-candidate-filing");
-    expect(filing).toHaveAttribute("href", "https://nsearchives.nseindia.com/corporate/BOTH.pdf");
+    expect(filing).toHaveAttribute(
+      "href",
+      "https://nsearchives.nseindia.com/corporate/BOTH.pdf",
+    );
     expect(filing).toHaveAttribute("target", "_blank");
     expect(filing).toHaveAttribute("rel", "noopener noreferrer");
     expect(filing).toHaveTextContent("BOTH wins a multi-year order");
-    expect(within(both).getByTestId("overlap-candidate-screen")).toHaveTextContent(
-      "Investing 001 #3 of 40",
-    );
+    expect(
+      within(both).getByTestId("overlap-candidate-screen"),
+    ).toHaveTextContent("Investing 001 #3 of 40");
     /* The baseline's tag: the reader's word, the priority, the source and the why — as context. */
     const tag = within(both).getByTestId("overlap-candidate-tag");
     expect(tag).toHaveTextContent("Order win");
     expect(tag).toHaveAttribute("data-priority", "high");
     expect(tag).toHaveAttribute("data-source", "laya");
-    expect(within(tag).getByTestId("overlap-candidate-tag-confidence")).toHaveTextContent("98%");
-    expect(tag).toHaveAttribute("title", expect.stringContaining("Laya read the headline at 98%"));
-    expect(tag).toHaveAttribute("title", expect.stringContaining("not used in any rank"));
-    expect(screen.getByTestId("overlap-candidates-tag-note")).toHaveTextContent("by Laya");
+    expect(
+      within(tag).getByTestId("overlap-candidate-tag-confidence"),
+    ).toHaveTextContent("98%");
+    expect(tag).toHaveAttribute(
+      "title",
+      expect.stringContaining("Laya read the headline at 98%"),
+    );
+    expect(tag).toHaveAttribute(
+      "title",
+      expect.stringContaining("not used in any rank"),
+    );
+    expect(screen.getByTestId("overlap-candidates-tag-note")).toHaveTextContent(
+      "by Laya",
+    );
 
     /* A name the feed does not cover has no result date and no filing — dashes, not blanks. */
     const quiet = rows[1]!;
-    expect(within(quiet).queryByTestId("overlap-candidate-earnings")).toBeNull();
+    expect(
+      within(quiet).queryByTestId("overlap-candidate-earnings"),
+    ).toBeNull();
     expect(within(quiet).queryByTestId("overlap-candidate-filing")).toBeNull();
     expect(within(quiet).queryByTestId("overlap-candidate-tag")).toBeNull();
   });
@@ -207,8 +248,14 @@ describe("CandidatesTable", () => {
     expect(tag).toHaveAttribute("data-source", "rules");
     expect(screen.queryByTestId("overlap-candidate-tag-confidence")).toBeNull();
     expect(tag).toHaveAttribute("data-disagrees-with", "laya:corporate_action");
-    expect(tag).toHaveAttribute("title", expect.stringContaining("matched: sebi order"));
-    expect(tag).toHaveAttribute("title", expect.stringContaining("(laya) said corporate_action"));
+    expect(tag).toHaveAttribute(
+      "title",
+      expect.stringContaining("matched: sebi order"),
+    );
+    expect(tag).toHaveAttribute(
+      "title",
+      expect.stringContaining("(laya) said corporate_action"),
+    );
     /* The rules stood because Laya was unsure: the guess is on hover, not a mark on the row. */
     expect(within(tag).queryByLabelText("the two readers disagree")).toBeNull();
   });
@@ -218,8 +265,16 @@ describe("CandidatesTable", () => {
     expect(screen.queryByTestId("overlap-candidate-tag-correct")).toBeNull();
     cleanup();
 
-    const correctTag: CorrectTagAction = vi.fn(() => Promise.resolve({ ok: true as const }));
-    render(<CandidatesTable candidates={payload} scope="actionable" correctTag={correctTag} />);
+    const correctTag: CorrectTagAction = vi.fn(() =>
+      Promise.resolve({ ok: true as const }),
+    );
+    render(
+      <CandidatesTable
+        candidates={payload}
+        scope="actionable"
+        correctTag={correctTag}
+      />,
+    );
     const select = screen.getByTestId("overlap-candidate-tag-correct");
     expect(select).toHaveAttribute(
       "aria-label",
@@ -249,19 +304,32 @@ describe("CandidatesTable", () => {
       "Routine notice",
       "Unclear",
     ]);
-    expect(within(select).getByRole("option", { name: "Clear correction" })).toBeDisabled();
+    expect(
+      within(select).getByRole("option", { name: "Clear correction" }),
+    ).toBeDisabled();
     /* Laya's word stands: nothing is selected until a person chooses. */
     expect(select).toHaveValue("");
   });
 
   it("calls the action with the headline and the chosen word", async () => {
-    const correctTag: CorrectTagAction = vi.fn(() => Promise.resolve({ ok: true as const }));
-    render(<CandidatesTable candidates={payload} scope="actionable" correctTag={correctTag} />);
+    const correctTag: CorrectTagAction = vi.fn(() =>
+      Promise.resolve({ ok: true as const }),
+    );
+    render(
+      <CandidatesTable
+        candidates={payload}
+        scope="actionable"
+        correctTag={correctTag}
+      />,
+    );
     fireEvent.change(screen.getByTestId("overlap-candidate-tag-correct"), {
       target: { value: "order" },
     });
     await waitFor(() =>
-      expect(correctTag).toHaveBeenCalledWith("Press Release - BOTH wins a multi-year order", "order"),
+      expect(correctTag).toHaveBeenCalledWith(
+        "Press Release - BOTH wins a multi-year order",
+        "order",
+      ),
     );
     expect(correctTag).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("overlap-candidate-tag-error")).toBeNull();
@@ -289,29 +357,53 @@ describe("CandidatesTable", () => {
       ],
     };
     const correctTag: CorrectTagAction = vi.fn(() =>
-      Promise.resolve({ ok: false as const, error: "The correction was not saved." }),
+      Promise.resolve({
+        ok: false as const,
+        error: "The correction was not saved.",
+      }),
     );
-    render(<CandidatesTable candidates={corrected} scope="actionable" correctTag={correctTag} />);
+    render(
+      <CandidatesTable
+        candidates={corrected}
+        scope="actionable"
+        correctTag={correctTag}
+      />,
+    );
     const tag = screen.getByTestId("overlap-candidate-tag");
     expect(tag).toHaveAttribute("data-source", "corrected");
     expect(tag).toHaveAttribute("data-corrected", "true");
     expect(tag).toHaveTextContent("Governance");
-    expect(within(tag).getByTestId("overlap-candidate-tag-source")).toHaveTextContent("corrected");
-    expect(within(tag).queryByTestId("overlap-candidate-tag-confidence")).toBeNull();
-    expect(tag).toHaveAttribute("title", expect.stringContaining("Corrected by you"));
-    expect(tag).toHaveAttribute("title", expect.stringContaining("overrules laya, which said order"));
+    expect(
+      within(tag).getByTestId("overlap-candidate-tag-source"),
+    ).toHaveTextContent("corrected");
+    expect(
+      within(tag).queryByTestId("overlap-candidate-tag-confidence"),
+    ).toBeNull();
+    expect(tag).toHaveAttribute(
+      "title",
+      expect.stringContaining("Corrected by you"),
+    );
+    expect(tag).toHaveAttribute(
+      "title",
+      expect.stringContaining("overrules laya, which said order"),
+    );
 
     const select = screen.getByTestId("overlap-candidate-tag-correct");
     expect(select).toHaveValue("governance");
-    expect(within(select).getByRole("option", { name: "Clear correction" })).toBeEnabled();
+    expect(
+      within(select).getByRole("option", { name: "Clear correction" }),
+    ).toBeEnabled();
     fireEvent.change(select, { target: { value: "__clear" } });
     await waitFor(() =>
-      expect(correctTag).toHaveBeenCalledWith("Press Release - BOTH wins a multi-year order", null),
+      expect(correctTag).toHaveBeenCalledWith(
+        "Press Release - BOTH wins a multi-year order",
+        null,
+      ),
     );
     /* A refusal is said on the chip, in this app's words. */
-    expect(await screen.findByTestId("overlap-candidate-tag-error")).toHaveTextContent(
-      "The correction was not saved.",
-    );
+    expect(
+      await screen.findByTestId("overlap-candidate-tag-error"),
+    ).toHaveTextContent("The correction was not saved.");
   });
 
   it("marks a disagreement only when a confident Laya overruled the rules", () => {
@@ -338,10 +430,9 @@ describe("CandidatesTable", () => {
     render(<CandidatesTable candidates={overruled} scope="actionable" />);
     const tag = screen.getByTestId("overlap-candidate-tag");
     expect(tag).toHaveAttribute("data-source", "laya");
-    expect(within(tag).getByLabelText("the two readers disagree")).toHaveAttribute(
-      "title",
-      "The other reader (rules) said order.",
-    );
+    expect(
+      within(tag).getByLabelText("the two readers disagree"),
+    ).toHaveAttribute("title", "The other reader (rules) said order.");
   });
 
   it("shows Laya's word with its percentage when it was sure, the rules' word with its reason otherwise, and never a trade", () => {
@@ -350,7 +441,10 @@ describe("CandidatesTable", () => {
     expect(sure).toHaveTextContent("Look first82%");
     expect(sure).toHaveAttribute("data-state", "shown");
     expect(sure).toHaveAttribute("data-source", "laya");
-    expect(sure).toHaveAttribute("title", expect.stringContaining("never a trade"));
+    expect(sure).toHaveAttribute(
+      "title",
+      expect.stringContaining("never a trade"),
+    );
     /* The column always has a word: no "not sure", no "—", no percentage on the rules. */
     expect(rules).toHaveTextContent("Worth a lookrules");
     expect(rules).not.toHaveTextContent("%");
@@ -358,16 +452,28 @@ describe("CandidatesTable", () => {
     expect(rules).toHaveAttribute("data-source", "rules");
     expect(rules).toHaveAttribute(
       "title",
-      expect.stringContaining("by the rules: a strategy could act; no filing on record"),
+      expect.stringContaining(
+        "by the rules: a strategy could act; no filing on record",
+      ),
     );
-    expect(rules).toHaveAttribute("title", expect.stringContaining("never a trade"));
+    expect(rules).toHaveAttribute(
+      "title",
+      expect.stringContaining("never a trade"),
+    );
     expect(screen.queryByText("not sure")).toBeNull();
-    expect(screen.getByRole("columnheader", { name: "Laya" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Laya" }),
+    ).toBeInTheDocument();
     /* The model's own percentage is visible on the rules row, and not repeated on Laya's own. */
     const [asides] = screen.getAllByTestId("overlap-candidate-opinion-laya");
-    expect(screen.getAllByTestId("overlap-candidate-opinion-laya")).toHaveLength(1);
+    expect(
+      screen.getAllByTestId("overlap-candidate-opinion-laya"),
+    ).toHaveLength(1);
     expect(asides).toHaveTextContent("Laya: Skip 34%");
-    expect(asides).toHaveAttribute("title", expect.stringContaining("under its 60% floor"));
+    expect(asides).toHaveAttribute(
+      "title",
+      expect.stringContaining("under its 60% floor"),
+    );
   });
 
   it("says why the rules said skip, and keeps the row labellable", () => {
@@ -389,19 +495,29 @@ describe("CandidatesTable", () => {
         },
       ],
     };
-    const labelRow: LabelRowAction = vi.fn(() => Promise.resolve({ ok: true as const }));
-    render(<CandidatesTable candidates={skipped} scope="all" labelRow={labelRow} />);
+    const labelRow: LabelRowAction = vi.fn(() =>
+      Promise.resolve({ ok: true as const }),
+    );
+    render(
+      <CandidatesTable candidates={skipped} scope="all" labelRow={labelRow} />,
+    );
     const opinion = screen.getByTestId("overlap-candidate-opinion");
     expect(opinion).toHaveTextContent("Skiprules");
     expect(opinion).toHaveAttribute("data-label", "skip");
     expect(opinion).toHaveAttribute(
       "title",
-      expect.stringContaining("Skip by the rules: the filing is adverse; Swing gate shut"),
+      expect.stringContaining(
+        "Skip by the rules: the filing is adverse; Swing gate shut",
+      ),
     );
     /* A person can still overrule the baseline — the select is empty, not the rules' word. */
-    expect(screen.getByTestId("overlap-candidate-opinion-label")).toHaveValue("");
+    expect(screen.getByTestId("overlap-candidate-opinion-label")).toHaveValue(
+      "",
+    );
     /* No answer from the sidecar yet: said, not hidden. */
-    expect(screen.getByTestId("overlap-candidate-opinion-laya")).toHaveTextContent("Laya: not read yet");
+    expect(
+      screen.getByTestId("overlap-candidate-opinion-laya"),
+    ).toHaveTextContent("Laya: not read yet");
   });
 
   it("offers the three words and a clear option on the Laya cell when it can write, and nothing when it cannot", () => {
@@ -409,13 +525,20 @@ describe("CandidatesTable", () => {
     expect(screen.queryByTestId("overlap-candidate-opinion-label")).toBeNull();
     cleanup();
 
-    const labelRow: LabelRowAction = vi.fn(() => Promise.resolve({ ok: true as const }));
-    render(<CandidatesTable candidates={payload} scope="all" labelRow={labelRow} />);
+    const labelRow: LabelRowAction = vi.fn(() =>
+      Promise.resolve({ ok: true as const }),
+    );
+    render(
+      <CandidatesTable candidates={payload} scope="all" labelRow={labelRow} />,
+    );
     /* Every row gets a select — including one the model has not answered or was unsure on. */
     const selects = screen.getAllByTestId("overlap-candidate-opinion-label");
     expect(selects).toHaveLength(2);
     const select = selects[0]!;
-    expect(select).toHaveAttribute("aria-label", "Label BOTH: how much does this row deserve a look");
+    expect(select).toHaveAttribute(
+      "aria-label",
+      "Label BOTH: how much does this row deserve a look",
+    );
     const options = within(select).getAllByRole("option");
     /* A placeholder, the three words in the wire's order, and the clear option. */
     expect(options.map((option) => option.getAttribute("value"))).toEqual([
@@ -430,15 +553,23 @@ describe("CandidatesTable", () => {
       "Worth a look",
       "Skip",
     ]);
-    expect(within(select).getByRole("option", { name: "Clear label" })).toBeDisabled();
+    expect(
+      within(select).getByRole("option", { name: "Clear label" }),
+    ).toBeDisabled();
     /* Laya's word stands: nothing is selected until a person chooses. */
     expect(select).toHaveValue("");
-    expect(within(select).getByRole("option", { name: "Label…" })).toBeDisabled();
+    expect(
+      within(select).getByRole("option", { name: "Label…" }),
+    ).toBeDisabled();
   });
 
   it("calls the label action with the instrument and the chosen word", async () => {
-    const labelRow: LabelRowAction = vi.fn(() => Promise.resolve({ ok: true as const }));
-    render(<CandidatesTable candidates={payload} scope="all" labelRow={labelRow} />);
+    const labelRow: LabelRowAction = vi.fn(() =>
+      Promise.resolve({ ok: true as const }),
+    );
+    render(
+      <CandidatesTable candidates={payload} scope="all" labelRow={labelRow} />,
+    );
     const [, quiet] = screen.getAllByTestId("overlap-candidate-opinion-label");
     fireEvent.change(quiet!, { target: { value: "skip" } });
     await waitFor(() => expect(labelRow).toHaveBeenCalledWith(2, "skip"));
@@ -466,30 +597,51 @@ describe("CandidatesTable", () => {
       ],
     };
     const labelRow: LabelRowAction = vi.fn(() =>
-      Promise.resolve({ ok: false as const, error: "The label was not saved." }),
+      Promise.resolve({
+        ok: false as const,
+        error: "The label was not saved.",
+      }),
     );
-    render(<CandidatesTable candidates={labelled} scope="actionable" labelRow={labelRow} />);
+    render(
+      <CandidatesTable
+        candidates={labelled}
+        scope="actionable"
+        labelRow={labelRow}
+      />,
+    );
     const opinion = screen.getByTestId("overlap-candidate-opinion");
     expect(opinion).toHaveAttribute("data-source", "labelled");
     expect(opinion).toHaveAttribute("data-state", "shown");
     expect(opinion).toHaveAttribute("data-label", "skip");
     expect(opinion).toHaveTextContent("Skiplabelled");
     expect(opinion).not.toHaveTextContent("%");
-    expect(within(opinion).getByTestId("overlap-candidate-opinion-source")).toHaveTextContent("labelled");
-    expect(opinion).toHaveAttribute("title", expect.stringContaining("Labelled by you"));
-    expect(opinion).toHaveAttribute("title", expect.stringContaining("never a trade"));
+    expect(
+      within(opinion).getByTestId("overlap-candidate-opinion-source"),
+    ).toHaveTextContent("labelled");
+    expect(opinion).toHaveAttribute(
+      "title",
+      expect.stringContaining("Labelled by you"),
+    );
+    expect(opinion).toHaveAttribute(
+      "title",
+      expect.stringContaining("never a trade"),
+    );
     /* What the model said stays visible beside the person's word — the disagreement is the point. */
-    expect(screen.getByTestId("overlap-candidate-opinion-laya")).toHaveTextContent("Laya: Look first 41%");
+    expect(
+      screen.getByTestId("overlap-candidate-opinion-laya"),
+    ).toHaveTextContent("Laya: Look first 41%");
 
     const select = screen.getByTestId("overlap-candidate-opinion-label");
     expect(select).toHaveValue("skip");
-    expect(within(select).getByRole("option", { name: "Clear label" })).toBeEnabled();
+    expect(
+      within(select).getByRole("option", { name: "Clear label" }),
+    ).toBeEnabled();
     fireEvent.change(select, { target: { value: "__clear" } });
     await waitFor(() => expect(labelRow).toHaveBeenCalledWith(1, null));
     /* A refusal is said in the cell, in this app's words. */
-    expect(await screen.findByTestId("overlap-candidate-opinion-error")).toHaveTextContent(
-      "The label was not saved.",
-    );
+    expect(
+      await screen.findByTestId("overlap-candidate-opinion-error"),
+    ).toHaveTextContent("The label was not saved.");
   });
 
   it("says whether Laya is working, in one line", () => {
@@ -518,18 +670,16 @@ describe("CandidatesTable", () => {
 
   it("keeps the picked screens while switching scope", () => {
     render(<CandidatesTable candidates={payload} scope="actionable" />);
-    expect(screen.getByTestId("overlap-candidates-scope-actionable")).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
+    expect(
+      screen.getByTestId("overlap-candidates-scope-actionable"),
+    ).toHaveAttribute("aria-current", "true");
     expect(screen.getByTestId("overlap-candidates-scope-all")).toHaveAttribute(
       "href",
       "/build/overlap?screen=exmpl0000001&scope=all",
     );
-    expect(screen.getByTestId("overlap-candidates-scope-actionable")).toHaveAttribute(
-      "href",
-      "/build/overlap?screen=exmpl0000001",
-    );
+    expect(
+      screen.getByTestId("overlap-candidates-scope-actionable"),
+    ).toHaveAttribute("href", "/build/overlap?screen=exmpl0000001");
   });
 
   it("distinguishes an unread API, another account, and an empty morning", () => {
@@ -537,9 +687,15 @@ describe("CandidatesTable", () => {
     expect(screen.getByTestId("overlap-candidates-unread")).toBeInTheDocument();
     cleanup();
 
-    const notMine: OverlapCandidates = { ...payload, strategies_read: false, data: [] };
+    const notMine: OverlapCandidates = {
+      ...payload,
+      strategies_read: false,
+      data: [],
+    };
     render(<CandidatesTable candidates={notMine} scope="actionable" />);
-    expect(screen.getByTestId("overlap-candidates-not-yours")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("overlap-candidates-not-yours"),
+    ).toBeInTheDocument();
     cleanup();
 
     const empty: OverlapCandidates = { ...payload, data: [] };
@@ -553,15 +709,21 @@ describe("CandidatesTable", () => {
 
 describe("CandidatesTable sorting (OV12)", () => {
   const rowOrder = () =>
-    screen.getAllByTestId("overlap-candidate-row").map((row) => row.getAttribute("data-symbol"));
+    screen
+      .getAllByTestId("overlap-candidate-row")
+      .map((row) => row.getAttribute("data-symbol"));
 
   it("starts in the server's order with no header sorted", () => {
     render(<CandidatesTable candidates={payload} scope="all" />);
     expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
     const headers = screen.getAllByRole("columnheader");
-    expect(headers).toHaveLength(9);
-    for (const header of headers.slice(0, 8)) expect(header).toHaveAttribute("aria-sort", "none");
-    expect(headers.map((h) => h.textContent?.replace(/[▲▼]/g, "").trim())).toEqual([
+    expect(headers).toHaveLength(10); // the model column comes first (PM7)
+    for (const header of headers.slice(1, 9))
+      expect(header).toHaveAttribute("aria-sort", "none");
+    expect(
+      headers.map((h) => h.textContent?.replace(/[▲▼]/g, "").trim()),
+    ).toEqual([
+      "Model",
       "Name",
       "On",
       "Strategies",
@@ -578,10 +740,14 @@ describe("CandidatesTable sorting (OV12)", () => {
     render(<CandidatesTable candidates={payload} scope="all" />);
     fireEvent.click(screen.getByTestId("overlap-sort-price"));
     expect(rowOrder()).toEqual(["QUIET", "BOTH"]);
-    expect(screen.getByTestId("overlap-sort-price").closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(
+      screen.getByTestId("overlap-sort-price").closest("th"),
+    ).toHaveAttribute("aria-sort", "descending");
     fireEvent.click(screen.getByTestId("overlap-sort-price"));
     expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
-    expect(screen.getByTestId("overlap-sort-price").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(
+      screen.getByTestId("overlap-sort-price").closest("th"),
+    ).toHaveAttribute("aria-sort", "ascending");
   });
 
   it("sorts by name ascending first, and moving to another header resets to its own direction", () => {
@@ -593,8 +759,12 @@ describe("CandidatesTable sorting (OV12)", () => {
     fireEvent.click(screen.getByTestId("overlap-sort-laya"));
     /* Laya descends on a first click: look first before worth a look. */
     expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
-    expect(screen.getByTestId("overlap-sort-laya").closest("th")).toHaveAttribute("aria-sort", "descending");
-    expect(screen.getByTestId("overlap-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
+    expect(
+      screen.getByTestId("overlap-sort-laya").closest("th"),
+    ).toHaveAttribute("aria-sort", "descending");
+    expect(
+      screen.getByTestId("overlap-sort-name").closest("th"),
+    ).toHaveAttribute("aria-sort", "none");
   });
 
   it("puts rows with nothing to sort by last, whichever way the column points", () => {

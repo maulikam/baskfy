@@ -5,8 +5,21 @@ import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { SeriesFlag } from "@/components/regime-signal/series-flag";
 import { RegimeDot } from "@/components/regime-signal/regime-dot";
-import { RegimeRows, RegimeSortHeader, RegimeTable } from "@/components/regime-signal/regime-table";
-import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
+import {
+  RegimeRows,
+  RegimeSortHeader,
+  RegimeTable,
+} from "@/components/regime-signal/regime-table";
+import {
+  MbScoreCell,
+  MbScoreHead,
+  MbScoresProvider,
+} from "@/components/mb/score-cell";
+import {
+  LiveMarksProvider,
+  LivePrice,
+  LiveStatus,
+} from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
 import { VbtDeskPanel } from "@/components/vbt/desk-panel";
 import { fetchMe } from "@/lib/auth/me";
@@ -98,108 +111,117 @@ function CandidateTable({
 }) {
   return (
     <RegimeTable>
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[74rem] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <RegimeSortHeader />
-            <th className="py-2 pr-3 font-medium">Stock</th>
-            <th className="py-2 pr-3 font-medium">Price</th>
-            <th className="py-2 pr-3 font-medium">Limit</th>
-            <th className="py-2 pr-3 font-medium">Stop</th>
-            <th className="py-2 pr-3 font-medium">Change</th>
-            <th className="py-2 pr-3 font-medium">Rel. volume</th>
-            <th className="py-2 pr-3 font-medium">Close position</th>
-            <th className="py-2 pr-3 font-medium">20-day return</th>
-            <th className="py-2 pr-3 font-medium">Turnover</th>
-            <th className="py-2 pr-3 font-medium">Above 200-DMA</th>
-            <th className="py-2 pr-3 font-medium">Chart</th>
-            <th className="py-2 pr-3 font-medium">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <RegimeRows
-            colSpan={13}
-            rows={rows.map((row) => ({
-              key: String(row.instrument_id),
-              signal: row.regime_signal,
-              node: (
-            <tr className="border-b border-border/40">
-              <td className="py-2 pr-2">
-                <RegimeDot signal={row.regime_signal} />
-              </td>
-              <td className="py-2 pr-3">
-                <InstrumentLink symbol={row.symbol} flag={false} />
-                <SeriesFlag series={row.series} />
-                {row.locked_upper_circuit ? (
-                  <span
-                    title="Locked at the upper circuit — no plan line is placed for it (04 §7.4)"
-                    className="ml-1.5 text-warning"
-                    data-testid="locked-warning"
-                  >
-                    ⚠
-                  </span>
-                ) : null}
-                <span className="block text-xs text-muted-foreground">
-                  {row.name}
-                </span>
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                <LivePrice symbol={row.symbol} close={row.last_price ?? row.close} />
-              </td>
-              <td className="py-2 pr-3 font-medium tabular-nums">
-                {money(row.limit_price)}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {money(row.stop_price)}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {percent(row.change_pct, 2)}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {row.rvol === null ? "—" : `${row.rvol.toFixed(1)}×`}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {position(row.close_position)}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {percent(row.ret_20_pct)}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {crore(row.turnover_avg_20)}
-              </td>
-              <td className="py-2 pr-3 tabular-nums">
-                {percent(row.pct_above_dma)}
-              </td>
-              <td className="py-2 pr-3">
-                <MiniChart
-                  bars={charts.get(row.instrument_id) ?? []}
-                  limit={row.limit_price}
-                  stop={row.stop_price}
-                  priorHigh={row.high_20_prior}
-                  label={`${row.symbol}: 130 sessions of adjusted closes, with its limit and stop`}
-                />
-              </td>
-              <td className="py-2 pr-3">
-                <BuyTicketButton
-                  symbol={row.symbol}
-                  name={row.name}
-                  instrumentId={row.instrument_id}
-                  price={row.last_price ?? row.close}
-                  source="vbt"
-                  setup="VBT"
-                  entry={row.limit_price}
-                  stop={row.stop_price}
-                  disabledReason={gate === "OPEN" ? null : `Volume-breakout gate is ${gate ?? "unread"}: no new entries.`}
-                />
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[74rem] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <MbScoreHead />
+              <RegimeSortHeader />
+              <th className="py-2 pr-3 font-medium">Stock</th>
+              <th className="py-2 pr-3 font-medium">Price</th>
+              <th className="py-2 pr-3 font-medium">Limit</th>
+              <th className="py-2 pr-3 font-medium">Stop</th>
+              <th className="py-2 pr-3 font-medium">Change</th>
+              <th className="py-2 pr-3 font-medium">Rel. volume</th>
+              <th className="py-2 pr-3 font-medium">Close position</th>
+              <th className="py-2 pr-3 font-medium">20-day return</th>
+              <th className="py-2 pr-3 font-medium">Turnover</th>
+              <th className="py-2 pr-3 font-medium">Above 200-DMA</th>
+              <th className="py-2 pr-3 font-medium">Chart</th>
+              <th className="py-2 pr-3 font-medium">Action</th>
             </tr>
-              ),
-            }))}
-          />
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            <RegimeRows
+              colSpan={14}
+              rows={rows.map((row) => ({
+                key: String(row.instrument_id),
+                signal: row.regime_signal,
+                node: (
+                  <tr className="border-b border-border/40">
+                    <MbScoreCell symbol={row.symbol} />
+                    <td className="py-2 pr-2">
+                      <RegimeDot signal={row.regime_signal} />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <InstrumentLink symbol={row.symbol} flag={false} />
+                      <SeriesFlag series={row.series} />
+                      {row.locked_upper_circuit ? (
+                        <span
+                          title="Locked at the upper circuit — no plan line is placed for it (04 §7.4)"
+                          className="ml-1.5 text-warning"
+                          data-testid="locked-warning"
+                        >
+                          ⚠
+                        </span>
+                      ) : null}
+                      <span className="block text-xs text-muted-foreground">
+                        {row.name}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      <LivePrice
+                        symbol={row.symbol}
+                        close={row.last_price ?? row.close}
+                      />
+                    </td>
+                    <td className="py-2 pr-3 font-medium tabular-nums">
+                      {money(row.limit_price)}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {money(row.stop_price)}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {percent(row.change_pct, 2)}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {row.rvol === null ? "—" : `${row.rvol.toFixed(1)}×`}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {position(row.close_position)}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {percent(row.ret_20_pct)}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {crore(row.turnover_avg_20)}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {percent(row.pct_above_dma)}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <MiniChart
+                        bars={charts.get(row.instrument_id) ?? []}
+                        limit={row.limit_price}
+                        stop={row.stop_price}
+                        priorHigh={row.high_20_prior}
+                        label={`${row.symbol}: 130 sessions of adjusted closes, with its limit and stop`}
+                      />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <BuyTicketButton
+                        symbol={row.symbol}
+                        name={row.name}
+                        instrumentId={row.instrument_id}
+                        price={row.last_price ?? row.close}
+                        source="vbt"
+                        setup="VBT"
+                        entry={row.limit_price}
+                        stop={row.stop_price}
+                        disabledReason={
+                          gate === "OPEN"
+                            ? null
+                            : `Volume-breakout gate is ${gate ?? "unread"}: no new entries.`
+                        }
+                      />
+                    </td>
+                  </tr>
+                ),
+              }))}
+            />
+          </tbody>
+        </table>
+      </div>
     </RegimeTable>
   );
 }
@@ -236,82 +258,98 @@ function RejectTable({
   return (
     <>
       <div className="mt-3">
-      <RegimeTable>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[46rem] text-sm" data-testid="rejects">
-          <caption className="sr-only">
-            Scan hits that failed a trend filter: which filters said no, and which said yes.
-          </caption>
-          <thead>
-            <tr className="border-b border-border text-xs text-muted-foreground">
-              <RegimeSortHeader className="pl-3 text-left font-normal" />
-              <th scope="col" className="px-3 py-2 text-left font-normal">
-                Stock
-              </th>
-              <th scope="col" className="px-3 py-2 text-left font-normal">
-                Failed
-              </th>
-              <th scope="col" className="px-3 py-2 text-left font-normal">
-                What it failed
-              </th>
-              <th scope="col" className="px-3 py-2 text-left font-normal">
-                Passed
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
-            <RegimeRows
-              colSpan={5}
-              rows={rows.map((row) => ({
-                key: String(row.instrument_id),
-                signal: row.regime_signal,
-                node: (
-              <tr data-testid="reject-row">
-                <td className="py-2 pl-3">
-                  <RegimeDot signal={row.regime_signal} />
-                </td>
-                <th scope="row" className="px-3 py-2 text-left font-medium">
-                  <InstrumentLink symbol={row.symbol} flag={false} />
-                  <SeriesFlag series={row.series} />
-                </th>
-                <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                  {row.failed_filters.length > 0 ? row.failed_filters.join(", ") : "—"}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">
-                  {row.failed_filters.length > 0
-                    ? row.failed_filters
-                        .map((code) => byCode.get(code)?.label ?? code)
-                        .join(" · ")
-                    : "—"}
-                </td>
-                <td
-                  className="px-3 py-2 text-muted-foreground"
-                  data-testid="reject-passed"
-                  /* The letters, with the words on hover: five labels in a cell would push the
+        <RegimeTable>
+          <div className="overflow-x-auto">
+            <table
+              className="w-full min-w-[46rem] text-sm"
+              data-testid="rejects"
+            >
+              <caption className="sr-only">
+                Scan hits that failed a trend filter: which filters said no, and
+                which said yes.
+              </caption>
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <MbScoreHead className="pl-3 py-2 text-left font-normal" />
+                  <RegimeSortHeader className="pl-3 text-left font-normal" />
+                  <th scope="col" className="px-3 py-2 text-left font-normal">
+                    Stock
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-normal">
+                    Failed
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-normal">
+                    What it failed
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-normal">
+                    Passed
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                <RegimeRows
+                  colSpan={6}
+                  rows={rows.map((row) => ({
+                    key: String(row.instrument_id),
+                    signal: row.regime_signal,
+                    node: (
+                      <tr data-testid="reject-row">
+                        <MbScoreCell
+                          symbol={row.symbol}
+                          className="py-2 pl-3"
+                        />
+                        <td className="py-2 pl-3">
+                          <RegimeDot signal={row.regime_signal} />
+                        </td>
+                        <th
+                          scope="row"
+                          className="px-3 py-2 text-left font-medium"
+                        >
+                          <InstrumentLink symbol={row.symbol} flag={false} />
+                          <SeriesFlag series={row.series} />
+                        </th>
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                          {row.failed_filters.length > 0
+                            ? row.failed_filters.join(", ")
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {row.failed_filters.length > 0
+                            ? row.failed_filters
+                                .map((code) => byCode.get(code)?.label ?? code)
+                                .join(" · ")
+                            : "—"}
+                        </td>
+                        <td
+                          className="px-3 py-2 text-muted-foreground"
+                          data-testid="reject-passed"
+                          /* The letters, with the words on hover: five labels in a cell would push the
                      failure — the reason the row is here at all — off the side of the table. */
-                  title={passedFor(row)
-                    .map((filter) => `${filter.code} — ${filter.label}`)
-                    .join("\n")}
-                >
-                  <span className="font-mono text-xs">
-                    {passedFor(row).length > 0
-                      ? passedFor(row).map((filter) => filter.code).join(", ")
-                      : "—"}
-                  </span>
-                  {passedFor(row).length > 0 ? (
-                    <span className="ml-2 text-xs">
-                      {passedFor(row).length} of {filters.length}
-                    </span>
-                  ) : null}
-                </td>
-              </tr>
-                ),
-              }))}
-            />
-          </tbody>
-        </table>
-      </div>
-      </RegimeTable>
+                          title={passedFor(row)
+                            .map((filter) => `${filter.code} — ${filter.label}`)
+                            .join("\n")}
+                        >
+                          <span className="font-mono text-xs">
+                            {passedFor(row).length > 0
+                              ? passedFor(row)
+                                  .map((filter) => filter.code)
+                                  .join(", ")
+                              : "—"}
+                          </span>
+                          {passedFor(row).length > 0 ? (
+                            <span className="ml-2 text-xs">
+                              {passedFor(row).length} of {filters.length}
+                            </span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ),
+                  }))}
+                />
+              </tbody>
+            </table>
+          </div>
+        </RegimeTable>
       </div>
 
       {used.length > 0 ? (
@@ -319,18 +357,27 @@ function RejectTable({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             What each filter checks
           </p>
-          <table className="mt-2 w-full min-w-[34rem] text-sm" data-testid="filter-legend">
+          <table
+            className="mt-2 w-full min-w-[34rem] text-sm"
+            data-testid="filter-legend"
+          >
             <caption className="sr-only">
-              The trend filters behind the letters above, with the rule each applies.
+              The trend filters behind the letters above, with the rule each
+              applies.
             </caption>
             <tbody className="divide-y divide-border/60">
               {used.map((filter) => (
                 <tr key={filter.code}>
-                  <th scope="row" className="px-3 py-2 text-left font-mono text-xs">
+                  <th
+                    scope="row"
+                    className="px-3 py-2 text-left font-mono text-xs"
+                  >
                     {filter.code}
                   </th>
                   <td className="px-3 py-2 font-medium">{filter.label}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{filter.rule}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {filter.rule}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -384,10 +431,11 @@ export default async function VbtTodayPage() {
       >
         {gate ? (
           <>
-            The gate is <span data-testid="gate-badge">
+            The gate is{" "}
+            <span data-testid="gate-badge">
               <Mark>{gate}</Mark>
-            </span> &mdash;{" "}
-            {gateCopy(gate)}. <Mark>{breadthLine(today!)}</Mark>.
+            </span>{" "}
+            &mdash; {gateCopy(gate)}. <Mark>{breadthLine(today!)}</Mark>.
           </>
         ) : (
           <>
@@ -425,8 +473,10 @@ export default async function VbtTodayPage() {
           // Live price overlay (21 Sep 2026): Price shows Kite's last price and today's change
           // while the market is open; the breakout, limit and stop stay on the scanned session.
           <LiveMarksProvider symbols={candidates.map((row) => row.symbol)}>
-            <LiveStatus asOf={asOf} />
-            <CandidateTable rows={candidates} charts={charts} gate={gate} />
+            <MbScoresProvider symbols={candidates.map((row) => row.symbol)}>
+              <LiveStatus asOf={asOf} />
+              <CandidateTable rows={candidates} charts={charts} gate={gate} />
+            </MbScoresProvider>
           </LiveMarksProvider>
         ) : (
           <p
@@ -450,7 +500,9 @@ export default async function VbtTodayPage() {
             the filters, and a page that never shows the rejects makes that
             argument unreadable.
           </p>
-          <RejectTable rows={rejects} filters={filters} />
+          <MbScoresProvider symbols={rejects.map((row) => row.symbol)}>
+            <RejectTable rows={rejects} filters={filters} />
+          </MbScoresProvider>
         </details>
       ) : null}
     </div>

@@ -12,19 +12,27 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { MbScoresProvider, MbScoreValue } from "@/components/mb/score-cell";
 import { SwingBuyButton } from "@/components/opportunities/buy-panel";
 import { MultiBuyButton } from "@/components/opportunities/multi-buy";
 import { SortableHeader } from "@/components/opportunities/sortable-header";
 import { SeriesFlag } from "@/components/regime-signal/series-flag";
 import { RegimeDot } from "@/components/regime-signal/regime-dot";
 import { GreenOnlyToggle } from "@/components/regime-signal/regime-table";
-import { DataStatusBanner, WarningsList } from "@/components/opportunities/states";
+import {
+  DataStatusBanner,
+  WarningsList,
+} from "@/components/opportunities/states";
 import { SwingDetail } from "@/components/opportunities/swing-detail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/format";
 import { isGreen } from "@/lib/regime-signal/types";
-import type { DataStatus, SwingOpportunity, SwingScanResponse } from "@/lib/opportunities/types";
+import type {
+  DataStatus,
+  SwingOpportunity,
+  SwingScanResponse,
+} from "@/lib/opportunities/types";
 import {
   SETUP_LABEL,
   actionabilityLabel,
@@ -50,7 +58,10 @@ export function ActionableBadge({
 }) {
   const verdict = actionabilityLabel(opportunity, status);
   return (
-    <Badge variant={verdict.actionable ? "positive" : "warning"} data-testid="actionable-badge">
+    <Badge
+      variant={verdict.actionable ? "positive" : "warning"}
+      data-testid="actionable-badge"
+    >
       {verdict.label}
     </Badge>
   );
@@ -58,6 +69,19 @@ export function ActionableBadge({
 
 function columns(status: DataStatus) {
   return [
+    column.display({
+      id: "mb",
+      header: () => (
+        <a
+          href="/mb"
+          className="underline decoration-dotted underline-offset-2"
+          title="The doubling model's rank among every name it scored, with its flags"
+        >
+          Model
+        </a>
+      ),
+      cell: ({ row }) => <MbScoreValue symbol={row.original.symbol} />,
+    }),
     column.display({
       id: "select",
       header: ({ table }) => (
@@ -84,13 +108,21 @@ function columns(status: DataStatus) {
       ),
     }),
     // GREEN 2 > RED 1, so the first (descending) press puts green first; absent sorts last.
-    column.accessor((r) => (r.regime_signal ? (r.regime_signal.signal === "GREEN" ? 2 : 1) : undefined), {
-      id: "regime",
-      header: "Regime",
-      sortDescFirst: true,
-      sortUndefined: "last",
-      cell: ({ row }) => <RegimeDot signal={row.original.regime_signal} />,
-    }),
+    column.accessor(
+      (r) =>
+        r.regime_signal
+          ? r.regime_signal.signal === "GREEN"
+            ? 2
+            : 1
+          : undefined,
+      {
+        id: "regime",
+        header: "Regime",
+        sortDescFirst: true,
+        sortUndefined: "last",
+        cell: ({ row }) => <RegimeDot signal={row.original.regime_signal} />,
+      },
+    ),
     column.display({
       id: "expand",
       header: () => <span className="sr-only">Details</span>,
@@ -102,7 +134,11 @@ function columns(status: DataStatus) {
           aria-label={`${row.getIsExpanded() ? "Hide" : "Show"} details for ${row.original.symbol}`}
           className="rounded p-0.5 hover:bg-muted"
         >
-          {row.getIsExpanded() ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          {row.getIsExpanded() ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
         </button>
       ),
     }),
@@ -114,16 +150,23 @@ function columns(status: DataStatus) {
             {row.original.symbol}
             <SeriesFlag series={row.original.series} />
           </span>
-          <span className="max-w-[14rem] truncate text-xs text-muted-foreground">{row.original.name}</span>
+          <span className="max-w-[14rem] truncate text-xs text-muted-foreground">
+            {row.original.name}
+          </span>
         </span>
       ),
     }),
-    column.accessor("setup", { header: "Setup", cell: (c) => label(SETUP_LABEL, c.getValue()) }),
+    column.accessor("setup", {
+      header: "Setup",
+      cell: (c) => label(SETUP_LABEL, c.getValue()),
+    }),
     column.accessor("status", {
       header: "Status",
       cell: ({ row }) => (
         <span className="flex flex-col items-start gap-1">
-          <Badge variant={row.original.status === "TRIGGERED" ? "accent" : "outline"}>
+          <Badge
+            variant={row.original.status === "TRIGGERED" ? "accent" : "outline"}
+          >
             {statusLabel(row.original.status)}
           </Badge>
           <ActionableBadge opportunity={row.original} status={status} />
@@ -135,8 +178,15 @@ function columns(status: DataStatus) {
       header: "Score",
       cell: (c) => formatNumber(c.getValue(), { decimals: 1 }),
     }),
-    column.accessor((r) => r.entry.price, { id: "entry", header: "Entry", cell: (c) => formatInr(c.getValue()) }),
-    column.accessor("invalidation", { header: "Invalidation", cell: (c) => formatInr(c.getValue()) }),
+    column.accessor((r) => r.entry.price, {
+      id: "entry",
+      header: "Entry",
+      cell: (c) => formatInr(c.getValue()),
+    }),
+    column.accessor("invalidation", {
+      header: "Invalidation",
+      cell: (c) => formatInr(c.getValue()),
+    }),
     column.accessor((r) => r.targets[0]?.price ?? null, {
       id: "targets",
       header: "Target(s)",
@@ -146,18 +196,29 @@ function columns(status: DataStatus) {
           ? "—"
           : row.original.targets.map((t) => formatInr(t.price)).join(" / "),
     }),
-    column.accessor("risk_reward", { header: "R:R", cell: (c) => formatNumber(c.getValue(), { decimals: 2 }) }),
-    column.accessor((r) => r.volatility.atr_pct, { id: "atr", header: "ATR%", cell: (c) => formatPct(c.getValue()) }),
+    column.accessor("risk_reward", {
+      header: "R:R",
+      cell: (c) => formatNumber(c.getValue(), { decimals: 2 }),
+    }),
+    column.accessor((r) => r.volatility.atr_pct, {
+      id: "atr",
+      header: "ATR%",
+      cell: (c) => formatPct(c.getValue()),
+    }),
     column.accessor((r) => r.liquidity.avg_turnover_cr_20d, {
       id: "turnover",
       header: "Turnover 20d",
       cell: (c) => formatInrCrore(c.getValue()),
     }),
-    column.accessor((r) => r.relative_strength.excess_return_pct ?? Number.NEGATIVE_INFINITY, {
-      id: "rs",
-      header: "RS excess",
-      cell: ({ row }) => formatPct(row.original.relative_strength.excess_return_pct, 2, true),
-    }),
+    column.accessor(
+      (r) => r.relative_strength.excess_return_pct ?? Number.NEGATIVE_INFINITY,
+      {
+        id: "rs",
+        header: "RS excess",
+        cell: ({ row }) =>
+          formatPct(row.original.relative_strength.excess_return_pct, 2, true),
+      },
+    ),
     column.display({
       id: "buy",
       header: () => <span className="sr-only">Buy</span>,
@@ -173,7 +234,9 @@ export function SwingResultsTable({
   response: SwingScanResponse;
   horizonMax: number;
 }) {
-  const [sorting, setSorting] = useState<SortingState>([{ id: "score", desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "score", desc: true },
+  ]);
   const [expanded, setExpanded] = useState({});
   const [greenOnly, setGreenOnly] = useState(false);
   const [selection, setSelection] = useState<RowSelectionState>({});
@@ -198,56 +261,75 @@ export function SwingResultsTable({
 
   return (
     <div className="space-y-2">
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {selected.length > 0 ? (
-        <Button type="button" size="sm" variant="ghost" onClick={() => setSelection({})}>
-          Clear selection
-        </Button>
-      ) : null}
-      <MultiBuyButton rows={selected} />
-      <GreenOnlyToggle pressed={greenOnly} onChange={setGreenOnly} />
-    </div>
-    <div className="overflow-x-auto" data-testid="swing-results">
-      <table className="w-full min-w-[76rem] border-collapse text-sm">
-        <thead>
-          {table.getHeaderGroups().map((group) => (
-            <tr key={group.id} className="border-b border-border/70">
-              {group.headers.map((header) => (
-                <SortableHeader key={header.id} header={header} />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {selected.length > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelection({})}
+          >
+            Clear selection
+          </Button>
+        ) : null}
+        <MultiBuyButton rows={selected} />
+        <GreenOnlyToggle pressed={greenOnly} onChange={setGreenOnly} />
+      </div>
+      <MbScoresProvider symbols={response.opportunities.map((o) => o.symbol)}>
+        <div className="overflow-x-auto" data-testid="swing-results">
+          <table className="w-full min-w-[76rem] border-collapse text-sm">
+            <thead>
+              {table.getHeaderGroups().map((group) => (
+                <tr key={group.id} className="border-b border-border/70">
+                  {group.headers.map((header) => (
+                    <SortableHeader key={header.id} header={header} />
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <Fragment key={row.id}>
-              <tr className="border-b border-border/40 align-top">
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="py-2 pr-3 tabular-nums">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-              {row.getIsExpanded() ? (
-                <tr className="border-b border-border/40 bg-muted/30">
-                  <td colSpan={span}>
-                    <SwingDetail opportunity={row.original} universe={response.universe} horizonMax={horizonMax} />
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map((row) => (
+                <Fragment key={row.id}>
+                  <tr className="border-b border-border/40 align-top">
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="py-2 pr-3 tabular-nums">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                  {row.getIsExpanded() ? (
+                    <tr className="border-b border-border/40 bg-muted/30">
+                      <td colSpan={span}>
+                        <SwingDetail
+                          opportunity={row.original}
+                          universe={response.universe}
+                          horizonMax={horizonMax}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              ))}
+              {data.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={span}
+                    className="py-3 text-sm text-muted-foreground"
+                    data-testid="regime-none-green"
+                  >
+                    No stock in this list has a green market regime. Turn off
+                    &ldquo;Green only&rdquo; to see all{" "}
+                    {response.opportunities.length}.
                   </td>
                 </tr>
               ) : null}
-            </Fragment>
-          ))}
-          {data.length === 0 ? (
-            <tr>
-              <td colSpan={span} className="py-3 text-sm text-muted-foreground" data-testid="regime-none-green">
-                No stock in this list has a green market regime. Turn off &ldquo;Green only&rdquo; to see all{" "}
-                {response.opportunities.length}.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
+            </tbody>
+          </table>
+        </div>
+      </MbScoresProvider>
     </div>
   );
 }
@@ -261,23 +343,42 @@ export function SwingResultView({
 }) {
   return (
     <div className="space-y-4">
-      <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" data-testid="swing-timestamps">
+      <p
+        className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
+        data-testid="swing-timestamps"
+      >
         <span>Data as of session {formatSessionDate(response.data_as_of)}</span>
         <span>Scanned at {formatIstDateTime(response.scanned_at)}</span>
         <span>
-          {formatNumber(response.counts.qualified)} qualified · {formatNumber(response.counts.pending)} pending ·{" "}
+          {formatNumber(response.counts.qualified)} qualified ·{" "}
+          {formatNumber(response.counts.pending)} pending ·{" "}
           {formatNumber(response.counts.triggered)} triggered
         </span>
       </p>
-      <DataStatusBanner status={response.data_status} reason={response.stale_reason} />
+      <DataStatusBanner
+        status={response.data_status}
+        reason={response.stale_reason}
+      />
       <WarningsList warnings={response.warnings} />
-      {response.data_status === "UNAVAILABLE" ? null : response.opportunities.length === 0 ? (
-        <div className="space-y-3 rounded-md border border-border/70 p-4" data-testid="swing-empty">
-          <p className="text-sm">No opportunities matched. {emptyReason(response.counts)}</p>
+      {response.data_status === "UNAVAILABLE" ? null : response.opportunities
+          .length === 0 ? (
+        <div
+          className="space-y-3 rounded-md border border-border/70 p-4"
+          data-testid="swing-empty"
+        >
+          <p className="text-sm">
+            No opportunities matched. {emptyReason(response.counts)}
+          </p>
           <ol className="flex flex-wrap gap-2 text-xs">
             {funnelSteps(response.counts).map((step) => (
-              <li key={step.label} className="rounded border border-border/60 px-2 py-1">
-                {step.label}: <span className="font-medium tabular-nums">{formatNumber(step.value)}</span>
+              <li
+                key={step.label}
+                className="rounded border border-border/60 px-2 py-1"
+              >
+                {step.label}:{" "}
+                <span className="font-medium tabular-nums">
+                  {formatNumber(step.value)}
+                </span>
               </li>
             ))}
           </ol>

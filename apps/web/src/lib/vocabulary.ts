@@ -127,7 +127,7 @@ export const PAGES = {
     blurb: "Which liquid names the model thinks most likely to double within a year, and how far to trust it.",
   },
   "/mb/paper": {
-    title: "Paper book · Doubling candidates",
+    title: "Paper record · Doubling candidates",
     blurb: "The ranking held on paper each month, marked every session, against what the backtest said to expect.",
   },
   /* —— The NIFTY options tab (OP5, docs/options/05 §2). Read-only where money is concerned:

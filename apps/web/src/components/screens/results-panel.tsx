@@ -1,10 +1,16 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { MbScoresProvider, MbScoreValue } from "@/components/mb/score-cell";
 import type { ScreenDefinition, ScreenRunResponse } from "@baskfy/api-client";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
-import type { DataTable as DataTableComponent, Density } from "@/components/data/data-table";
+import type {
+  DataTable as DataTableComponent,
+  Density,
+} from "@/components/data/data-table";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
 import { ProvenanceHeader } from "@/components/screens/provenance-header";
@@ -19,8 +25,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { columnDisplayLabel, suppressedResultColumns } from "@/lib/screens/column-display";
-import { liveStatusLine, useLiveMarks, withLivePrice } from "@/lib/screens/live-marks";
+import {
+  columnDisplayLabel,
+  suppressedResultColumns,
+} from "@/lib/screens/column-display";
+import {
+  liveStatusLine,
+  useLiveMarks,
+  withLivePrice,
+} from "@/lib/screens/live-marks";
 import { cn } from "@/lib/utils";
 
 /*
@@ -47,7 +60,6 @@ const DataTable = dynamic(() =>
 const PeekDrawer = dynamic(() =>
   import("@/components/screens/peek-drawer").then((m) => m.PeekDrawer),
 );
-
 
 const LOADING_LINES = [
   "Crunching tickers…",
@@ -113,7 +125,9 @@ function suppressedColumnsNote(
   keys: readonly string[],
   meta: ReadonlyMap<string, ColumnMeta>,
 ): string {
-  const names = keys.map((key) => columnDisplayLabel(key, meta.get(key)?.label ?? key));
+  const names = keys.map((key) =>
+    columnDisplayLabel(key, meta.get(key)?.label ?? key),
+  );
   const lead = names[0];
   if (lead === undefined) return "";
   if (names.length === 1) {
@@ -143,20 +157,22 @@ function ScreenResultsTable({
   className?: string;
 }) {
   return (
-    <DataTable
-      data={rows}
-      columns={columns}
-      label={`Screen results, ${count} rows`}
-      density={density}
-      loading={loading}
-      height={TABLE_HEIGHT}
-      repeatHeaderEvery={0}
-      rowHeight={density === "compact" ? 36 : 52}
-      sortNote={SORT_NOTE}
-      contentKey={contentKey}
-      onRowActivate={onRowActivate}
-      className={className}
-    />
+    <MbScoresProvider symbols={rows.map((row) => symbolOf(row))}>
+      <DataTable
+        data={rows}
+        columns={[MB_COLUMN, ...columns]}
+        label={`Screen results, ${count} rows`}
+        density={density}
+        loading={loading}
+        height={TABLE_HEIGHT}
+        repeatHeaderEvery={0}
+        rowHeight={density === "compact" ? 36 : 52}
+        sortNote={SORT_NOTE}
+        contentKey={contentKey}
+        onRowActivate={onRowActivate}
+        className={className}
+      />
+    </MbScoresProvider>
   );
 }
 
@@ -193,14 +209,21 @@ export function ResultsPanel({
   );
   const live = useLiveMarks(symbols);
   const rows = useMemo<readonly ResultRow[]>(
-    () => publishedRows.map((row) => withLivePrice(row, live.marks, live.quotes)),
+    () =>
+      publishedRows.map((row) => withLivePrice(row, live.marks, live.quotes)),
     [publishedRows, live.marks, live.quotes],
   );
 
   const sortingFactorLabel = result?.sorting_factor.label ?? "";
   const columns = useMemo(
     () =>
-      buildColumns(result?.columns ?? [], columnMeta, sortingFactorLabel, sortingFactorUnit, rows),
+      buildColumns(
+        result?.columns ?? [],
+        columnMeta,
+        sortingFactorLabel,
+        sortingFactorUnit,
+        rows,
+      ),
     [result?.columns, sortingFactorLabel, columnMeta, sortingFactorUnit, rows],
   );
 
@@ -210,7 +233,9 @@ export function ResultsPanel({
   );
 
   const tableContentKey =
-    result === undefined ? undefined : `${result.as_of}-${result.result_count}-${rows.length}`;
+    result === undefined
+      ? undefined
+      : `${result.as_of}-${result.result_count}-${rows.length}`;
 
   if (error && !result) {
     return <ErrorState error={error} onRetry={onRetry} className={className} />;
@@ -220,7 +245,10 @@ export function ResultsPanel({
   return (
     <div className={cn("flex min-w-0 flex-col gap-4", className)}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="text-sm font-light tabular-nums text-muted-foreground" data-testid="result-count">
+        <p
+          className="text-sm font-light tabular-nums text-muted-foreground"
+          data-testid="result-count"
+        >
           {isPending ? "…" : `${count} matches`}
         </p>
         {/* Which numbers move (21 Sep 2026): Price and today's change are live while the market
@@ -246,7 +274,9 @@ export function ResultsPanel({
             <Switch
               id="results-density"
               checked={density === "compact"}
-              onCheckedChange={(checked) => setDensity(checked ? "compact" : "comfortable")}
+              onCheckedChange={(checked) =>
+                setDensity(checked ? "compact" : "comfortable")
+              }
             />
             <Label htmlFor="results-density" className="text-xs">
               Compact
@@ -256,7 +286,9 @@ export function ResultsPanel({
         </div>
       </div>
 
-      {result?.provenance ? <ProvenanceHeader provenance={result.provenance} /> : null}
+      {result?.provenance ? (
+        <ProvenanceHeader provenance={result.provenance} />
+      ) : null}
 
       {isPending ? <LoadingOneLiner /> : null}
 
@@ -277,7 +309,10 @@ export function ResultsPanel({
             reason="Ruthless. Loosen one and try again — or reset to the defaults."
             action={
               onLoosenFilters
-                ? { label: "Reset filters to defaults", onClick: onLoosenFilters }
+                ? {
+                    label: "Reset filters to defaults",
+                    onClick: onLoosenFilters,
+                  }
                 : undefined
             }
             className="w-full"
@@ -347,3 +382,18 @@ export function ResultsPanel({
 }
 
 export { Button as ResultsAction };
+
+/** PM7 (Maulik, 11 Nov 2026): the doubling model's rank and flags first on every Build table. Information only. */
+const MB_COLUMN: ColumnDef<ResultRow, unknown> = {
+  id: "mb_model",
+  header: "Model",
+  size: 120,
+  enableSorting: false,
+  cell: (info) => (
+    <MbScoreValue symbol={symbolOf(info.row.original)} />
+  ),
+};
+
+function symbolOf(row: ResultRow): string {
+  return typeof row.symbol === "string" ? row.symbol : "";
+}

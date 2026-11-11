@@ -5,8 +5,21 @@ import { SleeveStateBadge } from "@/components/screens/sleeve-state";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { SeriesFlag } from "@/components/regime-signal/series-flag";
 import { RegimeDot } from "@/components/regime-signal/regime-dot";
-import { RegimeRows, RegimeSortHeader, RegimeTable } from "@/components/regime-signal/regime-table";
-import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
+import {
+  RegimeRows,
+  RegimeSortHeader,
+  RegimeTable,
+} from "@/components/regime-signal/regime-table";
+import {
+  MbScoreCell,
+  MbScoreHead,
+  MbScoresProvider,
+} from "@/components/mb/score-cell";
+import {
+  LiveMarksProvider,
+  LivePrice,
+  LiveStatus,
+} from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -114,7 +127,8 @@ function crore(value: number | null): string {
 }
 
 function shape(row: SwingSetup): string {
-  if (row.setup === "FLAG") return row.base_bars === null ? "—" : `${row.base_bars} bars`;
+  if (row.setup === "FLAG")
+    return row.base_bars === null ? "—" : `${row.base_bars} bars`;
   if (row.setup === "EP") return percent(row.gap_pct);
   return row.up_streak === null ? "—" : `${row.up_streak} up`;
 }
@@ -129,7 +143,11 @@ function shape(row: SwingSetup): string {
 function emptyReason(
   heading: string,
   setupKey: string,
-  funnel: { liquid?: number; instruments?: number; candidates?: Record<string, number> } | null,
+  funnel: {
+    liquid?: number;
+    instruments?: number;
+    candidates?: Record<string, number>;
+  } | null,
   status: string,
 ): string {
   const what = heading.split(" — ")[0]?.toLowerCase() ?? heading.toLowerCase();
@@ -153,7 +171,9 @@ function StatusPill({ status }: { status: string }) {
         ? "border-border text-muted-foreground"
         : "border-border text-foreground";
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-[11px] uppercase tracking-wide ${tone}`}>
+    <span
+      className={`rounded border px-1.5 py-0.5 text-[11px] uppercase tracking-wide ${tone}`}
+    >
       {status.replaceAll("_", " ").toLowerCase()}
     </span>
   );
@@ -176,167 +196,203 @@ function SetupTable({
 }) {
   return (
     <RegimeTable>
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[66rem] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <RegimeSortHeader />
-            <th className="py-2 pr-3 font-medium">Stock</th>
-            <th className="py-2 pr-3 font-medium">Status</th>
-            <th className="py-2 pr-3 font-medium">Score</th>
-            <th className="py-2 pr-3 font-medium">Price</th>
-            <th className="py-2 pr-3 font-medium">Trigger</th>
-            <th className="py-2 pr-3 font-medium">Stop</th>
-            <th className="py-2 pr-3 font-medium">Risk</th>
-            <th className="py-2 pr-3 font-medium">ADR</th>
-            <th className="py-2 pr-3 font-medium">Turnover</th>
-            <th className="py-2 pr-3 font-medium">{shapeLabel}</th>
-            <th className="py-2 pr-3 font-medium">Sector</th>
-            <th className="py-2 pr-3 font-medium">Chart</th>
-            <th className="py-2 pr-3 font-medium">Catalyst</th>
-            <th className="py-2 pr-3 font-medium">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <RegimeRows
-            colSpan={15}
-            rows={rows.map((row) => {
-            const watch = watched.get(row.instrument_id);
-            const bars = charts.get(row.instrument_id);
-            return {
-              key: `${row.setup}-${row.instrument_id}`,
-              signal: row.regime_signal,
-              node: (
-              <tr
-                className={
-                  watch?.focus
-                    ? "border-b border-border/40 bg-muted/40"
-                    : "border-b border-border/40"
-                }
-                data-focus={watch?.focus ? "true" : undefined}
-              >
-                <td className="py-2 pr-2">
-                  <RegimeDot signal={row.regime_signal} />
-                </td>
-                <td className="py-2 pr-3">
-                  {watch?.focus ? (
-                    <span
-                      className="mr-1.5 text-warning"
-                      title="In today's focus — the top five flags by score and every episodic pivot. Pushed at the trigger and first on the desk page."
-                      aria-label="focus"
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[66rem] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <MbScoreHead />
+              <RegimeSortHeader />
+              <th className="py-2 pr-3 font-medium">Stock</th>
+              <th className="py-2 pr-3 font-medium">Status</th>
+              <th className="py-2 pr-3 font-medium">Score</th>
+              <th className="py-2 pr-3 font-medium">Price</th>
+              <th className="py-2 pr-3 font-medium">Trigger</th>
+              <th className="py-2 pr-3 font-medium">Stop</th>
+              <th className="py-2 pr-3 font-medium">Risk</th>
+              <th className="py-2 pr-3 font-medium">ADR</th>
+              <th className="py-2 pr-3 font-medium">Turnover</th>
+              <th className="py-2 pr-3 font-medium">{shapeLabel}</th>
+              <th className="py-2 pr-3 font-medium">Sector</th>
+              <th className="py-2 pr-3 font-medium">Chart</th>
+              <th className="py-2 pr-3 font-medium">Catalyst</th>
+              <th className="py-2 pr-3 font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <RegimeRows
+              colSpan={16}
+              rows={rows.map((row) => {
+                const watch = watched.get(row.instrument_id);
+                const bars = charts.get(row.instrument_id);
+                return {
+                  key: `${row.setup}-${row.instrument_id}`,
+                  signal: row.regime_signal,
+                  node: (
+                    <tr
+                      className={
+                        watch?.focus
+                          ? "border-b border-border/40 bg-muted/40"
+                          : "border-b border-border/40"
+                      }
+                      data-focus={watch?.focus ? "true" : undefined}
                     >
-                      ★
-                    </span>
-                  ) : null}
-                  <InstrumentLink symbol={row.symbol} flag={false} />
-                  <SeriesFlag series={row.series} />
-                  <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
-                  {row.locked_upper_circuit ? (
-                    <span
-                      className="ml-2 text-xs text-warning"
-                      title="Locked at its upper circuit — there was no seller, so a break here is not a fill."
-                    >
-                      locked
-                    </span>
-                  ) : null}
-                  {row.listed_within_2y ? (
-                    <span
-                      className="ml-2 text-xs text-muted-foreground"
-                      title="Listed within two years — a young stock, which he prefers."
-                    >
-                      new
-                    </span>
-                  ) : null}
-                </td>
-                <td className="py-2 pr-3">
-                  <StatusPill status={row.status} />
-                </td>
-                <td className="py-2 pr-3 tabular-nums">{row.score.toFixed(0)}</td>
-                <td className="py-2 pr-3 tabular-nums">
-                  <LivePrice symbol={row.symbol} close={row.last_price ?? row.close} />
-                </td>
-                <td className="py-2 pr-3 tabular-nums font-medium">{money(row.trigger)}</td>
-                <td className="py-2 pr-3 tabular-nums">{money(row.stop_ref)}</td>
-                <td className="py-2 pr-3 tabular-nums">{percent(row.stop_distance_pct)}</td>
-                <td className="py-2 pr-3 tabular-nums">{percent(row.adr_pct)}</td>
-                <td className="py-2 pr-3 tabular-nums">{crore(row.turnover_avg)}</td>
-                <td className="py-2 pr-3 tabular-nums">{shape(row)}</td>
-                <td className="py-2 pr-3 text-xs text-muted-foreground">{row.sector_slug ?? "—"}</td>
-                <td className="py-1 pr-3">
-                  {bars ? (
-                    <MiniChart
-                      bars={bars}
-                      trigger={row.trigger}
-                      stop={row.stop_ref}
-                      label={`${row.symbol}: the last ${bars.length} closes with the 10- and 20-day averages, the trigger and the stop`}
-                    />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="py-2 pr-3 text-xs text-muted-foreground">
-                  <CatalystLink feed={row.catalyst_feed} />
-                </td>
-                <td className="py-2 pr-3">
-                  <span className="inline-flex flex-wrap items-center gap-2">
-                  {isStaff ? (
-                  <BuyTicketButton
-                    symbol={row.symbol}
-                    name={row.name}
-                    instrumentId={row.instrument_id}
-                    price={row.last_price ?? row.close ?? null}
-                    source="swing"
-                    setup={row.setup}
-                    entry={row.trigger}
-                    stop={row.stop_ref}
-                    disabledReason={tradeable ? null : "Parabolic short — record only; NSE delivery cannot short it."}
-                  />
-                  ) : null}
-                  {!tradeable ? null : watch ? (
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          watching
-                          {watch.source === "MANUAL" ? " (yours)" : ""}
+                      <MbScoreCell symbol={row.symbol} />
+                      <td className="py-2 pr-2">
+                        <RegimeDot signal={row.regime_signal} />
+                      </td>
+                      <td className="py-2 pr-3">
+                        {watch?.focus ? (
+                          <span
+                            className="mr-1.5 text-warning"
+                            title="In today's focus — the top five flags by score and every episodic pivot. Pushed at the trigger and first on the desk page."
+                            aria-label="focus"
+                          >
+                            ★
+                          </span>
+                        ) : null}
+                        <InstrumentLink symbol={row.symbol} flag={false} />
+                        <SeriesFlag series={row.series} />
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {row.name}
                         </span>
-                        <RowActionForm
-                          action={watchDismiss}
-                          fields={{ id: watch.id }}
-                          label="Dismiss"
-                          pendingLabel="Dismissing…"
-                          title="Mark the watchlist row dismissed. It is kept, as the record of a no."
-                          variant="ghost"
+                        {row.locked_upper_circuit ? (
+                          <span
+                            className="ml-2 text-xs text-warning"
+                            title="Locked at its upper circuit — there was no seller, so a break here is not a fill."
+                          >
+                            locked
+                          </span>
+                        ) : null}
+                        {row.listed_within_2y ? (
+                          <span
+                            className="ml-2 text-xs text-muted-foreground"
+                            title="Listed within two years — a young stock, which he prefers."
+                          >
+                            new
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <StatusPill status={row.status} />
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {row.score.toFixed(0)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        <LivePrice
+                          symbol={row.symbol}
+                          close={row.last_price ?? row.close}
                         />
-                      </span>
-                    ) : (
-                      <RowActionForm
-                        action={watchAdd}
-                        fields={{
-                          instrument_id: row.instrument_id,
-                          symbol: row.symbol,
-                          setup: row.setup,
-                          trigger: row.trigger === null ? "" : row.trigger.toFixed(2),
-                          stop_ref: row.stop_ref === null ? "" : row.stop_ref.toFixed(2),
-                        }}
-                        label="Watch"
-                        pendingLabel="Adding…"
-                        title="Put this name on the watchlist with these levels. Moves no money."
-                      />
-                    )}
-                  </span>
-                </td>
-              </tr>
-              ),
-            };
-          })}
-          />
-        </tbody>
-      </table>
-    </div>
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums font-medium">
+                        {money(row.trigger)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {money(row.stop_ref)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {percent(row.stop_distance_pct)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {percent(row.adr_pct)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {crore(row.turnover_avg)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">{shape(row)}</td>
+                      <td className="py-2 pr-3 text-xs text-muted-foreground">
+                        {row.sector_slug ?? "—"}
+                      </td>
+                      <td className="py-1 pr-3">
+                        {bars ? (
+                          <MiniChart
+                            bars={bars}
+                            trigger={row.trigger}
+                            stop={row.stop_ref}
+                            label={`${row.symbol}: the last ${bars.length} closes with the 10- and 20-day averages, the trigger and the stop`}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            —
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 text-xs text-muted-foreground">
+                        <CatalystLink feed={row.catalyst_feed} />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                          {isStaff ? (
+                            <BuyTicketButton
+                              symbol={row.symbol}
+                              name={row.name}
+                              instrumentId={row.instrument_id}
+                              price={row.last_price ?? row.close ?? null}
+                              source="swing"
+                              setup={row.setup}
+                              entry={row.trigger}
+                              stop={row.stop_ref}
+                              disabledReason={
+                                tradeable
+                                  ? null
+                                  : "Parabolic short — record only; NSE delivery cannot short it."
+                              }
+                            />
+                          ) : null}
+                          {!tradeable ? null : watch ? (
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                watching
+                                {watch.source === "MANUAL" ? " (yours)" : ""}
+                              </span>
+                              <RowActionForm
+                                action={watchDismiss}
+                                fields={{ id: watch.id }}
+                                label="Dismiss"
+                                pendingLabel="Dismissing…"
+                                title="Mark the watchlist row dismissed. It is kept, as the record of a no."
+                                variant="ghost"
+                              />
+                            </span>
+                          ) : (
+                            <RowActionForm
+                              action={watchAdd}
+                              fields={{
+                                instrument_id: row.instrument_id,
+                                symbol: row.symbol,
+                                setup: row.setup,
+                                trigger:
+                                  row.trigger === null
+                                    ? ""
+                                    : row.trigger.toFixed(2),
+                                stop_ref:
+                                  row.stop_ref === null
+                                    ? ""
+                                    : row.stop_ref.toFixed(2),
+                              }}
+                              label="Watch"
+                              pendingLabel="Adding…"
+                              title="Put this name on the watchlist with these levels. Moves no money."
+                            />
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  ),
+                };
+              })}
+            />
+          </tbody>
+        </table>
+      </div>
     </RegimeTable>
   );
 }
 
-async function chartsFor(rows: SwingSetup[], asOf: string | null): Promise<Map<number, SwingBar[]>> {
+async function chartsFor(
+  rows: SwingSetup[],
+  asOf: string | null,
+): Promise<Map<number, SwingBar[]>> {
   const wanted = [...rows]
     .sort((a, b) => b.score - a.score)
     .slice(0, CHART_ROWS)
@@ -356,7 +412,9 @@ export default async function SwingSetupsPage(props: {
   searchParams?: Promise<{ status?: string }>;
 }) {
   const params = (await props.searchParams) ?? {};
-  const status = STATUS_CHIPS.some((chip) => chip.key === params.status && chip.key)
+  const status = STATUS_CHIPS.some(
+    (chip) => chip.key === params.status && chip.key,
+  )
     ? (params.status ?? "")
     : "";
 
@@ -381,7 +439,9 @@ export default async function SwingSetupsPage(props: {
   const lastScan = setups?.last_scan ?? null;
   const watched = new Map<number, SwingWatchRow>();
   for (const row of watchlist?.data ?? []) watched.set(row.instrument_id, row);
-  const focusCount = rows.filter((row) => watched.get(row.instrument_id)?.focus).length;
+  const focusCount = rows.filter(
+    (row) => watched.get(row.instrument_id)?.focus,
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -391,7 +451,9 @@ export default async function SwingSetupsPage(props: {
         meta={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {asOf ? (
-              <span className="text-sm text-muted-foreground">As of {formatTradeDate(asOf)}</span>
+              <span className="text-sm text-muted-foreground">
+                As of {formatTradeDate(asOf)}
+              </span>
             ) : null}
             <ScanLabel provisional={provisional} scannedAt={scannedAt} />
             <SleeveStateBadge sleeve="swing" />
@@ -425,9 +487,13 @@ export default async function SwingSetupsPage(props: {
               </>
             ) : (
               <>
-                The allocation may hold up to <Mark>{setups?.max_open_positions ?? 0} positions</Mark>{" "}
-                and <Mark>{(setups?.max_exposure_pct ?? 0).toFixed(0)}% of the allocation</Mark>, which
-                is rung {(setups?.exposure_level ?? 0) + 1} of 4.
+                The allocation may hold up to{" "}
+                <Mark>{setups?.max_open_positions ?? 0} positions</Mark> and{" "}
+                <Mark>
+                  {(setups?.max_exposure_pct ?? 0).toFixed(0)}% of the
+                  allocation
+                </Mark>
+                , which is rung {(setups?.exposure_level ?? 0) + 1} of 4.
               </>
             )}
           </>
@@ -437,13 +503,18 @@ export default async function SwingSetupsPage(props: {
       </Answer>
 
       {day ? (
-        <p className="max-w-[80ch] text-sm text-muted-foreground" data-testid="gate-detail">
-          <span className="font-medium text-foreground">{day.gate}</span> because {breadthLine(day)}.
+        <p
+          className="max-w-[80ch] text-sm text-muted-foreground"
+          data-testid="gate-detail"
+        >
+          <span className="font-medium text-foreground">{day.gate}</span>{" "}
+          because {breadthLine(day)}.
           {focusCount > 0 ? (
             <>
               {" "}
-              <span className="text-warning">★</span> marks the {focusCount} in today&rsquo;s
-              focus — the top five flags by score and every episodic pivot.
+              <span className="text-warning">★</span> marks the {focusCount} in
+              today&rsquo;s focus — the top five flags by score and every
+              episodic pivot.
             </>
           ) : null}
         </p>
@@ -466,10 +537,15 @@ export default async function SwingSetupsPage(props: {
                     : "rounded-md border border-border/50 px-3 py-1.5 text-sm text-muted-foreground"
                 }
               >
-                <span className="font-medium">{sector.slug.replace(/^nifty-/, "")}</span>{" "}
-                <span className="tabular-nums">{sector.pct_above_ma_slow.toFixed(0)}%</span>
+                <span className="font-medium">
+                  {sector.slug.replace(/^nifty-/, "")}
+                </span>{" "}
+                <span className="tabular-nums">
+                  {sector.pct_above_ma_slow.toFixed(0)}%
+                </span>
                 <span className="ml-2 text-xs">
-                  {sector.candidates} {sector.candidates === 1 ? "candidate" : "candidates"}
+                  {sector.candidates}{" "}
+                  {sector.candidates === 1 ? "candidate" : "candidates"}
                 </span>
               </li>
             ))}
@@ -497,34 +573,47 @@ export default async function SwingSetupsPage(props: {
       {/* Live price overlay (21 Sep 2026): one quote batch for every row on the page, polled only
           while the market is open. Status, score, trigger and stop stay on the scan. */}
       <LiveMarksProvider symbols={rows.map((row) => row.symbol)}>
-      <LiveStatus asOf={asOf} />
-      {SETUP_SECTIONS.map((section) => {
-        const sectionRows = rows
-          .filter((row) => row.setup === section.key)
-          .sort((a, b) => b.score - a.score);
-        return (
-          <section key={section.key} aria-label={section.heading} className="space-y-3">
-            <div className="space-y-1">
-              <h2 className="text-lg font-medium">{section.heading}</h2>
-              <p className="max-w-[70ch] text-sm text-muted-foreground">{section.blurb}</p>
-            </div>
-            {sectionRows.length > 0 ? (
-              <SetupTable
-                rows={sectionRows}
-                shapeLabel={section.shape}
-                watched={watched}
-                charts={charts}
-                tradeable={section.key !== "PARABOLIC_SHORT"}
-                isStaff={isStaff}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {emptyReason(section.heading, section.key, setups?.funnel ?? null, status)}
-              </p>
-            )}
-          </section>
-        );
-      })}
+        <MbScoresProvider symbols={rows.map((row) => row.symbol)}>
+          <LiveStatus asOf={asOf} />
+          {SETUP_SECTIONS.map((section) => {
+            const sectionRows = rows
+              .filter((row) => row.setup === section.key)
+              .sort((a, b) => b.score - a.score);
+            return (
+              <section
+                key={section.key}
+                aria-label={section.heading}
+                className="space-y-3"
+              >
+                <div className="space-y-1">
+                  <h2 className="text-lg font-medium">{section.heading}</h2>
+                  <p className="max-w-[70ch] text-sm text-muted-foreground">
+                    {section.blurb}
+                  </p>
+                </div>
+                {sectionRows.length > 0 ? (
+                  <SetupTable
+                    rows={sectionRows}
+                    shapeLabel={section.shape}
+                    watched={watched}
+                    charts={charts}
+                    tradeable={section.key !== "PARABOLIC_SHORT"}
+                    isStaff={isStaff}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {emptyReason(
+                      section.heading,
+                      section.key,
+                      setups?.funnel ?? null,
+                      status,
+                    )}
+                  </p>
+                )}
+              </section>
+            );
+          })}
+        </MbScoresProvider>
       </LiveMarksProvider>
     </div>
   );

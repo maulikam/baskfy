@@ -127,9 +127,9 @@ export const MB_PAPER_EXPECT = {
 } as const;
 
 export const MB_BOOK_NAMES: Record<string, string> = {
-  book: "Book of record: top 20 investable each month, equal weight, held 250 sessions",
+  book: "Monthly picks: top 20 investable each month, equal weight, held 250 sessions",
   hi63_20: "Shadow: 63-day-high trigger, 1/20 of a tranche a name",
   hi63_16: "Shadow: 63-day-high trigger, 1/16 of a tranche a name",
   book_overlay:
-    "Shadow: the book, in cash while the Smallcap 250 is under its 100-day average (5 closes to confirm)",
+    "Shadow: the monthly picks, in cash while the Smallcap 250 is under its 100-day average (5 closes to confirm)",
 };

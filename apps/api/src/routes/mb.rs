@@ -421,6 +421,87 @@ pub async fn get_paper(
     ))
 }
 
+/// The most names one `/mb/lookup` answers.
+pub const MAX_LOOKUP: usize = 500;
+
+/// `GET /mb/lookup?symbols=A,B` — the newest scored session's verdict for each named stock, for the
+/// first column of every Build table. A symbol the model did not score is simply absent.
+///
+/// # Errors
+/// 401, 404 not the sole tenant.
+pub async fn get_lookup(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    RawQuery(raw): RawQuery,
+) -> Result<Response, Problem> {
+    require_authenticated(&principal)?;
+    scoped_sole_user_id(&state, principal.user_id, None).await?;
+    let q = QueryParams::parse(raw.as_deref());
+    let mut symbols: Vec<String> = q
+        .get("symbols")
+        .unwrap_or("")
+        .split(',')
+        .map(|s| s.trim().to_uppercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    symbols.sort();
+    symbols.dedup();
+    symbols.truncate(MAX_LOOKUP);
+    let pool = state.db.pool();
+    let as_of: Option<chrono::NaiveDate> =
+        sqlx::query_scalar("SELECT max(date) FROM mb_score_daily")
+            .fetch_one(pool)
+            .await
+            .map_err(db)?;
+    let mut names = Vec::new();
+    let mut universe_n = J::Null;
+    if let Some(day) = as_of {
+        let rows = sqlx::query(
+            "SELECT i.symbol, s.rank, s.score, s.universe_n, s.investable, s.hi63_trigger, s.hi63_trigger_date, \
+             s.close_raw, s.turnover20, s.sessions_listed, s.ttm_rev_yoy, s.ttm_pat_yoy \
+             FROM mb_score_daily s JOIN instrument i ON i.id = s.instrument_id \
+             WHERE s.date = $1 AND i.symbol = ANY($2)",
+        )
+        .bind(day)
+        .bind(&symbols)
+        .fetch_all(pool)
+        .await
+        .map_err(db)?;
+        for r in &rows {
+            universe_n = J::Int(i64::from(col::<i32>(r, "universe_n")?));
+            names.push(
+                Obj::new()
+                    .put("symbol", J::Str(col(r, "symbol")?))
+                    .put("rank", J::Int(i64::from(col::<i32>(r, "rank")?)))
+                    .put("score", J::Dec(dec(r, "score")?))
+                    .put("investable", J::Bool(col(r, "investable")?))
+                    .put("hi63_trigger", J::Bool(col(r, "hi63_trigger")?))
+                    .put(
+                        "hi63_trigger_date",
+                        J::opt_date(col(r, "hi63_trigger_date")?),
+                    )
+                    .put("close", J::opt_dec(odec(r, "close_raw")?))
+                    .put("turnover20", J::opt_dec(odec(r, "turnover20")?))
+                    .put("sessions_listed", opt_i(r, "sessions_listed")?)
+                    .put("ttm_rev_yoy_fraction", J::opt_dec(odec(r, "ttm_rev_yoy")?))
+                    .put("ttm_pat_yoy_fraction", J::opt_dec(odec(r, "ttm_pat_yoy")?))
+                    .done(),
+            );
+        }
+    }
+    Ok(canonical_response(
+        &Obj::new()
+            .put("as_of", J::opt_date(as_of))
+            .put("universe_n", universe_n)
+            .put(
+                "requested",
+                J::Int(i64::try_from(symbols.len()).unwrap_or(0)),
+            )
+            .put("names", J::Arr(names))
+            .done(),
+    ))
+}
+
 /// The `/mb` routes: GET only.
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -428,4 +509,5 @@ pub fn router() -> Router<AppState> {
         .route("/mb/history/{instrument_id}", get(get_history))
         .route("/mb/model", get(get_model))
         .route("/mb/paper", get(get_paper))
+        .route("/mb/lookup", get(get_lookup))
 }

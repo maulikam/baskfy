@@ -1,4 +1,16 @@
-import type { MbName } from "@/lib/mb/fetch";
+/** The fields the flags read; a full ranking row and a Build-table lookup both have them. */
+export interface MbVerdict {
+  rank: number;
+  score: string;
+  investable: boolean;
+  hi63_trigger: boolean;
+  hi63_trigger_date: string | null;
+  close: string | null;
+  turnover20: string | null;
+  sessions_listed: number | null;
+  ttm_rev_yoy_fraction: string | null;
+  ttm_pat_yoy_fraction: string | null;
+}
 
 /** PM7: what each flag on the ranking means. One symbol per fact; a name can carry several. */
 export const MB_FLAGS = [
@@ -7,14 +19,14 @@ export const MB_FLAGS = [
     symbol: "●",
     label: "Investable",
     meaning:
-      "Close at least ₹50 and at least ₹5 cr traded a day. The paper book buys only these.",
+      "Close at least ₹50 and at least ₹5 cr traded a day. The paper record buys only these.",
   },
   {
     key: "low_price",
     symbol: "₹",
     label: "Low price",
     meaning:
-      "Close under ₹50. Below the backtest's floor; never bought by the book.",
+      "Close under ₹50. Below the backtest's floor; never bought on paper.",
   },
   {
     key: "thin",
@@ -43,22 +55,30 @@ export const MB_FLAGS = [
     meaning:
       "No quarterly revenue or profit growth on file, so those columns are blank.",
   },
+  {
+    key: "not_scored",
+    symbol: "⊘",
+    label: "Not ranked",
+    meaning:
+      "Outside the model's universe: under ₹20, under ₹2 cr traded a day, under 260 sessions listed, not an equity, or within 60 sessions of an unexplained price jump.",
+  },
 ] as const;
 
 export type MbFlagKey = (typeof MB_FLAGS)[number]["key"];
 
-const SESSIONS_A_YEAR = 250;
+const YOUNG_SESSIONS = 500;
 const MIN_CLOSE = 50;
 const MIN_TURNOVER = 5e7;
 
-export function flagsOf(n: MbName): MbFlagKey[] {
+export function flagsOf(n: MbVerdict | null | undefined): MbFlagKey[] {
+  if (!n) return ["not_scored"];
   const out: MbFlagKey[] = [];
   if (n.investable) out.push("investable");
   if (n.close !== null && Number(n.close) < MIN_CLOSE) out.push("low_price");
   if (n.turnover20 !== null && Number(n.turnover20) < MIN_TURNOVER)
     out.push("thin");
   if (n.hi63_trigger) out.push("high63");
-  if (n.sessions_listed !== null && n.sessions_listed < SESSIONS_A_YEAR)
+  if (n.sessions_listed !== null && n.sessions_listed < YOUNG_SESSIONS)
     out.push("new");
   if (n.ttm_rev_yoy_fraction === null && n.ttm_pat_yoy_fraction === null)
     out.push("no_results");

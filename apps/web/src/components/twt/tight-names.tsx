@@ -2,8 +2,22 @@ import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { SeriesFlag } from "@/components/regime-signal/series-flag";
 import { RegimeDot } from "@/components/regime-signal/regime-dot";
-import { RegimeRows, RegimeSortHeader, RegimeTable } from "@/components/regime-signal/regime-table";
-import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
+import {
+  RegimeRows,
+  RegimeSortHeader,
+  RegimeTable,
+} from "@/components/regime-signal/regime-table";
+import {
+  MbScoreCell,
+  MbScoreHead,
+  MbScoresProvider,
+  MbScoreValue,
+} from "@/components/mb/score-cell";
+import {
+  LiveMarksProvider,
+  LivePrice,
+  LiveStatus,
+} from "@/components/screens/live-price";
 import { formatTradeDate } from "@/lib/format";
 import { ENTRY_TODAY, WATCH_ONLY, pointInTimeLine } from "@/lib/twt/copy";
 import type { TightNameView } from "@/lib/twt/view";
@@ -59,16 +73,23 @@ export function TightNames({
          * `session` is the same null the gate card branches on, and it was already a prop here.
          */
         session === null ? (
-          <p className="text-sm text-muted-foreground" data-testid="twt-tight-unread">
-            No session has been read for this strategy yet, so there is nothing to say about which
-            names were quiet. The scan runs after the close on a trading day; until one has run,
-            this is empty because nothing has looked, not because nothing qualified.
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="twt-tight-unread"
+          >
+            No session has been read for this strategy yet, so there is nothing
+            to say about which names were quiet. The scan runs after the close
+            on a trading day; until one has run, this is empty because nothing
+            has looked, not because nothing qualified.
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground" data-testid="twt-tight-empty">
-            No name held the pattern on this session. That is an ordinary result: the pattern needs
-            three weekly closes within about 3% of one another, and most weeks most names move more
-            than that.
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="twt-tight-empty"
+          >
+            No name held the pattern on this session. That is an ordinary
+            result: the pattern needs three weekly closes within about 3% of one
+            another, and most weeks most names move more than that.
           </p>
         )
       ) : (
@@ -76,8 +97,10 @@ export function TightNames({
         // change while the market is open. The pattern, the weekly closes and the entry stay on
         // the published session.
         <LiveMarksProvider symbols={entries.map((row) => row.symbol)}>
-          <LiveStatus asOf={session} className="mb-2" />
-          <NameTable rows={entries} gateOpen={gateOpen} />
+          <MbScoresProvider symbols={entries.map((row) => row.symbol)}>
+            <LiveStatus asOf={session} className="mb-2" />
+            <NameTable rows={entries} gateOpen={gateOpen} />
+          </MbScoresProvider>
         </LiveMarksProvider>
       )}
 
@@ -92,16 +115,18 @@ export function TightNames({
 
       <Disclosure summary="The method note" testId="twt-method-note">
         <p>
-          The screen reads the closed daily price. The current week counts as a week in progress:
-          today&rsquo;s close stands in for this week&rsquo;s close, beside the last close of each
-          of the two weeks before it. Chartink&rsquo;s historical export instead uses each
-          week&rsquo;s final close on every day of that week, which is a price that had not
+          The screen reads the closed daily price. The current week counts as a
+          week in progress: today&rsquo;s close stands in for this week&rsquo;s
+          close, beside the last close of each of the two weeks before it.
+          Chartink&rsquo;s historical export instead uses each week&rsquo;s
+          final close on every day of that week, which is a price that had not
           happened yet on the Monday it is applied to.
         </p>
         <p>
-          Both readings were measured against Chartink&rsquo;s own export. The one used here is
-          what a person running the screen at the close would actually have seen, which is the
-          only reading a live entry can be taken from.
+          Both readings were measured against Chartink&rsquo;s own export. The
+          one used here is what a person running the screen at the close would
+          actually have seen, which is the only reading a live entry can be
+          taken from.
         </p>
       </Disclosure>
 
@@ -112,158 +137,179 @@ export function TightNames({
           testId="twt-watch-only"
         >
           <p>
-            Each of these met every rule of the pattern and was still passed over, for the reason
-            beside it. They are here because a screen that shows only what it accepted cannot be
-            checked.
+            Each of these met every rule of the pattern and was still passed
+            over, for the reason beside it. They are here because a screen that
+            shows only what it accepted cannot be checked.
           </p>
-          <ul className="space-y-1.5">
-            {watchOnly.map((row) => (
-              <li key={row.instrumentId} data-testid="twt-watch-only-row">
-                <RegimeDot signal={row.regimeSignal} />
-                <InstrumentLink symbol={row.symbol} flag={false} />
-                <SeriesFlag series={row.series} />{" "}
-                <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                  {WATCH_ONLY}
-                </span>
-                {" — "}
-                {row.watchReason}
-              </li>
-            ))}
-          </ul>
+          <MbScoresProvider symbols={watchOnly.map((row) => row.symbol)}>
+            <ul className="space-y-1.5">
+              {watchOnly.map((row) => (
+                <li key={row.instrumentId} data-testid="twt-watch-only-row">
+                  <span className="mr-2 text-xs">
+                    <MbScoreValue symbol={row.symbol} />
+                  </span>
+                  <RegimeDot signal={row.regimeSignal} />
+                  <InstrumentLink symbol={row.symbol} flag={false} />
+                  <SeriesFlag series={row.series} />{" "}
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                    {WATCH_ONLY}
+                  </span>
+                  {" — "}
+                  {row.watchReason}
+                </li>
+              ))}
+            </ul>
+          </MbScoresProvider>
         </Disclosure>
       ) : null}
     </section>
   );
 }
 
-function NameTable({ rows, gateOpen }: { rows: readonly TightNameView[]; gateOpen: boolean }) {
+function NameTable({
+  rows,
+  gateOpen,
+}: {
+  rows: readonly TightNameView[];
+  gateOpen: boolean;
+}) {
   return (
     <RegimeTable>
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[58rem] border-collapse text-sm">
-        <caption className="sr-only">
-          Names holding the three-weeks-tight pattern, most heavily traded first
-        </caption>
-        <thead>
-          <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <RegimeSortHeader />
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Stock
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Price
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Three weekly closes
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Spread across them
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Above its three-month low
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Sessions quiet
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Entry today
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Traded a day
-            </th>
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Action
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <RegimeRows
-            colSpan={10}
-            rows={rows.map((row) => ({
-              key: String(row.instrumentId),
-              signal: row.regimeSignal,
-              node: (
-            <tr
-              className="border-b border-border/40"
-              data-testid="twt-tight-row"
-            >
-              <td className="py-2 pr-2">
-                <RegimeDot signal={row.regimeSignal} />
-              </td>
-              <td className="py-2 pr-3">
-                <InstrumentLink symbol={row.symbol} flag={false} />
-                <SeriesFlag series={row.series} />
-                {row.lockedUpperCircuit ? (
-                  <span
-                    className="ml-1.5 text-warning"
-                    title="It closed locked at its upper circuit, so there was no price to buy at"
-                    data-testid="twt-locked"
-                  >
-                    &#9888;
-                  </span>
-                ) : null}
-                <span className="block text-xs text-muted-foreground">{row.name}</span>
-              </td>
-              <td className="py-2 pr-3">
-                <LivePrice symbol={row.symbol} fallback={<FigureValue figure={row.close} />} />
-              </td>
-              <td className="py-2 pr-3">
-                <span className="flex flex-wrap gap-x-2">
-                  {row.weekCloses.map((close, index) => (
-                    <FigureValue key={index} figure={close} />
-                  ))}
-                </span>
-              </td>
-              <td className="py-2 pr-3">
-                <FigureValue figure={row.weekRange} />
-              </td>
-              <td className="py-2 pr-3">
-                <FigureValue figure={row.aboveMonthLow} />
-              </td>
-              <td className="py-2 pr-3">
-                <FigureValue figure={row.sessionsInState} />
-              </td>
-              <td className="py-2 pr-3">
-                {row.entry === "ENTRY" ? (
-                  <span
-                    className={cn(
-                      "rounded-md bg-accent-muted px-1.5 py-0.5 text-xs font-medium text-accent",
-                    )}
-                    data-testid="twt-entry-badge"
-                  >
-                    {ENTRY_TODAY}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Still quiet</span>
-                )}
-              </td>
-              <td className="py-2 pr-3">
-                <FigureValue figure={row.turnoverCrore} />
-              </td>
-              <td className="py-2 pr-3">
-                <BuyTicketButton
-                  symbol={row.symbol}
-                  name={row.name}
-                  instrumentId={row.instrumentId}
-                  price={row.price}
-                  source="twt"
-                  setup="THREE_WEEKS_TIGHT"
-                  disabledReason={
-                    !gateOpen
-                      ? "Three-weeks-tight gate is not open: no new entries."
-                      : row.lockedUpperCircuit
-                        ? "Locked at its upper circuit — no seller to buy from."
-                        : null
-                  }
-                />
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[58rem] border-collapse text-sm">
+          <caption className="sr-only">
+            Names holding the three-weeks-tight pattern, most heavily traded
+            first
+          </caption>
+          <thead>
+            <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <MbScoreHead />
+              <RegimeSortHeader />
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Stock
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Price
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Three weekly closes
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Spread across them
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Above its three-month low
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Sessions quiet
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Entry today
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Traded a day
+              </th>
+              <th scope="col" className="py-2 pr-3 font-medium">
+                Action
+              </th>
             </tr>
-              ),
-            }))}
-          />
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            <RegimeRows
+              colSpan={11}
+              rows={rows.map((row) => ({
+                key: String(row.instrumentId),
+                signal: row.regimeSignal,
+                node: (
+                  <tr
+                    className="border-b border-border/40"
+                    data-testid="twt-tight-row"
+                  >
+                    <MbScoreCell symbol={row.symbol} />
+                    <td className="py-2 pr-2">
+                      <RegimeDot signal={row.regimeSignal} />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <InstrumentLink symbol={row.symbol} flag={false} />
+                      <SeriesFlag series={row.series} />
+                      {row.lockedUpperCircuit ? (
+                        <span
+                          className="ml-1.5 text-warning"
+                          title="It closed locked at its upper circuit, so there was no price to buy at"
+                          data-testid="twt-locked"
+                        >
+                          &#9888;
+                        </span>
+                      ) : null}
+                      <span className="block text-xs text-muted-foreground">
+                        {row.name}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <LivePrice
+                        symbol={row.symbol}
+                        fallback={<FigureValue figure={row.close} />}
+                      />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <span className="flex flex-wrap gap-x-2">
+                        {row.weekCloses.map((close, index) => (
+                          <FigureValue key={index} figure={close} />
+                        ))}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <FigureValue figure={row.weekRange} />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <FigureValue figure={row.aboveMonthLow} />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <FigureValue figure={row.sessionsInState} />
+                    </td>
+                    <td className="py-2 pr-3">
+                      {row.entry === "ENTRY" ? (
+                        <span
+                          className={cn(
+                            "rounded-md bg-accent-muted px-1.5 py-0.5 text-xs font-medium text-accent",
+                          )}
+                          data-testid="twt-entry-badge"
+                        >
+                          {ENTRY_TODAY}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Still quiet
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <FigureValue figure={row.turnoverCrore} />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <BuyTicketButton
+                        symbol={row.symbol}
+                        name={row.name}
+                        instrumentId={row.instrumentId}
+                        price={row.price}
+                        source="twt"
+                        setup="THREE_WEEKS_TIGHT"
+                        disabledReason={
+                          !gateOpen
+                            ? "Three-weeks-tight gate is not open: no new entries."
+                            : row.lockedUpperCircuit
+                              ? "Locked at its upper circuit — no seller to buy from."
+                              : null
+                        }
+                      />
+                    </td>
+                  </tr>
+                ),
+              }))}
+            />
+          </tbody>
+        </table>
+      </div>
     </RegimeTable>
   );
 }

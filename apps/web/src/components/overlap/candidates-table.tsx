@@ -4,12 +4,27 @@ import { ExternalLink } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState, useTransition, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 
 import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FilingsScanButton } from "@/components/overlap/filings-scan-button";
-import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
+import {
+  MbScoreCell,
+  MbScoreHead,
+  MbScoresProvider,
+} from "@/components/mb/score-cell";
+import {
+  LiveMarksProvider,
+  LivePrice,
+  LiveStatus,
+} from "@/components/screens/live-price";
 import { formatDateTimeIST, formatTradeDate } from "@/lib/format";
 import {
   OPINION_LABELS,
@@ -81,7 +96,10 @@ export function CandidatesTable({
   /* OV12: which header the person chose, or none for the server's order. Display only. */
   const [sortKey, setSortKey] = useState<CandidateSortKey | null>(null);
   const [direction, setDirection] = useState<CandidateSortDirection>(1);
-  const sorted = useMemo(() => sortCandidates(rows, sortKey, direction), [rows, sortKey, direction]);
+  const sorted = useMemo(
+    () => sortCandidates(rows, sortKey, direction),
+    [rows, sortKey, direction],
+  );
   /* Computed from the current key, not inside a state updater — StrictMode runs an updater
      twice, and a `setDirection` inside one flips the direction straight back (the holdings
      table learnt this the hard way). */
@@ -97,10 +115,10 @@ export function CandidatesTable({
     [sortKey],
   );
   const latest = sessions
-    ? [sessions.swing, sessions.volume_breakout, sessions.three_weeks_tight]
+    ? ([sessions.swing, sessions.volume_breakout, sessions.three_weeks_tight]
         .filter((value): value is string => Boolean(value))
         .sort()
-        .at(-1) ?? null
+        .at(-1) ?? null)
     : null;
 
   return (
@@ -118,10 +136,11 @@ export function CandidatesTable({
             Today&rsquo;s candidates
           </h2>
           <p className="max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
-            One row per name, with each strategy&rsquo;s own word on it, the screens it is on, and
-            the exchange filing the swing feed linked. Ordered by how many strategies raised the
-            name — a count, not a score — until you pick a column: every header sorts, and a
-            second click turns it round.
+            One row per name, with each strategy&rsquo;s own word on it, the
+            screens it is on, and the exchange filing the swing feed linked.
+            Ordered by how many strategies raised the name — a count, not a
+            score — until you pick a column: every header sorts, and a second
+            click turns it round.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -140,7 +159,10 @@ export function CandidatesTable({
       </div>
 
       {sessions ? (
-        <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-sessions">
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="overlap-candidates-sessions"
+        >
           Swing {formatTradeDate(sessions.swing)} · Volume breakout{" "}
           {formatTradeDate(sessions.volume_breakout)} · Three weeks tight{" "}
           {formatTradeDate(sessions.three_weeks_tight)}
@@ -151,82 +173,121 @@ export function CandidatesTable({
       ) : null}
 
       {candidates === null ? (
-        <p className="text-sm text-muted-foreground" data-testid="overlap-candidates-unread">
-          The candidates could not be read just now. The symbol matrix below is still computed
-          from each hub&rsquo;s own page.
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="overlap-candidates-unread"
+        >
+          The candidates could not be read just now. The symbol matrix below is
+          still computed from each hub&rsquo;s own page.
         </p>
       ) : !candidates.strategies_read ? (
-        <p className="text-sm text-muted-foreground" data-testid="overlap-candidates-not-yours">
-          The strategy scans belong to the account that runs them, and this is not that account —
-          so there are no strategy rows to show here.
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="overlap-candidates-not-yours"
+        >
+          The strategy scans belong to the account that runs them, and this is
+          not that account — so there are no strategy rows to show here.
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground" data-testid="overlap-candidates-empty">
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="overlap-candidates-empty"
+        >
           {scope === "actionable"
             ? "No name on any strategy's latest session is one its plan builder could take. Switch to every row to see what the scans wrote."
             : "The strategies have not written a session yet, so there is nothing to list."}
         </p>
       ) : (
         <LiveMarksProvider symbols={rows.map((row) => row.symbol)}>
-          <LiveStatus asOf={latest} />
-          <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-laya">
-            {layaStatusLine(candidates.laya, formatDateTimeIST)}
-          </p>
-          <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-tag-note">
-            The Laya column is the model&rsquo;s view of the whole row &mdash; the scan&rsquo;s
-            numbers said in words, plus the filing &mdash; as attention, never a trade. Laya&rsquo;s
-            word with its confidence when the model is sure; otherwise the word fixed rules give from
-            the same facts, marked &ldquo;rules&rdquo;, with the reason on hover. Your own word on a
-            row wins over both, and the rows you label are what the model is trained on next. The small tag under a filing is read
-            from its headline — by Laya, with its
-            confidence, when the model is sure, and by fixed rules otherwise; a &ldquo;?&rdquo; means
-            the two disagreed. It is the subject the exchange named, nothing more: context for
-            which filing to open first, not used in any rank, size or order. If it is wrong,
-            correct it: your word wins on the page and is what the model is trained on next.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[56rem] text-sm" data-testid="overlap-candidates-table">
-              <thead>
-                <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  {CANDIDATE_SORT_KEYS.map((key) => {
-                    const active = sortKey === key;
-                    return (
-                      <th
-                        key={key}
-                        scope="col"
-                        aria-sort={active ? (direction === 1 ? "ascending" : "descending") : "none"}
-                        className={cn("py-2 font-medium", HEADER_CLASS[key])}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSort(key)}
-                          title={CANDIDATE_SORT_MEANING[key]}
-                          data-testid={`overlap-sort-${key}`}
-                          className="inline-flex items-center gap-1 hover:text-foreground"
+          <MbScoresProvider symbols={rows.map((row) => row.symbol)}>
+            <LiveStatus asOf={latest} />
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="overlap-candidates-laya"
+            >
+              {layaStatusLine(candidates.laya, formatDateTimeIST)}
+            </p>
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="overlap-candidates-tag-note"
+            >
+              The Laya column is the model&rsquo;s view of the whole row &mdash;
+              the scan&rsquo;s numbers said in words, plus the filing &mdash; as
+              attention, never a trade. Laya&rsquo;s word with its confidence
+              when the model is sure; otherwise the word fixed rules give from
+              the same facts, marked &ldquo;rules&rdquo;, with the reason on
+              hover. Your own word on a row wins over both, and the rows you
+              label are what the model is trained on next. The small tag under a
+              filing is read from its headline — by Laya, with its confidence,
+              when the model is sure, and by fixed rules otherwise; a
+              &ldquo;?&rdquo; means the two disagreed. It is the subject the
+              exchange named, nothing more: context for which filing to open
+              first, not used in any rank, size or order. If it is wrong,
+              correct it: your word wins on the page and is what the model is
+              trained on next.
+            </p>
+            <div className="overflow-x-auto">
+              <table
+                className="w-full min-w-[56rem] text-sm"
+                data-testid="overlap-candidates-table"
+              >
+                <thead>
+                  <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <MbScoreHead />
+                    {CANDIDATE_SORT_KEYS.map((key) => {
+                      const active = sortKey === key;
+                      return (
+                        <th
+                          key={key}
+                          scope="col"
+                          aria-sort={
+                            active
+                              ? direction === 1
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
+                          className={cn("py-2 font-medium", HEADER_CLASS[key])}
                         >
-                          {HEADER_LABEL[key]}
-                          <span aria-hidden="true" className={cn("text-[0.7em]", !active && "opacity-0")}>
-                            {direction === 1 ? "▲" : "▼"}
-                          </span>
-                        </button>
-                      </th>
-                    );
-                  })}
-                  <th scope="col" className="py-2 pl-2 font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((row) => (
-                  <CandidateRow
-                    key={row.instrument_id}
-                    row={row}
-                    correctTag={correctTag}
-                    labelRow={labelRow}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(key)}
+                            title={CANDIDATE_SORT_MEANING[key]}
+                            data-testid={`overlap-sort-${key}`}
+                            className="inline-flex items-center gap-1 hover:text-foreground"
+                          >
+                            {HEADER_LABEL[key]}
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "text-[0.7em]",
+                                !active && "opacity-0",
+                              )}
+                            >
+                              {direction === 1 ? "▲" : "▼"}
+                            </span>
+                          </button>
+                        </th>
+                      );
+                    })}
+                    <th scope="col" className="py-2 pl-2 font-medium">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((row) => (
+                    <CandidateRow
+                      key={row.instrument_id}
+                      row={row}
+                      correctTag={correctTag}
+                      labelRow={labelRow}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </MbScoresProvider>
         </LiveMarksProvider>
       )}
     </section>
@@ -269,18 +330,27 @@ function CandidateRow({
 }) {
   return (
     <tr
-      className={cn("border-b border-border/40", !row.actionable && "text-muted-foreground")}
+      className={cn(
+        "border-b border-border/40",
+        !row.actionable && "text-muted-foreground",
+      )}
       data-testid="overlap-candidate-row"
       data-symbol={row.symbol}
       data-actionable={row.actionable ? "true" : "false"}
     >
+      <MbScoreCell symbol={row.symbol} className="py-2 pr-3 align-top" />
       <td className="py-2 pr-3 align-top">
         <InstrumentLink symbol={row.symbol} className="font-medium">
           {row.symbol}
         </InstrumentLink>
-        <span className="block max-w-[14rem] truncate text-xs text-muted-foreground">{row.name}</span>
+        <span className="block max-w-[14rem] truncate text-xs text-muted-foreground">
+          {row.name}
+        </span>
       </td>
-      <td className="px-2 py-2 text-center align-top tabular-nums" data-testid="overlap-candidate-count">
+      <td
+        className="px-2 py-2 text-center align-top tabular-nums"
+        data-testid="overlap-candidate-count"
+      >
         {row.strategy_count}
       </td>
       <td className="px-2 py-2 align-top">
@@ -318,8 +388,13 @@ function CandidateRow({
             data-testid="overlap-candidate-filing"
             title={row.catalyst.headline ?? undefined}
           >
-            <span className="truncate">{row.catalyst.headline ?? "Filing"}</span>
-            <ExternalLink aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+            <span className="truncate">
+              {row.catalyst.headline ?? "Filing"}
+            </span>
+            <ExternalLink
+              aria-hidden="true"
+              className="mt-0.5 size-3 shrink-0"
+            />
           </a>
         ) : (
           <span className="text-muted-foreground/70">—</span>
@@ -334,7 +409,9 @@ function CandidateRow({
               />
             ) : null}
             {row.catalyst?.published_at ? (
-              <span>{formatTradeDate(row.catalyst.published_at.slice(0, 10))}</span>
+              <span>
+                {formatTradeDate(row.catalyst.published_at.slice(0, 10))}
+              </span>
             ) : null}
           </span>
         ) : null}
@@ -357,7 +434,11 @@ function CandidateRow({
                 <Link
                   href={`/build/${hit.public_id}` as Route}
                   className="hover:underline"
-                  title={hit.definition_changed ? "The screen was edited after this run" : undefined}
+                  title={
+                    hit.definition_changed
+                      ? "The screen was edited after this run"
+                      : undefined
+                  }
                 >
                   {hit.name}
                 </Link>
@@ -380,7 +461,11 @@ function CandidateRow({
           price={row.last_price ?? row.close}
           source="overlap"
           setup={row.strategies.find((hit) => hit.actionable)?.strategy ?? null}
-          disabledReason={row.actionable ? null : "No strategy's plan builder could take this name today."}
+          disabledReason={
+            row.actionable
+              ? null
+              : "No strategy's plan builder could take this name today."
+          }
         />
       </td>
     </tr>
@@ -418,7 +503,9 @@ function OpinionCell({
   const onChange = (value: string) => {
     if (!labelRow) return;
     const next: OverlapOpinionLabel | null =
-      value === CLEAR_LABEL ? null : (OPINION_LABELS.find((label) => label === value) ?? null);
+      value === CLEAR_LABEL
+        ? null
+        : (OPINION_LABELS.find((label) => label === value) ?? null);
     if (next === null && value !== CLEAR_LABEL) return;
     setError(null);
     startTransition(async () => {
@@ -450,7 +537,11 @@ function OpinionCell({
         </option>
       </select>
       {error ? (
-        <span role="alert" className="text-destructive" data-testid="overlap-candidate-opinion-error">
+        <span
+          role="alert"
+          className="text-destructive"
+          data-testid="overlap-candidate-opinion-error"
+        >
           {error}
         </span>
       ) : null}
@@ -460,7 +551,11 @@ function OpinionCell({
   let word: ReactNode;
   if (opinion === null) {
     word = (
-      <span className="text-muted-foreground/70" data-testid="overlap-candidate-opinion" data-state="pending">
+      <span
+        className="text-muted-foreground/70"
+        data-testid="overlap-candidate-opinion"
+        data-state="pending"
+      >
         —
       </span>
     );
@@ -482,7 +577,10 @@ function OpinionCell({
         title={`Labelled by you: ${OPINION_WORDS[opinion.label]}. Your word wins on the page and is what the model is trained on next. Attention, never a trade — not used in any rank, size or order.`}
       >
         {OPINION_WORDS[opinion.label]}
-        <span className="text-muted-foreground" data-testid="overlap-candidate-opinion-source">
+        <span
+          className="text-muted-foreground"
+          data-testid="overlap-candidate-opinion-source"
+        >
           labelled
         </span>
       </span>
@@ -505,7 +603,10 @@ function OpinionCell({
         title={`${OPINION_WORDS[opinion.label]} by the rules: ${opinion.reason ?? "from the facts on the row"}. Laya was not sure enough to overrule them. Attention, never a trade — not used in any rank, size or order.`}
       >
         {OPINION_WORDS[opinion.label]}
-        <span className="text-muted-foreground" data-testid="overlap-candidate-opinion-source">
+        <span
+          className="text-muted-foreground"
+          data-testid="overlap-candidate-opinion-source"
+        >
           rules
         </span>
       </span>
@@ -555,10 +656,16 @@ function OpinionCell({
         data-testid="overlap-candidate-opinion-laya"
         title={`Laya's own answer on this row: ${OPINION_WORDS[opinion.laya.label]} at ${Math.round(opinion.laya.confidence * 100)}%${opinion.laya.confidence < opinion.floor ? `, under its ${Math.round(opinion.floor * 100)}% floor, so it does not stand on its own` : ""}. Context only — never a trade.`}
       >
-        Laya: {OPINION_WORDS[opinion.laya.label]} {Math.round(opinion.laya.confidence * 100)}%
+        Laya: {OPINION_WORDS[opinion.laya.label]}{" "}
+        {Math.round(opinion.laya.confidence * 100)}%
       </span>
-    ) : opinion !== null && opinion.laya === null && opinion.source !== "laya" ? (
-      <span className="text-[11px] text-muted-foreground/60" data-testid="overlap-candidate-opinion-laya">
+    ) : opinion !== null &&
+      opinion.laya === null &&
+      opinion.source !== "laya" ? (
+      <span
+        className="text-[11px] text-muted-foreground/60"
+        data-testid="overlap-candidate-opinion-laya"
+      >
         Laya: not read yet
       </span>
     ) : null;
@@ -598,14 +705,13 @@ function TagChip({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const why =
-    tag.corrected
-      ? "you corrected it"
-      : tag.source === "laya"
-        ? `Laya read the headline at ${Math.round((tag.confidence ?? 0) * 100)}% confidence`
-        : tag.matched.length > 0
-          ? `matched: ${tag.matched.join(", ")}`
-          : "no subject in the headline";
+  const why = tag.corrected
+    ? "you corrected it"
+    : tag.source === "laya"
+      ? `Laya read the headline at ${Math.round((tag.confidence ?? 0) * 100)}% confidence`
+      : tag.matched.length > 0
+        ? `matched: ${tag.matched.join(", ")}`
+        : "no subject in the headline";
   const [otherSource, otherType] = tag.disagrees_with?.split(":") ?? [];
   const disagreement =
     otherSource && otherType
@@ -613,14 +719,17 @@ function TagChip({
         ? ` It overrules ${otherSource}, which said ${otherType}.`
         : ` The other reader (${otherSource}) said ${otherType}.`
       : "";
-  const by = tag.corrected ? "Corrected by you" : `Read from the headline by ${tag.source}`;
+  const by = tag.corrected
+    ? "Corrected by you"
+    : `Read from the headline by ${tag.source}`;
 
   const onChange = (value: string) => {
     if (!correctTag || !headline) return;
     const next: OverlapEventType | null =
       value === CLEAR_CORRECTION
         ? null
-        : (OVERLAP_EVENT_TYPES.find((eventType) => eventType === value) ?? null);
+        : (OVERLAP_EVENT_TYPES.find((eventType) => eventType === value) ??
+          null);
     if (next === null && value !== CLEAR_CORRECTION) return;
     setError(null);
     startTransition(async () => {
@@ -662,11 +771,17 @@ function TagChip({
       />
       {EVENT_WORDS[tag.event_type]}
       {tag.corrected ? (
-        <span className="text-muted-foreground" data-testid="overlap-candidate-tag-source">
+        <span
+          className="text-muted-foreground"
+          data-testid="overlap-candidate-tag-source"
+        >
           corrected
         </span>
       ) : tag.source === "laya" && tag.confidence !== null ? (
-        <span className="text-muted-foreground" data-testid="overlap-candidate-tag-confidence">
+        <span
+          className="text-muted-foreground"
+          data-testid="overlap-candidate-tag-confidence"
+        >
           {Math.round(tag.confidence * 100)}%
         </span>
       ) : null}
@@ -706,7 +821,11 @@ function TagChip({
             </option>
           </select>
           {error ? (
-            <span role="alert" className="text-destructive" data-testid="overlap-candidate-tag-error">
+            <span
+              role="alert"
+              className="text-destructive"
+              data-testid="overlap-candidate-tag-error"
+            >
               {error}
             </span>
           ) : null}
@@ -759,7 +878,9 @@ function ScopeChip({
       aria-current={active ? "true" : undefined}
       className={cn(
         "rounded-full border px-3 py-1 text-xs",
-        active ? "border-foreground bg-foreground text-background" : "border-border/70",
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "border-border/70",
       )}
       data-testid={`overlap-candidates-scope-${value}`}
     >

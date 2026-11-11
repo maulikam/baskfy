@@ -1,4 +1,5 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { FlagTip } from "@/components/mb/flag-tip";
 import {
   EMPTY_CELL,
   formatFraction,
@@ -117,14 +118,14 @@ export function MbRanking({
                   data-testid="mb-flags"
                 >
                   {flagsOf(n).map((k) => (
-                    <span
+                    <FlagTip
                       key={k}
+                      label={SYMBOL[k]?.label ?? k}
+                      meaning={SYMBOL[k]?.meaning}
                       className={`mr-1.5 ${SYMBOL[k]?.tone ?? ""}`}
-                      title={`${SYMBOL[k]?.label}: ${SYMBOL[k]?.meaning}`}
-                      aria-label={SYMBOL[k]?.label}
                     >
                       {SYMBOL[k]?.symbol}
-                    </span>
+                    </FlagTip>
                   ))}
                 </td>
                 <td className="py-2 pr-3 text-muted-foreground">

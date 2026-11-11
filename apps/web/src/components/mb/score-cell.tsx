@@ -2,6 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
+import { FlagTip } from "@/components/mb/flag-tip";
 import { MB_FLAGS, flagsOf } from "@/lib/mb/flags";
 import { EMPTY_MB_SCORES, type MbScores, useMbScores } from "@/lib/mb/scores";
 
@@ -48,14 +49,27 @@ export function SwingScoreValue({ symbol }: { symbol: string }) {
   const v = swing.bySymbol[symbol.trim().toUpperCase()];
   if (!v)
     return (
-      <span className="text-slate-400" title="Not scored by the swing model" data-testid="swing-score-cell">
-        ⊘
+      <span data-testid="swing-score-cell">
+        <FlagTip
+          label="Not scored"
+          meaning="The swing model scored no row for this stock tonight (outside its universe, or too little history)."
+          className="text-slate-400"
+        >
+          ⊘
+        </FlagTip>
       </span>
     );
   return (
     <span className="whitespace-nowrap tabular-nums" data-testid="swing-score-cell">
-      <span
-        title={`Rank ${v.rank}${swing.universeN ? ` of ${swing.universeN}` : ""} · score ${v.score}${v.investable ? "" : " · too cheap or thin to be picked"}`}
+      <FlagTip
+        label={`Swing score ${v.score} · rank ${v.rank}${swing.universeN ? ` of ${swing.universeN}` : ""}`}
+        meaning={
+          v.picked
+            ? "One of tonight's five swing picks: buy at the next open, stop 7% under entry, trailing 12% under the high, out after 60 sessions."
+            : v.investable
+              ? "The model's chance of +14% under the swing exit rule. Liquid enough to be picked, but not in tonight's top five."
+              : "The model's chance of +14% under the swing exit rule. Under ₹50 or under ₹5 cr a day, so never picked."
+        }
         className={
           v.picked
             ? "font-semibold text-emerald-600 dark:text-emerald-400"
@@ -65,11 +79,15 @@ export function SwingScoreValue({ symbol }: { symbol: string }) {
         }
       >
         {Number(v.score).toFixed(3)}
-      </span>
+      </FlagTip>
       {v.picked ? (
-        <span className="ml-1 text-amber-500" title="One of the session's five swing picks" aria-label="Swing pick">
+        <FlagTip
+          label="Swing pick"
+          meaning={`One of the session's five picks${swing.switchOn === false ? " (the market switch has since turned off)" : ""}. See Doubling → Swing picks.`}
+          className="ml-1 text-amber-500"
+        >
           ★
-        </span>
+        </FlagTip>
       ) : null}
     </span>
   );
@@ -118,8 +136,9 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
       data-testid="mb-score-cell"
     >
       {v ? (
-        <span
-          title={`Rank ${v.rank}${universeN ? ` of ${universeN}` : ""} · score ${v.score}`}
+        <FlagTip
+          label={`Doubling score ${v.score} · rank ${v.rank}${universeN ? ` of ${universeN}` : ""}`}
+          meaning="Higher is likelier to double within a year. Green: investable."
           className={
             v.investable
               ? "font-medium text-emerald-600 dark:text-emerald-400"
@@ -127,17 +146,17 @@ export function MbScoreValue({ symbol }: { symbol: string }) {
           }
         >
           {Number(v.score).toFixed(3)}
-        </span>
+        </FlagTip>
       ) : null}
       {flagsOf(v).map((k) => (
-        <span
+        <FlagTip
           key={k}
+          label={SYMBOL[k]?.label ?? k}
+          meaning={SYMBOL[k]?.meaning}
           className={`ml-1 ${SYMBOL[k]?.tone ?? ""}`}
-          title={`${SYMBOL[k]?.label}: ${SYMBOL[k]?.meaning}`}
-          aria-label={SYMBOL[k]?.label}
         >
           {SYMBOL[k]?.symbol}
-        </span>
+        </FlagTip>
       ))}
     </span>
   );

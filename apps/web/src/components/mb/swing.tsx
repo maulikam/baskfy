@@ -1,4 +1,5 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { FlagTip } from "@/components/mb/flag-tip";
 import {
   EMPTY_CELL,
   formatFraction,
@@ -395,9 +396,9 @@ function Ranking({ names }: { names: readonly MbSwingName[] }) {
               <td className={`${TD} text-muted-foreground`}>{n.sector ?? EMPTY_CELL}</td>
               <td className={TD}>
                 {n.investable ? (
-                  <span className="text-emerald-600 dark:text-emerald-400" title="Close ≥ ₹50 and ≥ ₹5 cr a day">●</span>
+                  <FlagTip label="Investable" meaning="Close at least ₹50 and at least ₹5 cr traded a day: can become a pick." className="text-emerald-600 dark:text-emerald-400">●</FlagTip>
                 ) : (
-                  <span className="text-red-600 dark:text-red-400" title="Under ₹50 or under ₹5 cr a day: never picked">✗</span>
+                  <FlagTip label="Not investable" meaning="Close under ₹50 or under ₹5 cr traded a day: scored, but never picked." className="text-red-600 dark:text-red-400">✗</FlagTip>
                 )}
               </td>
             </tr>

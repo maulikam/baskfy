@@ -14,6 +14,7 @@ import datetime as dt
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -165,7 +166,11 @@ def connect():
     url = os.environ.get("BASKFY_DATABASE_URL")
     if not url:
         sys.exit("BASKFY_DATABASE_URL is not set")
-    return psycopg.connect(url.replace("postgresql+psycopg://", "postgresql://"))
+    url = re.sub(r"^postgres(?:ql)?(?:\+[a-z0-9_]+)?://", "postgresql://", url)  # SQLAlchemy/sqlx driver suffixes
+    try:
+        return psycopg.connect(url)
+    except psycopg.Error as e:  # its message can carry the URL, password included: never print it
+        sys.exit(f"could not connect to the database named by BASKFY_DATABASE_URL ({type(e).__name__})")
 
 
 def published(conn) -> tuple[int, str, list[str]] | None:

@@ -72,14 +72,15 @@ def assemble(univ: pl.DataFrame, filings: pl.DataFrame, holdings: pl.DataFrame, 
 
 
 def blank_rates(frame: pl.DataFrame, features: list[str]) -> pl.DataFrame:
-    """Blank share of each feature by year, dead vs live; `scope` is every row or the ever-investable names."""
+    """Blank share of each feature by year, dead vs live; `scope` is every row or the ever-investable names.
+    Grouped aggregation, no unpivot: the same numbers in a few KB instead of a 70M-row long table."""
     ever = frame.filter((pl.col("close_raw") >= 50) & (pl.col("turnover20") >= 5e7))["instrument_id"].unique()
-    tagged = frame.with_columns(pl.col("date").dt.year().alias("year"), (pl.col("terminal") != "alive").alias("dead"))
+    tagged = frame.select("instrument_id", "date", *features).with_columns(pl.col("date").dt.year().alias("year"), (frame["terminal"] != "alive").alias("dead"))
     rows = []
-    for scope, part in (("all", tagged), ("ever_investable", tagged.filter(pl.col("instrument_id").is_in(ever.to_list())))):
-        long = part.select("year", "dead", *features).unpivot(index=["year", "dead"], variable_name="feature")
-        got = long.group_by("year", "feature", "dead").agg(pl.col("value").is_null().mean().alias("blank"), pl.len().alias("rows"))
-        dead, live = got.filter(pl.col("dead")).drop("dead"), got.filter(~pl.col("dead")).drop("dead")
+    for scope, part in (("all", tagged), ("ever_investable", tagged.filter(pl.col("instrument_id").is_in(ever.implode())))):
+        got = part.group_by("year", "dead").agg([pl.col(f).is_null().mean().alias(f) for f in features] + [pl.len().alias("rows")])
+        long = got.unpivot(index=["year", "dead", "rows"], variable_name="feature", value_name="blank")
+        dead, live = long.filter(pl.col("dead")).drop("dead"), long.filter(~pl.col("dead")).drop("dead")
         rows.append(dead.join(live, on=["year", "feature"], suffix="_live").rename({"blank": "blank_dead", "rows": "rows_dead"})
                     .with_columns(pl.lit(scope).alias("scope"), (pl.col("blank_dead") - pl.col("blank_live")).alias("gap")))
     return pl.concat(rows).select("scope", "year", "feature", "blank_dead", "blank_live", "gap", "rows_dead", "rows_live").sort("scope", "year", "feature")
@@ -240,9 +241,11 @@ def evaluate(frame: pl.DataFrame, horizon: int, marks: pl.DataFrame, bench: pl.D
 
 def blank_check(source: Path, filings: pl.DataFrame) -> bool:
     """PM4.4, step 1 of every run: writes blank_rates.csv and says whether the common-coverage rows are judged."""
-    univ = pl.scan_parquet(source).filter(pl.col("universe")).select(KEEP).collect()
+    univ = pl.scan_parquet(source).filter(pl.col("universe")).select("instrument_id", "date", "close_raw", "turnover20", "terminal").collect()
     frame = S.join_features(F.join_features(univ, F.snapshots(filings)), S.snapshots(panel.load_shareholding(DATA)))
+    del univ
     rates = blank_rates(frame, BLANK_FEATURES)
+    del frame
     OUT.mkdir(parents=True, exist_ok=True)
     rates.write_csv(OUT / "blank_rates.csv")
     pl.Config.set_tbl_rows(60); pl.Config.set_tbl_width_chars(200); pl.Config.set_float_precision(3)
@@ -276,13 +279,16 @@ def main(geometry: str, blanks_only: bool = False) -> int:
     by_year.write_csv(OUT / "coverage_fundamentals.csv")
     univ = pl.scan_parquet(source).filter(pl.col("universe")).select(KEEP).collect()
     frame = assemble(univ, filings, panel.load_shareholding(DATA), panel.load_sector(DATA))
+    del univ
+    frame = frame.with_columns([pl.col(c).cast(pl.Float32) for c, t in frame.schema.items() if t == pl.Float64])
+    import gc; gc.collect()
     S.coverage_by_year(frame).write_csv(OUT / "coverage_shareholding.csv")
     print(S.coverage_by_year(frame))
     names_with_sector = M.sector_coverage(frame)
     check = M.mcap_check(frame, panel.load_fundamental_daily(DATA))
     print(f"sector coverage {names_with_sector:.1%} of names; mcap vs fundamental_daily {check}")
 
-    marks = pl.scan_parquet(source).select("instrument_id", "date", "close", "terminal").collect()
+    marks = pl.scan_parquet(source).select("instrument_id", "date", pl.col("close").cast(pl.Float32), "terminal").collect()
     bench = panel.load_index_series(DATA).select("date", "nifty50", "midcap150", "smallcap250")
     print("common-coverage rows", flush=True)
     judged = evaluate(covered(frame), horizon, marks, bench, "_covered", covered_mode=True)

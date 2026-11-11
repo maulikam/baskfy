@@ -1,0 +1,29 @@
+arm,year,train_rows,train_positives,min_positives,test_rows,trained,skipped_because
+controls,2020,0,0,50,106691,false,"234 sessions before the year, needs 550"
+controls,2021,0,0,50,184316,false,"486 sessions before the year, needs 550"
+controls,2022,31298,8722,50,174277,true,""
+controls,2023,68390,15571,50,186020,true,""
+controls,2024,103045,19492,50,264486,true,""
+controls,2025,139281,30937,50,216514,true,""
+controls,2026,192929,35574,50,0,false,no test rows
+controls_fundamentals,2020,0,0,300,106691,false,"234 sessions before the year, needs 550"
+controls_fundamentals,2021,0,0,300,184316,false,"486 sessions before the year, needs 550"
+controls_fundamentals,2022,31298,8722,300,174277,true,""
+controls_fundamentals,2023,68390,15571,300,186020,true,""
+controls_fundamentals,2024,103045,19492,300,264486,true,""
+controls_fundamentals,2025,139281,30937,300,216514,true,""
+controls_fundamentals,2026,192929,35574,300,0,false,no test rows
+controls_technicals,2020,0,0,50,106691,false,"234 sessions before the year, needs 550"
+controls_technicals,2021,0,0,50,184316,false,"486 sessions before the year, needs 550"
+controls_technicals,2022,31298,8722,50,174277,true,""
+controls_technicals,2023,68390,15571,50,186020,true,""
+controls_technicals,2024,103045,19492,50,264486,true,""
+controls_technicals,2025,139281,30937,50,216514,true,""
+controls_technicals,2026,192929,35574,50,0,false,no test rows
+all,2020,0,0,300,106691,false,"234 sessions before the year, needs 550"
+all,2021,0,0,300,184316,false,"486 sessions before the year, needs 550"
+all,2022,31298,8722,300,174277,true,""
+all,2023,68390,15571,300,186020,true,""
+all,2024,103045,19492,300,264486,true,""
+all,2025,139281,30937,300,216514,true,""
+all,2026,192929,35574,300,0,false,no test rows

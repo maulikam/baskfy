@@ -10,8 +10,11 @@
 | PM3 | Market cap, sector | code complete, data pending | Sector verified on 4 quotes; coverage and mcap check need the ship, a nightly and the backfill |
 | PM0.7 | Dead names | code complete, data in throwaway DB | 501 names; ship the image, then run the backfill (`NEEDS-MAULIK.md`) |
 | PM0.8 | Twelve years with the dead | ✅ done on merged export | STRATEGY §0, §3, §4, §6 rewritten |
-| PM4 | The re-run | prepared, not run | `run_pm4.py` refuses below 70 % coverage |
-| PM5–PM9 | | not started | |
+| PM4 | four-way re-run | ❌ red for fundamentals (11 Nov) | price-only kept as the sleeve's model (PM6.0) though it also fails the 2024 and pooled gate natively (PM4.10); `out/pm4/PM4-RESULT.md` |
+| PM9a | TimesFM-3 zero-shot features | ❌ not adopted (11 Nov) | raw forecast anti-predictive; as features, noise |
+| PM0.18–0.19 | indicators (CMO/CCI/chop/ER); average-Sharpe features | ❌ no gain as inputs | Sharpe as a stand-alone ranker halves less; untested as a book |
+| PM6–PM8 | scorer, pages, paper book | ▶ commissioned 11 Nov (PM6.0) | brief: `KICKOFF-PROMPT-PM6-PM8.md`; not started |
+| PM5, PM9 | | not started | after PM8 |
 
 **Plan on (PM0.8, from 2014, dead included, every line marked, variant b):** top-20 skip-held 17.2 % CAGR / −66.3 % / Sharpe 0.75; top-10 skip-held 17.0 % / −72.6 % / 0.69; investable equal-weight 13.0 % / −55.8 %; Smallcap 250 16.3 % / −60.8 %.
 
@@ -27,3 +30,6 @@ newest walk-forward year and the price-only model showed no edge there: top-20 h
 +3.9 %. The folds are out of sample for training, but the design was chosen with 2025 visible (10 Sep export).
 
 **Did the edge exist before 2020?** On survivors-only data the ranking did (AUC 0.58–0.80, 2014–19), the return edge only in rising years: top-20 lagged the universe by 12 points in signal-years 2018 and 2019, as it did by 10–11 in 2024 and 2025.
+
+
+**PM4 (11 Nov 2026): FAIL for fundamentals; price-only model stands.** See DECISIONS-PM PM4.6–4.10 and `machinelearning/python/research/portfolio-ml/out/pm4/PM4-RESULT.md`.

@@ -18,7 +18,7 @@ from portfolioml.labels import BarrierConfig, MultibaggerConfig, multibagger, tr
 
 DATA = Path(os.environ.get("PM_DATA", Path(__file__).parent / "data"))
 OUT = Path(__file__).parent / "out"
-CHUNKS = 6
+CHUNKS = 12
 PRICE = ["instrument_id", "date", "open", "high", "low", "close", "volume", "close_raw", "turnover"]
 KEEP = ["instrument_id", "date", "symbol", "eligible", "close", "close_raw", "open", "high", "low", "liquid", "n_hist"]
 
@@ -36,15 +36,18 @@ def build_features(t0: float) -> pl.DataFrame:
     print(f"bars {bars.shape} sessions {bars['date'].n_unique()}  {time.time()-t0:.0f}s", flush=True)
     bars = bars.join(ins.select("instrument_id", "eligible", "symbol"), on="instrument_id", how="left")
     bars = bars.with_columns(pl.col("eligible").fill_null(False))
-    parts = []
+    tmp = DATA / "_chunks"; tmp.mkdir(exist_ok=True)
+    for old in tmp.glob("*.parquet"):  # a stale chunk would join the glob below
+        old.unlink()
     for i, ch in enumerate(_chunks(bars)):
         f = F.name_features(ch)
         f32 = [c for c in F.NAME_FEATURES if c in f.columns and c not in ("rs21", "rs63", "n_hist")] + ["turnover20"]
-        parts.append(f.select(*KEEP, *f32).with_columns([pl.col(c).cast(pl.Float32) for c in f32]))
-        print(f"  chunk {i+1}/{CHUNKS} {parts[-1].shape}  {time.time()-t0:.0f}s", flush=True)
+        part = f.select(*KEEP, *f32).with_columns([pl.col(c).cast(pl.Float32) for c in f32])
+        part.write_parquet(tmp / f"{i:02d}.parquet")
+        print(f"  chunk {i+1}/{CHUNKS} {part.shape}  {time.time()-t0:.0f}s", flush=True)
+        del f, part
     del bars
-    feat = pl.concat(parts).sort("instrument_id", "date")
-    del parts
+    feat = pl.scan_parquet(str(tmp / "*.parquet")).sort("instrument_id", "date").collect()
     feat = feat.join(F.market_features(idx), on="date", how="left")
     feat = feat.join(F.breadth(feat), on="date", how="left")
     feat = F.cross_sectional(feat)
@@ -101,19 +104,26 @@ def main(argv: list[str]) -> None:
         feat = feat.join(status, on="instrument_id", how="left").with_columns(pl.col("terminal").fill_null("alive"))
         bars = feat.select("instrument_id", "date", "open", "high", "low", "close", "terminal")
     labels = build_labels(bars, cfg, t0, terminal)
-    ds = feat.join(labels.drop("terminal", strict=False), on=["instrument_id", "date"], how="left")
+    del bars
+    labels.drop("terminal", strict=False).write_parquet(DATA / "_labels.parquet")
+    del labels
+    feat.write_parquet(DATA / "_feat_t.parquet")
+    del feat
     OUT.mkdir(exist_ok=True)
-    ds.write_parquet(DATA / f"dataset_{tag}.parquet")
-    print(f"dataset_{tag} {ds.shape}  {time.time()-t0:.0f}s", flush=True)
+    (pl.scan_parquet(DATA / "_feat_t.parquet")
+       .join(pl.scan_parquet(DATA / "_labels.parquet"), on=["instrument_id", "date"], how="left")
+       .sink_parquet(DATA / f"dataset_{tag}.parquet"))
+    ds = pl.scan_parquet(DATA / f"dataset_{tag}.parquet")
+    print(f"dataset_{tag}  {time.time()-t0:.0f}s", flush=True)
 
-    u = ds.filter(pl.col("universe"))
+    u = ds.filter(pl.col("universe")).select("date", "instrument_id", "label", "fwd_ret_h").collect()
     print("universe rows", u.shape[0], "labelled", u["label"].is_not_null().sum())
     print(u.group_by(pl.col("date").dt.year().alias("year")).agg(
         pl.len().alias("rows"), pl.col("instrument_id").n_unique().alias("names"),
         pl.col("label").mean().alias("base_rate"), pl.col("fwd_ret_h").mean().alias("mean_fwd_h"),
         pl.col("fwd_ret_h").median().alias("median_fwd_h"),
     ).sort("year"))
-    print("near_sus_gap rows quarantined:", ds.filter(pl.col("liquid") & pl.col("eligible") & pl.col("near_sus_gap")).shape[0])
+    print("near_sus_gap rows quarantined:", ds.filter(pl.col("liquid") & pl.col("eligible") & pl.col("near_sus_gap")).select(pl.len()).collect().item())
 
 
 if __name__ == "__main__":

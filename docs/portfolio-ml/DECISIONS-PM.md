@@ -91,3 +91,70 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
 - **PM4.4 result** 11 Nov 2026, full crawl, fresh export (`out/pm4/blank_rates.csv`): the 10-point rule is breached, so **PM4 is judged on the common-coverage rows** (rows with `pat_margin_ttm`); the full universe prints for reference. 158 of 560 (scope, year, feature) cells from 2019 exceed 10 points, dead names always blanker: 2019 TTM margins 68–70 % vs 47–48 % blank, 2020 33–37 % vs 21–26 %, 2023 `roce` 54 vs 26 %, `debt_equity` 36 vs 13 %, 2024 `ttm_pat_yoy` 60 vs 32 %. 2026 breaches on every shareholding feature (33 vs 1 %) rest on 536 dead rows only; the decision holds without them. Since this run the check is step 1 of every `run_pm4.py` run and sets the judged run itself; `--where-covered` is refused.
 - **PM4.4 floor** Maulik, 11 Nov 2026: in covered mode a fundamentals arm (2, controls + fundamentals; 4, all) trains on a fold only with at least 300 positive training rows; otherwise that test year is skipped for arms 2 and 4 and the run says so. Other arms and the full universe keep the old floor of 50. Every arm's folds (training rows, positives, test rows, trained, why skipped) print and go to `out/pm4/folds_{covered,full}.csv`; an arm with no trained fold stops the run. Counted on today's export, before PM4: covered 2022–2025 have 31,298 / 68,390 / 103,045 / 139,281 training rows with 8,722 / 15,571 / 19,492 / 30,937 positives, so the floor does not bind; covered 2020 and 2021 are skipped for **every** arm already, because covered rows start in 2019 (234 and 486 sessions before the year, 550 needed). Full universe: 2020–2025, 13,729–50,725 positives.
 - **PM4.5** Maulik, 10 Nov 2026: PM4 is four models, same family, folds and tuning: controls (log price, turnover, Amihud, listing age, volatility, market and breadth), controls + fundamentals (PM1, PM2, mcap, `is_bank`), controls + technicals (today's price-only), all. Both the common-coverage rows and the full universe always run; PM4.4 still decides which is judged. The gate applies to model 4 against investable equal-weight. AUC and average precision are on the universe, top-20 and top decile on investable names each date. Not run until the crawl and retry pass finish. PM0.10's P10 arm failed its rule, so there is no fifth.
+- **PM4.6** ⚠ UNREVIEWED **PM4 ran 11 Nov 2026 and FAILS for fundamentals** (`out/pm4/PM4-RESULT.md`). Judged on
+  common-coverage rows per PM4.4 (blank gap breached), folds 2022–2025, dead names, terminal (b), full marks.
+  AC1 FAIL (model "all" misses the gate in 2024, 2025 and pooled); AC2 FAIL (2023 AUC −0.033); AC3 pass (6 of
+  the top 12 features are PM1–PM3, led by log_mcap and ebitda_margin_ttm — used, not generalising). AUC all −
+  price-only by year: +0.011, −0.033, −0.021, +0.021 (cloud run; native figures in PM4.10). The cloud run had the
+  price-only arm passing all three windows on covered rows; the native run does not (PM4.10).
+  Sector cap 3 costs ~3 CAGR points. **Fallback taken as written in 06 PM4: the price-only model is the sleeve's
+  model; PM5–PM9 proceed with it.** Fundamentals, shareholding, mcap and is_bank stay in the plant and in
+  `run_pm4.py` for re-test when the shareholding and balance-sheet layers have more than two years of history.
+  Rejected: tuning the fundamentals arm (round count, feature subsets) against these four years.
+- **PM4.7** ⚠ UNREVIEWED The covered-mode price-only 2025 pass (hit 8.6 % vs 5.3 %) is **not** a candidate-pool
+  effect. `isolate_filter.py`: full-trained price-only scores with picks restricted to filers give 2025 hit
+  4.4 % vs 5.1 % — identical to the full pool (96 % of investable rows are filers). The difference came from the
+  2019→ training set, which was worse in 2022 and 2023. One-year noise; nothing adopted or carried.
+- **PM4.8** ⚠ UNREVIEWED PM4 was run in the agent's cloud workspace (7 GB; the Mac research VM has 3 GB) from the
+  11 Nov 03:23 export. Three memory-only changes committed with it: `features.cross_sectional` ranks in place
+  (no self-join), `build_dataset.py` spills chunks and sinks the final join, `run_pm4.blank_rates` aggregates per
+  group instead of unpivoting ~70M rows. Numerically identical by construction; the blank-check verdict
+  reproduces the Mac's. Price-only AUCs on this export (0.678/0.685/0.680/0.651/0.657/0.603) differ slightly from
+  the 6 Nov export's (0.690/…/0.601) because the bars are now corrected and the crawl complete. Native re-run: PM4.10.
+- **PM4.9** ⚠ UNREVIEWED Two more cuts of the fundamentals question, both agreeing with PM4.6
+  (`out/pm4/single_split_2024on.csv`, `last6m_split.csv`; `single_split.py`, `last6m.py`). Clean single split,
+  train ≤ 2023 → test 2024–Nov 2025 (480k rows): price-only lift 2.18×, +4.1 % vs universe +1.6 %; with
+  fundamentals 1.48×, −5.2 %. Last six months of completed labels (May–Nov 2025, train ≤ May 2024): price-only
+  lift 2.1×, +14.9 % vs +4.1 %; fundamentals 1.7×, +2.0 %; controls-only 1.0×, −6.9 %. The in-sample version
+  Maulik asked for (train on everything, test on 2024→) was run beside the clean one to show why it is not used:
+  fundamentals "returned" +94 % at 11× lift there — memorisation, and more features memorise better.
+  Fundamentals are settled negative for this data generation; re-test when shareholding and balance-sheet
+  history exceed ~3 years.
+- **PM9a** ⚠ UNREVIEWED **Google TimesFM-3 tested, not adopted** (`explore_timesfm.py`,
+  `out/timesfm/timesfm_vs_price.csv`, forecast cache `timesfm_forecasts_quarterly.tgz`). Zero-shot
+  `google/timesfm-3.0-pytorch` (330M), context 512 adjusted closes, 250-session forecast with 9 quantiles,
+  quarterly signal dates 2014→2025, 36,982 forecasts on CPU (0.06 s each). Nine forecast-derived features
+  (median/P10/P90 return at 63 and 250, path max/min, band width). Same walk-forward 2020–2025, identical rows,
+  pooled 480 top-20 picks: price-only AUC 0.648 / lift 1.94× / +38.9 % / halved 5.2 %; price + TimesFM 0.636 /
+  2.02× / +42.8 % / 5.6 %; TimesFM-only (learned) 0.592 / 1.97×; **raw TimesFM median as a ranker AUC 0.442 —
+  anti-predictive** (it extrapolates the 12-month trend, ρ +0.19, and fades the 3-month, ρ −0.14). Rule (beat
+  price-only lift in 2024 and 2025 without more halving): FAIL — won 2025 (13.8 % vs 8.7 % hit on 80 picks),
+  lost 2024 (18.8 % vs 22.5 %). Noted, not carried: the 2025 lift is the second information source to help
+  that year specifically (fundamentals too, mildly). Optional one-hour follow-up on the Mac: full-resolution
+  (every 5th session) forecasts via the MLX backend (`timesfm3.mlx`, Apple-silicon native) to settle whether
+  the 2025 effect survives 10× the picks. **Licence:** the 3.0 weights are `timesfm-non-commercial-license-v1.0`
+  — research use only; Maulik's position is that Baskfy is non-commercial research. If Baskfy ever launches
+  paid (Phase 4), TimesFM-3 self-hosted weights may not be inside it; Google's BigQuery ML route is the
+  commercial path.
+- **PM0.18** ⚠ UNREVIEWED Classic indicators add nothing (`explore_technicals.py`, `out/technicals_vs_price.csv`).
+  CMO, CCI (std in place of mean deviation), Choppiness and Kaufman efficiency ratio at 14/20/63, twelve-year
+  walk-forward on identical rows: mean AUC 0.659 → 0.661, top-20 lift 2.27 → 2.26, halved 10.1 % both. Best new
+  feature (chop63) ranks 29 of 107. Not added.
+- **PM0.19** ⚠ UNREVIEWED Average-Sharpe features (Maulik, 11 Nov): mean of 1-3-6-9-12-month Sharpe, of 1-3, of
+  3-6-9-12, raw and ranked (`explore_sharpe.py`, `out/sharpe_vs_price.csv`). As model inputs: AUC 0.659 → 0.661,
+  lift 2.27 → 2.25 — not added. As stand-alone rankers (no model): lower hit (19.1 % vs 22.9 % for 3-6-9-12),
+  about half the halved rate (5.9 % vs 10.1 %) and a higher mean 12-month return (+28.7 % vs +23.7 %) — simple
+  per-year averages of picks, **not** a book. Untested as a book or as a blend (model top-50 → best-Sharpe 20);
+  candidate for one fixed-rule test, not adopted.
+- **PM4.10** ⚠ UNREVIEWED Native re-run on the Mac, 11 Nov 2026 (`out/pm4/`, `PM4-RESULT.md` rewritten from it). Verdicts
+  reproduce: AC1 FAIL, AC2 FAIL (2023 −0.027 covered), AC3 6 of 12. The tables do not: the native data has ~100 more
+  labelled rows per fold (2022 positives 8,722 vs 8,687), and a fresh rebuild from the export reproduces the native
+  tables exactly, so native stands and the cloud tables are superseded. Changed reading: the price-only arm **fails**
+  the gate on covered rows in 2024 (top-20 −0.8 % vs universe +0.8 %) and pooled (+2.1 % vs +2.3 %), passing 2025 only
+  (+5.3 % vs +4.1 %, hit 10.0 % vs 5.3 %); on the full universe it passes 2024 and fails 2025 and pooled (+1.1 % vs
+  +2.2 %), as in the cloud run. Book on covered rows 2022→: price-only 19.2 % / −33.0 % / 0.92, "all" 17.3 % / −36.0 %.
+  Consequence taken: none to the plan. PM6.0 rests on Maulik's call and the 2014→ book, not on a gate pass; the page
+  shows these failures beside the 2014→ numbers, and PM8's paper book is the test. Not re-tuned.
+- **PM6.0** Maulik, 11 Nov 2026: "our model is good enough, let's integrate into Baskfy." Scope taken: the
+  price-only ranker as a read-only sleeve (PM6 scorer, PM7 pages, PM8 paper book with three shadow lines);
+  no order path, no flag. Brief: `KICKOFF-PROMPT-PM6-PM8.md`.

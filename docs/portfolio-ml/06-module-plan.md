@@ -46,8 +46,8 @@ table is idempotent on re-run (house rule 7), money/prices `numeric` (rule 9), r
 ## PM6 — Nightly scorer
 **Goal:** `mb_score_daily` for the last completed session, every night.
 - Schema per BASKFY-INTEGRATION (`mb_model`, `mb_score_daily`). Task `mb-score` **post-publish** (cannot fail the night); task `mb-train` first Saturday of each quarter: refit on every completed label, store the model file, diff the new ranking against the previous model's on the same day, refuse to publish if Spearman < 0.7 without an operator ack.
-- Law 1: `baskfy-core` stays pure, the worker does I/O. Scoring is `portfolioml/model.py`, a Python worker task (PM6.1), which is handed a loaded Booster. **Date:** last completed session (data-date-clocks skill); never label a figure live.
-- AC1 idempotent night. AC2 `test_mb_purity.py`. AC3 the Python worker runs it (DECISIONS PM6.1 — Rust port deferred; options recorded).
+- Law 1: `baskfy-core` stays pure, the worker does I/O. Scoring is `mb_task.py` (reusing `portfolioml`), a Python subprocess the Rust worker runs after the nightly commits (PM6.1). **Date:** last completed session (data-date-clocks skill); never label a figure live.
+- AC1 idempotent night. AC2 feature parity with the research dataset. AC3 the worker runs it and a failure cannot fail the night (DECISIONS PM6.1 — Rust port deferred; options recorded). Brief: `KICKOFF-PROMPT-PM6-PM8.md`.
 
 ## PM7 — Pages
 **Goal:** see it. Web `/mb` (read-only): top 50, rank, score, investable, sector, mcap, 12m return, distance from ATH, turnover, listing age; the §4 backtest as the "what this is" panel; disclaimers as components. Desk `/mb`: the same list as a **watchlist** with a link that pre-fills a *manual* `/analyze`. No plan builder. AC: 402-gating consistent with the other sleeves; no `execute` route touched (`tools/deploy/verify-safety.sh` still green).

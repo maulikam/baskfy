@@ -42,8 +42,8 @@ a human's hand in `/analyze → /execute`.
 
 | STRATEGY concept | Baskfy implementation |
 |---|---|
-| labels, features, tranche book (§1, §4, §5) | `baskfy_core.mb.{labels,features,tranches}` ← `portfolioml/` unchanged; `test_mb_purity.py` |
-| the saved model (§3) | `mb_model` row + file under `data/models/mb/`; a `lightgbm.Booster` passed *into* core, loaded by `services/mb` |
+| labels, features, tranche book (§1, §4, §5) | `portfolioml/` unchanged (Python `baskfy_core` is legacy since RF3); production imports it, no copy |
+| the saved model (§3) | `mb_model` row + file under the untracked data dir; a `lightgbm.Booster` passed *into* `portfolioml.model`, loaded by the `mb` task (PM6.1) |
 | today's ranking (`score_latest.py`) | task `mb-score` after `publish` → `mb_score_daily`; date = last completed session |
 | investable floor (≥ ₹50, ≥ ₹5 cr/day), sector cap 3 | `MbConfig` fields; the page filters, the model does not |
 | fundamentals / shareholding / sector (§6.1–6.3) | `fundamental_pit`, `shareholding_pit`, `instrument_sector` — PM1–PM3 |

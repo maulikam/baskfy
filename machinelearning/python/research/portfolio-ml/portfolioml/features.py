@@ -129,14 +129,13 @@ def cross_sectional(feat: pl.DataFrame) -> pl.DataFrame:
         (pl.col("r63") - pl.col("nifty50_r63")).alias("rs63"),
     )
     univ = pl.col("liquid") & pl.col("eligible")
+    # in place, no self-join: a masked column ranks only within the universe (nulls take no rank)
+    masked = {k: pl.when(univ).then(pl.col(k)) for k in RANKED}
     ranks = [
-        pl.when(univ).then(pl.col(k).rank("average").over("date") / pl.col(k).count().over("date")).alias(f"{k}_cs")
+        pl.when(univ).then(masked[k].rank("average").over("date") / masked[k].count().over("date")).alias(f"{k}_cs")
         for k in RANKED
     ]
-    # rank only within the universe: null out non-universe values first so they do not take ranks
-    masked = f.with_columns([pl.when(univ).then(pl.col(k)).alias(k) for k in RANKED])
-    ranked = masked.with_columns(ranks)
-    return f.join(ranked.select("instrument_id", "date", *[f"{k}_cs" for k in RANKED]), on=["instrument_id", "date"])
+    return f.with_columns(ranks)
 
 
 NAME_FEATURES = [

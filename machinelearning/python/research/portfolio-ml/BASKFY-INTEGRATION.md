@@ -29,10 +29,10 @@ do not do this. Scoring needs only the model file and the feature frame. Record 
 `docs/DECISIONS-MERGE.md` before it enters the worker.
 
 **Rust rewrite:** `baskfy-core` is the port target and LightGBM has no first-class Rust. Options,
-cheapest first: (a) keep `mb-score` as a Python worker task — the plan already keeps Python workers
-for what is not ported; (b) export the booster to its text format and score with a small tree walker
+cheapest first: (a) the Rust worker runs `mb-score` as a Python subprocess after `publish`, reusing
+`portfolioml` (PM6.1); (b) export the booster to its text format and score with a small tree walker
 in Rust (LightGBM's model file is a plain tree dump; ~200 lines); (c) ONNX. Pick (a) now, (b) when
-the Python worker is retired.
+the Python layer leaves the worker image.
 
 ## Schema (`db/migrations/00xx_mb.sql`)
 

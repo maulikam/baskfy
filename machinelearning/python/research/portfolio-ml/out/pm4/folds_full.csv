@@ -1,0 +1,29 @@
+arm,year,train_rows,train_positives,min_positives,test_rows,trained,skipped_because
+controls,2020,141433,13729,50,136392,true,""
+controls,2021,163560,14752,50,197894,true,""
+controls,2022,190317,25185,50,200979,true,""
+controls,2023,229373,32144,50,231799,true,""
+controls,2024,269749,36749,50,277158,true,""
+controls,2025,315553,50725,50,224420,true,""
+controls,2026,370758,55600,50,0,false,no test rows
+controls_fundamentals,2020,141433,13729,50,136392,true,""
+controls_fundamentals,2021,163560,14752,50,197894,true,""
+controls_fundamentals,2022,190317,25185,50,200979,true,""
+controls_fundamentals,2023,229373,32144,50,231799,true,""
+controls_fundamentals,2024,269749,36749,50,277158,true,""
+controls_fundamentals,2025,315553,50725,50,224420,true,""
+controls_fundamentals,2026,370758,55600,50,0,false,no test rows
+controls_technicals,2020,141433,13729,50,136392,true,""
+controls_technicals,2021,163560,14752,50,197894,true,""
+controls_technicals,2022,190317,25185,50,200979,true,""
+controls_technicals,2023,229373,32144,50,231799,true,""
+controls_technicals,2024,269749,36749,50,277158,true,""
+controls_technicals,2025,315553,50725,50,224420,true,""
+controls_technicals,2026,370758,55600,50,0,false,no test rows
+all,2020,141433,13729,50,136392,true,""
+all,2021,163560,14752,50,197894,true,""
+all,2022,190317,25185,50,200979,true,""
+all,2023,229373,32144,50,231799,true,""
+all,2024,269749,36749,50,277158,true,""
+all,2025,315553,50725,50,224420,true,""
+all,2026,370758,55600,50,0,false,no test rows

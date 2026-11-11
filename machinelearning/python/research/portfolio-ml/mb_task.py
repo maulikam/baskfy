@@ -1,6 +1,7 @@
 """MB sleeve tasks (PM6): reads Postgres and the NSE archive, writes only mb_* tables. Never an order.
 
-usage: python mb_task.py score --date YYYY-MM-DD      (the nightly, after publish)
+usage: python mb_task.py score --date YYYY-MM-DD      (the nightly, after publish; then the PM8 paper book)
+       python mb_task.py paper-seed out/paper/seed.json   (once: the backtest history, labelled backtest)
        python mb_task.py train [--ack WHO]            (quarterly; publishes itself unless Spearman < 0.7)
        python mb_task.py publish MODEL_ID --ack WHO   (operator ack for a model the train step held back)
 Exit codes: 0 done, 3 nothing to do (no model, no bars for the date), 4 model held for an ack, other = error.
@@ -180,6 +181,19 @@ def booster(path: str, features: list[str]) -> lgb.Booster:
     return lgb.Booster(model_file=path)
 
 
+def score_day(conn, bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, date: dt.date, model: tuple[int, str, list[str]]) -> pl.DataFrame:
+    """Score one session from bars that end on it, and write it (idempotent)."""
+    cut = bars.filter(pl.col("date") <= date)
+    feat = P.tail_features(cut, ins, idx.filter(pl.col("date") <= date))
+    day = ranked(feat.filter((pl.col("date") == date) & pl.col("universe")), booster(model[1], model[2]))
+    day = day.join(hi63(cut), on="instrument_id", how="left").with_columns(pl.col("hi63_trigger_date").is_not_null().alias("hi63_trigger"))
+    day = display(day, filings_from_pg(conn, date))
+    rows = day.select(pl.lit(date).alias("date"), "instrument_id", pl.lit(model[0]).alias("model_id"), "score", "rank", "universe_n",
+                      "investable", "hi63_trigger", "hi63_trigger_date", *DISPLAY)
+    write_scores(conn, date, rows)
+    return rows
+
+
 def score(date: dt.date) -> int:
     mb_dir, ca_dir, schemes = paths()
     with connect() as conn:
@@ -188,19 +202,40 @@ def score(date: dt.date) -> int:
             print("no published mb_model; nothing scored")
             return 3
         with tempfile.TemporaryDirectory(dir=mb_dir if mb_dir.exists() else None) as tmp:
-            bars, ins, idx = prepared(raw_from_pg(conn, date, Path(tmp)), ca_dir, schemes)
+            raw = raw_from_pg(conn, date, Path(tmp))
+        bars, ins, idx = prepared(raw, ca_dir, schemes)
         if bars.is_empty() or bars["date"].max() != date:
             print(f"no full session of bars on {date}; nothing scored")
             return 3
-        feat = P.tail_features(bars, ins, idx)
-        day = ranked(feat.filter((pl.col("date") == date) & pl.col("universe")), booster(model[1], model[2]))
-        day = day.join(hi63(bars), on="instrument_id", how="left").with_columns(pl.col("hi63_trigger_date").is_not_null().alias("hi63_trigger"))
-        day = display(day, filings_from_pg(conn, date))
-        rows = day.select(pl.lit(date).alias("date"), "instrument_id", pl.lit(model[0]).alias("model_id"), "score", "rank", "universe_n",
-                          "investable", "hi63_trigger", "hi63_trigger_date", *DISPLAY)
-        write_scores(conn, date, rows)
-    print(f"mb_score_daily {date}: {rows.height} names, model {model[0]}, investable {rows['investable'].sum()}, hi63 {rows['hi63_trigger'].sum()}")
+        rows = score_day(conn, bars, ins, idx, date, model)
+        print(f"mb_score_daily {date}: {rows.height} names, model {model[0]}, investable {rows['investable'].sum()}, hi63 {rows['hi63_trigger'].sum()}")
+        if has_table(conn, "mb_paper_tranche"):
+            import mb_paper
+            print(mb_paper.nightly(conn, bars, ins, idx, raw.terminal, date, model, score_day))
     return 0
+
+
+def paper_seed(path: str) -> int:
+    import mb_paper
+    mb_dir, ca_dir, schemes = paths()
+    with connect() as conn:
+        n = mb_paper.seed(conn, path)
+        with conn.cursor() as cur:
+            cur.execute("SELECT max(date) FROM ohlcv_daily")
+            through = cur.fetchone()[0]
+        with tempfile.TemporaryDirectory(dir=mb_dir if mb_dir.exists() else None) as tmp:
+            raw = raw_from_pg(conn, through, Path(tmp))
+        bars, _, idx = prepared(raw, ca_dir, schemes)
+        with conn.transaction():
+            got = mb_paper.refresh(conn, mb_paper.grid_of(bars, raw.terminal), idx, mb_paper.BACKTEST)
+    print(f"mb paper seed: {n} backtest tranches added; {got}")
+    return 0
+
+
+def has_table(conn, name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s)", (f"public.{name}",))
+        return cur.fetchone()[0] is not None
 
 
 def write_scores(conn, date: dt.date, rows: pl.DataFrame) -> None:
@@ -288,6 +323,8 @@ def main(argv: list[str]) -> int:
     opt = lambda k: rest[rest.index(k) + 1] if k in rest else None  # noqa: E731
     if cmd == "score" and opt("--date"):
         return score(dt.date.fromisoformat(opt("--date")))
+    if cmd == "paper-seed" and rest:
+        return paper_seed(rest[0])
     if cmd == "train":
         return train(opt("--ack"))
     if cmd == "publish" and rest and opt("--ack"):

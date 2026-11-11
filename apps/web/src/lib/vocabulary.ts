@@ -126,6 +126,10 @@ export const PAGES = {
     title: "Doubling candidates",
     blurb: "Which liquid names the model thinks most likely to double within a year, and how far to trust it.",
   },
+  "/mb/paper": {
+    title: "Paper book · Doubling candidates",
+    blurb: "The ranking held on paper each month, marked every session, against what the backtest said to expect.",
+  },
   /* —— The NIFTY options tab (OP5, docs/options/05 §2). Read-only where money is concerned:
      every plan is confirmed in the desk console and nowhere else (docs/options/02 Track C §4).
      Everything on it is a scan or paper — no option sleeve has traded real money. —— */

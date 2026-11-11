@@ -220,7 +220,10 @@ export const SECTION_TABS = {
     { href: "/twt/backtest" as Route, label: "Backtest" },
   ],
   /* The MB sleeve (PM7): read-only ranking; PM8 adds the paper book. */
-  mb: [{ href: "/mb" as Route, label: "Today" }],
+  mb: [
+    { href: "/mb" as Route, label: "Today" },
+    { href: "/mb/paper" as Route, label: "Paper" },
+  ],
   /*
     The NIFTY options tab (OP5, `docs/options/05` §2): "Today | Journal | Calendar". The settings
     sit under Me with the other sleeves' (`/me/options`), for the same reason — they are about a

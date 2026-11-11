@@ -12,7 +12,8 @@ use crate::auth::{Principal, require_authenticated};
 use crate::problems::Problem;
 use crate::query::{QueryParams, Validation};
 use crate::routes::sleeves::common::{
-    J, LaxInt, Obj, canonical_response, db, dec, get as col, int_param, odec, scoped_sole_user_id,
+    J, LaxInt, Obj, canonical_response, db, dec, decimal_of_float, get as col, int_param, odec,
+    quantize, scoped_sole_user_id,
 };
 use crate::state::AppState;
 
@@ -236,10 +237,195 @@ pub async fn get_model(
     ))
 }
 
+/// One book's span, growth and worst fall, from its marks.
+fn book_j(r: &PgRow) -> Result<J, Problem> {
+    let start: chrono::NaiveDate = col(r, "start")?;
+    let end: chrono::NaiveDate = col(r, "end")?;
+    let first: f64 = col(r, "first")?;
+    let last: f64 = col(r, "last")?;
+    let years = (end - start).num_days() as f64 / 365.25;
+    let cagr = if years > 0.5 && first > 0.0 {
+        J::Dec(quantize(
+            decimal_of_float((last / first).powf(1.0 / years) - 1.0),
+            4,
+        ))
+    } else {
+        J::Null
+    };
+    Ok(Obj::new()
+        .put("source", J::Str(col(r, "source")?))
+        .put("book", J::Str(col(r, "book")?))
+        .put("start", J::Date(start))
+        .put("end", J::Date(end))
+        .put(
+            "growth_fraction",
+            J::Dec(quantize(decimal_of_float(last / first - 1.0), 4)),
+        )
+        .put("cagr_fraction", cagr)
+        .put(
+            "max_dd_fraction",
+            J::Dec(quantize(decimal_of_float(col::<f64>(r, "max_dd")?), 4)),
+        )
+        .put(
+            "invested_fraction",
+            J::Dec(quantize(decimal_of_float(col::<f64>(r, "invested")?), 4)),
+        )
+        .done())
+}
+
+fn outcome_j(r: &PgRow) -> Result<J, Problem> {
+    let f = |c: &str| -> Result<J, Problem> {
+        Ok(col::<Option<f64>>(r, c)?.map_or(J::Null, |v| J::Dec(quantize(decimal_of_float(v), 4))))
+    };
+    Ok(Obj::new()
+        .put("lines", J::Int(col(r, "lines")?))
+        .put("touched_2x_fraction", f("touched")?)
+        .put("halved_fraction", f("halved")?)
+        .put("median_return_fraction", f("median")?)
+        .done())
+}
+
+/// `GET /mb/paper` — the paper book (PM8): each book's marks summarised, a weekly equity series, the live
+/// tranches, and realised outcomes against the research's expectation. Paper only; `backtest` is labelled so.
+///
+/// # Errors
+/// 401, 404 not the sole tenant.
+pub async fn get_paper(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+) -> Result<Response, Problem> {
+    require_authenticated(&principal)?;
+    scoped_sole_user_id(&state, principal.user_id, None).await?;
+    let pool = state.db.pool();
+    let live_from: Option<String> =
+        sqlx::query_scalar("SELECT value FROM mb_paper_state WHERE key = 'live_from_month'")
+            .fetch_optional(pool)
+            .await
+            .map_err(db)?;
+    let books = sqlx::query(
+        "WITH m AS (SELECT source, book, date, equity::float8 AS equity, invested::float8 AS invested, \
+           equity::float8 / max(equity::float8) OVER (PARTITION BY source, book ORDER BY date) - 1 AS dd \
+           FROM mb_paper_mark) \
+         SELECT source, book, min(date) AS start, max(date) AS end, \
+           (array_agg(equity ORDER BY date))[1] AS first, (array_agg(equity ORDER BY date DESC))[1] AS last, \
+           min(dd) AS max_dd, (array_agg(invested ORDER BY date DESC))[1] AS invested \
+         FROM m GROUP BY source, book ORDER BY source DESC, book",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let series_rows = sqlx::query(
+        "SELECT source, book, date, equity FROM (SELECT source, book, date, equity, \
+           row_number() OVER (PARTITION BY source, book ORDER BY date) AS rn, \
+           count(*) OVER (PARTITION BY source, book) AS n FROM mb_paper_mark) x \
+         WHERE (rn - 1) % 5 = 0 OR rn = n ORDER BY source DESC, book, date",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let outcomes = sqlx::query(
+        "SELECT t.source, l.line, l.closed, count(*) AS lines, \
+           avg((l.max_mult >= 2)::int)::float8 AS touched, avg((l.mult <= 0.5)::int)::float8 AS halved, \
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY l.mult - 1)::float8 AS median \
+         FROM mb_paper_line l JOIN mb_paper_tranche t ON t.id = l.tranche_id \
+         WHERE l.entry_date IS NOT NULL GROUP BY t.source, l.line, l.closed \
+         ORDER BY t.source DESC, l.line, l.closed DESC",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let tranches = sqlx::query(
+        "SELECT t.signal_date, t.model_id, count(*) FILTER (WHERE l.line = 'hi63') AS hi63_lines, \
+           count(*) FILTER (WHERE l.line = 'book') AS lines, \
+           avg((l.max_mult >= 2)::int) FILTER (WHERE l.line = 'book')::float8 AS touched, \
+           avg((l.mult <= 0.5)::int) FILTER (WHERE l.line = 'book')::float8 AS halved, \
+           (percentile_cont(0.5) WITHIN GROUP (ORDER BY l.mult - 1) FILTER (WHERE l.line = 'book'))::float8 AS median, \
+           max(l.sessions_held) FILTER (WHERE l.line = 'book') AS sessions_held \
+         FROM mb_paper_tranche t LEFT JOIN mb_paper_line l ON l.tranche_id = t.id \
+         WHERE t.source = 'live' GROUP BY t.id ORDER BY t.signal_date DESC",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db)?;
+    let mut series: Vec<J> = Vec::new();
+    let mut current: Option<(String, String, Vec<J>)> = None;
+    for r in &series_rows {
+        let key: (String, String) = (col(r, "source")?, col(r, "book")?);
+        if current
+            .as_ref()
+            .is_none_or(|c| (c.0.as_str(), c.1.as_str()) != (key.0.as_str(), key.1.as_str()))
+        {
+            if let Some((src, bk, pts)) = current.take() {
+                series.push(
+                    Obj::new()
+                        .put("source", J::Str(src))
+                        .put("book", J::Str(bk))
+                        .put("points", J::Arr(pts))
+                        .done(),
+                );
+            }
+            current = Some((key.0, key.1, Vec::new()));
+        }
+        if let Some(c) = current.as_mut() {
+            c.2.push(J::Arr(vec![
+                J::Date(col(r, "date")?),
+                J::Dec(dec(r, "equity")?),
+            ]));
+        }
+    }
+    if let Some((src, bk, pts)) = current {
+        series.push(
+            Obj::new()
+                .put("source", J::Str(src))
+                .put("book", J::Str(bk))
+                .put("points", J::Arr(pts))
+                .done(),
+        );
+    }
+    let mut out_rows = Vec::with_capacity(outcomes.len());
+    for r in &outcomes {
+        let mut o = outcome_j(r)?;
+        if let J::Obj(fields) = &mut o {
+            fields.insert(0, ("matured".to_owned(), J::Bool(col(r, "closed")?)));
+            fields.insert(0, ("line".to_owned(), J::Str(col(r, "line")?)));
+            fields.insert(0, ("source".to_owned(), J::Str(col(r, "source")?)));
+        }
+        out_rows.push(o);
+    }
+    let mut tranche_rows = Vec::with_capacity(tranches.len());
+    for r in &tranches {
+        let mut o = outcome_j(r)?;
+        if let J::Obj(fields) = &mut o {
+            fields.insert(0, ("hi63_lines".to_owned(), J::Int(col(r, "hi63_lines")?)));
+            fields.insert(0, ("sessions_held".to_owned(), opt_i(r, "sessions_held")?));
+            fields.insert(0, ("model_id".to_owned(), opt_i(r, "model_id")?));
+            fields.insert(
+                0,
+                ("signal_date".to_owned(), J::Date(col(r, "signal_date")?)),
+            );
+        }
+        tranche_rows.push(o);
+    }
+    let mut book_rows = Vec::with_capacity(books.len());
+    for r in &books {
+        book_rows.push(book_j(r)?);
+    }
+    Ok(canonical_response(
+        &Obj::new()
+            .put("live_from_month", J::opt_str(live_from))
+            .put("books", J::Arr(book_rows))
+            .put("series", J::Arr(series))
+            .put("outcomes", J::Arr(out_rows))
+            .put("tranches", J::Arr(tranche_rows))
+            .done(),
+    ))
+}
+
 /// The `/mb` routes: GET only.
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/mb/today", get(get_today))
         .route("/mb/history/{instrument_id}", get(get_history))
         .route("/mb/model", get(get_model))
+        .route("/mb/paper", get(get_paper))
 }

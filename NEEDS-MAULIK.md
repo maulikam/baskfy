@@ -2611,8 +2611,9 @@ It prints `BLANK CHECK: gap above 10%: YES` or `no` and the judged run (PM4.4); 
 ## Portfolio-ML (PM6) — ship the MB scorer (11 Nov 2026)
 
 **Needed:** build and ship the Rust and web images (the Rust one now carries `/opt/mb`, a Python 3.12 runtime, ~0.8 GB more), let it
-run migrations (0006–0008 are pending locally), then once: `docker exec baskfy-local-worker-1 /opt/mb/run train`
-(about a minute, ~5 GB RAM). After that every published nightly scores itself. To see that a failing scorer cannot
+run migrations (0006–0009 are pending locally), then once: `docker exec baskfy-local-worker-1 /opt/mb/run train`
+(about a minute, ~5 GB RAM) and `docker exec baskfy-local-worker-1 /opt/mb/run paper-seed /opt/mb/app/seed.json` (the
+backtest history, ~15 s). After that every published nightly scores itself. To see that a failing scorer cannot
 fail the night, re-run one published date with `BASKFY_MB_RUN=/bin/false` set on the worker: the run should still
-publish and the log carry `mb score failed`. **Blocks:** PM6's live rows, PM7's pages showing data, PM8's live book.
-**Meanwhile:** PM7 and PM8 are built against the scratch database.
+publish and the log carry `mb score failed`. The live paper record starts with the first month after the first scored night. **Blocks:** PM6's live rows,
+PM7's and PM8's pages showing data. **Meanwhile:** all three were built and checked against a scratch copy of the local DB.

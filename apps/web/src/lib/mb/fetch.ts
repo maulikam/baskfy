@@ -90,3 +90,48 @@ async function readOrNull<T>(path: string, search: Record<string, string> = {}):
 export async function fetchMbToday(date?: string): Promise<MbToday | null> {
   return readOrNull<MbToday>("/mb/today", date ? { date } : {});
 }
+
+/** PM8: one paper book's marks, summarised. `source` "backtest" is the seeded walk-forward history. */
+export interface MbPaperBook {
+  source: "backtest" | "live";
+  book: "book" | "hi63_20" | "hi63_16" | "book_overlay";
+  start: string;
+  end: string;
+  growth_fraction: string;
+  cagr_fraction: string | null;
+  max_dd_fraction: string;
+  invested_fraction: string;
+}
+
+export interface MbPaperOutcome {
+  source: "backtest" | "live";
+  line: "book" | "hi63";
+  matured: boolean;
+  lines: number;
+  touched_2x_fraction: string | null;
+  halved_fraction: string | null;
+  median_return_fraction: string | null;
+}
+
+export interface MbPaperTranche {
+  signal_date: string;
+  model_id: number | null;
+  sessions_held: number | null;
+  hi63_lines: number;
+  lines: number;
+  touched_2x_fraction: string | null;
+  halved_fraction: string | null;
+  median_return_fraction: string | null;
+}
+
+export interface MbPaper {
+  /** "YYYY-MM": the first month of the live record. Null before the first night has run. */
+  live_from_month: string | null;
+  books: readonly MbPaperBook[];
+  outcomes: readonly MbPaperOutcome[];
+  tranches: readonly MbPaperTranche[];
+}
+
+export async function fetchMbPaper(): Promise<MbPaper | null> {
+  return readOrNull<MbPaper>("/mb/paper");
+}

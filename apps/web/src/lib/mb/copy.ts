@@ -45,3 +45,18 @@ export const MB_CAVEATS: readonly string[] = [
   "2025 showed no edge on the full universe, and on the 2022–25 re-test it failed the 2024 window too.",
   "A list of names, not a portfolio and not advice. Nothing on this page places, plans or schedules an order.",
 ];
+
+/** PM8's expectation for the paper book (KICKOFF PM8; STRATEGY §4, PM0.17). Fractions. */
+export const MB_PAPER_EXPECT = {
+  touched2x: "20–23%",
+  halved: "about 7%",
+  median12m: "about +6%",
+  triggerDrawdown: "about −26%",
+} as const;
+
+export const MB_BOOK_NAMES: Record<string, string> = {
+  book: "Book of record: top 20 investable each month, equal weight, held 250 sessions",
+  hi63_20: "Shadow: 63-day-high trigger, 1/20 of a tranche a name",
+  hi63_16: "Shadow: 63-day-high trigger, 1/16 of a tranche a name",
+  book_overlay: "Shadow: the book, in cash while the Smallcap 250 is under its 100-day average (5 closes to confirm)",
+};

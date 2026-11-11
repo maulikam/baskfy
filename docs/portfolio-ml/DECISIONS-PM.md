@@ -191,3 +191,28 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   app, so the desk view is a staff-only watchlist section on `/mb` (top 20 investable, closes) with a link to the
   weekly desk (`/rebalance`) and the Desk menu entry "Doubling". No plan line is created. Reverse: a desk route that
   writes a scan in `/analyze`'s shape, if Maulik wants one.
+- **PM8.1** ⚠ UNREVIEWED Paper book mechanics (`portfolioml/paper.py`, `mb_paper.py`, migration 0009). Tranches and
+  lines are the record and are never rewritten; marks are recomputed from the corrected bars every night and replaced
+  whole, so a re-run gives identical rows and a later corporate-action correction re-marks the whole history. Book of
+  record: on each month's first session, the top 20 investable names by rank not in the last 12 tranches, entered at
+  the next open, held 250 sessions, variant (b). All books are marked in the pool form the PM0.15–0.17 comparisons
+  used (`timing.pool_book_detail`, 1/240 of equity a name, cash at 6 %, 0.25 % a side), with an open end so a line
+  still inside its 250 sessions is held, not sold, on the last day. Shadow lines: (a)/(b) the 63-day trigger on each
+  tranche's top-50 watch list, first close at a 63-session high within 21 sessions, entry next open, at most 20 a
+  tranche, a name not re-entered while held, at 1/20 and 1/16 of a tranche; (c) the book in cash while the Smallcap
+  250 is under its 100-DMA, 5 closes to confirm, traded a session late, 0.5 % a switch, applied to the book's daily
+  return (PM0.13 ran it on the slice book; on the pool book the numbers differ, so it is not PM0.13's figure).
+- **PM8.2** ⚠ UNREVIEWED Live record and restarts. The live record starts with the first month whose first session
+  is on or after the first paper night (`mb_paper_state.live_from_month`). Each night records every due live tranche
+  that is missing, scoring its first session from bars that end on it if that night was missed, so a restart neither
+  loses nor duplicates a tranche (`UNIQUE(source, signal_date)`). Live trigger lines are added as they fire; when two
+  tranches' 21-session windows overlap and one name fires in both, the earlier session wins, where the batch research
+  ran tranche by tranche. Tested on the scratch DB: an October "deploy" recorded 1 Oct and 2 Nov with 29 trigger
+  lines; a second run changed no row; deleting November's tranche and scores and re-running rebuilt the same marks.
+- **PM8.3** Seed (`paper_seed_build.py` → `out/paper/seed.json`, 143 tranches, loaded by `mb_task.py paper-seed`,
+  labelled backtest). Its book picks equal `tranches.simulate`'s exactly (2,860); its trigger lines (1,469) and marks
+  equal the research's own code on today's export: pool book 18.7 % / −60.5 %, 1/20 trigger 16.9 % / −28.4 %,
+  1/16 19.2 % / −36.6 %, overlay 17.6 % / −27.4 % (2014→Nov 2026). PM0.17's 16.6 % / −26.3 % was on the 10 Nov
+  export; the same script on today's bars gives 16.9 % / −28.4 %. Backtest outcomes over 12 months: book lines
+  touched 2× 20.4 %, halved 5.5 %, median +7.9 % (expected 20–23 %, ~7 %, ~+6 %). The seed's trigger events are
+  restricted to completed outcomes, as the research's were; live lines take every firing.

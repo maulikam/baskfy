@@ -66,7 +66,8 @@ COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app/templates 
 COPY --chown=baskfy:baskfy legacy/python/kite-momentum-rebalancer/app/static    /desk/app/static
 COPY --from=mb /opt/mb /opt/mb
 COPY machinelearning/python/research/portfolio-ml/portfolioml /opt/mb/app/portfolioml
-COPY machinelearning/python/research/portfolio-ml/mb_task.py machinelearning/python/research/portfolio-ml/audit_moves.py \
+COPY machinelearning/python/research/portfolio-ml/mb_task.py machinelearning/python/research/portfolio-ml/mb_paper.py \
+     machinelearning/python/research/portfolio-ml/audit_moves.py machinelearning/python/research/portfolio-ml/out/paper/seed.json \
      machinelearning/python/research/portfolio-ml/explore_multibagger.py crates/providers/src/reference/nse_schemes.csv /opt/mb/app/
 COPY --chmod=0755 machinelearning/python/research/portfolio-ml/mb_run.sh /opt/mb/run
 # Same BASKFY_ -> desk credential mapping as Dockerfile.desk's desk-entrypoint.

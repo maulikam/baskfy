@@ -72,6 +72,7 @@ def nearby(r: dict, meta: dict, by_symbol: dict, by_issuer: dict) -> list:
 
 def classified(bars: pl.DataFrame, meta: dict, terminal: pl.DataFrame, by_symbol: dict, by_issuer: dict) -> pl.DataFrame:
     """Every move beyond 60 % and every matched 20–60 % fall, with its class and multiplier."""
+    bars = bars.select("instrument_id", "date", "open", "close", "close_raw")  # all the scan reads
     m = moves(bars).join(terminal, on="instrument_id", how="left")
     rows = []
     for r in m.to_dicts():

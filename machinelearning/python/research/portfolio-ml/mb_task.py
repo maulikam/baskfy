@@ -253,22 +253,39 @@ def write_scores(conn, date: dt.date, rows: pl.DataFrame) -> None:
                 cp.write_row(r)
 
 
-def training_frame(bars: pl.DataFrame, ins: pl.DataFrame, idx: pl.DataFrame, terminal: pl.DataFrame, tmp: Path) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """build_dataset.py's dataset (variant b), stride-5 universe rows with a completed label."""
+def training_frame(raw: Raw, ca_dir: Path, schemes: Path, tmp: Path) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """build_dataset.py's dataset (variant b): stride-5 universe rows with a completed label, and the last
+    session's universe rows. Labels first, then features, each in chunks spilled to ``tmp``; nothing kept
+    that training does not read (the worker shares an 8 GB VM)."""
+    bars, ins, idx = prepared(raw, ca_dir, schemes)
+    raw.ohlcv = pl.DataFrame()
+    cfg = MultibaggerConfig(up=1.0, horizon=250)
+    status = raw.terminal.select("instrument_id", pl.col("status").alias("terminal"))
+    lb = bars.select("instrument_id", "date", "open", "high", "low", "close").join(status, on="instrument_id", how="left").with_columns(
+        pl.col("terminal").fill_null("alive"))
+    last_complete = lb["date"].unique().sort()[-(cfg.horizon + 1)]
+    for i, ch in enumerate(P.chunks(lb, 12)):
+        multibagger(ch, cfg, TERMINAL, last_complete).select("instrument_id", "date", "label").write_parquet(tmp / f"l{i:02d}.parquet")
+    del lb
     named = P.with_names(bars, ins)
+    del bars
     for i, ch in enumerate(P.chunks(named, 12)):
         P.name_part(ch).write_parquet(tmp / f"f{i:02d}.parquet")
     del named
-    feat = P.finish(pl.scan_parquet(str(tmp / "f*.parquet")).sort("instrument_id", "date").collect(), idx)
-    status = terminal.select("instrument_id", pl.col("status").alias("terminal"))
-    feat = feat.join(status, on="instrument_id", how="left").with_columns(pl.col("terminal").fill_null("alive"))
-    cfg = MultibaggerConfig(up=1.0, horizon=250)
-    lbars = feat.select("instrument_id", "date", "open", "high", "low", "close", "terminal")
-    last_complete = lbars["date"].unique().sort()[-(cfg.horizon + 1)]
-    labels = pl.concat([multibagger(ch, cfg, TERMINAL, last_complete).select("instrument_id", "date", "label") for ch in P.chunks(lbars, 12)])
-    univ = feat.filter(pl.col("universe")).join(labels, on=["instrument_id", "date"], how="left")
-    sessions = univ["date"].unique().sort()
-    return univ.filter(pl.col("label").is_not_null() & pl.col("date").is_in(sessions[::TRAIN_STRIDE].implode())).sort("date"), feat
+    stride: list = []
+
+    def keep(days: pl.Series) -> pl.Series:  # every fifth universe session, plus the last for the Spearman check
+        stride.append(days[::TRAIN_STRIDE])
+        return pl.concat([stride[0], days[-1:]]).unique().sort()
+
+    feat = P.finish_kept(pl.scan_parquet(str(tmp / "f*.parquet")), idx, keep)
+    univ = feat.filter(pl.col("universe")).select("instrument_id", "date", *ALL_FEATURES)
+    last_day = feat["date"].max()
+    del feat
+    today = univ.filter(pl.col("date") == last_day)
+    labels = pl.read_parquet(str(tmp / "l*.parquet"))
+    rows = univ.filter(pl.col("date").is_in(stride[0].implode())).join(labels, on=["instrument_id", "date"], how="left")
+    return rows.filter(pl.col("label").is_not_null()).sort("date"), today
 
 
 def spearman(a: np.ndarray, b: np.ndarray) -> float:
@@ -284,13 +301,10 @@ def train(ack: str | None) -> int:
             cur.execute("SELECT max(date) FROM ohlcv_daily")
             through = cur.fetchone()[0]
         with tempfile.TemporaryDirectory(dir=mb_dir) as tmp:
-            raw = raw_from_pg(conn, through, Path(tmp))
-            bars, ins, idx = prepared(raw, ca_dir, schemes)
-            train_rows, feat = training_frame(bars, ins, idx, raw.terminal, Path(tmp))
+            train_rows, today = training_frame(raw_from_pg(conn, through, Path(tmp)), ca_dir, schemes, Path(tmp))
         x = train_rows.select(ALL_FEATURES).to_numpy().astype(np.float32)
         m = lgb.train(PARAMS, lgb.Dataset(x, train_rows["label"].to_numpy(), group=grp(train_rows)), ROUNDS)
         trained_on = train_rows["date"].max()
-        today = feat.filter((pl.col("date") == feat["date"].max()) & pl.col("universe"))
         new_scores = m.predict(today.select(ALL_FEATURES).to_numpy().astype(np.float32))
         prev = published(conn)
         rho = None if prev is None else spearman(new_scores, booster(prev[1], prev[2]).predict(today.select(ALL_FEATURES).to_numpy().astype(np.float32)))

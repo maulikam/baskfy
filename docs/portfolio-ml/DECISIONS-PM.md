@@ -256,3 +256,12 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   still takes in 2018 and 2022 (bear-market rallies) lose more (−4.7 %, −2.1 % a trade). Tighter setups gain nothing
   from it. Not adopted. Next candidates, Maulik's question of the same day: regime-adaptive trailing for winners, a
   time stop for non-movers, volatility-sized stops and positions.
+- **PM10d** ⚠ UNREVIEWED Can a moving-average switch find the bad years? (Maulik, 11 Nov 2026.) `explore_rr_regime.py`,
+  `out/rr_regime/`. Seven switches fixed before the run (Smallcap 250 > 100 / > 200-DMA, 50 > 200, 20 > 50, both 200
+  rules, 200-DMA rising, breadth ≥ 50 % above their 200-DMA) on trail −7/12 h60 and fixed −7/+25 h40, model top 5,
+  PM10c's rule. **None passes.** Best by years: 20 > 50 on the trail setup, +1.03 % a trade, PF 1.24, 7 of 11 years.
+  The 200-DMA rules are worse than the 100-DMA (+0.43 % to +0.68 %, 4–5 of 11 years): they react later. 2024 is the
+  clearest case: every 200-DMA rule was on all year and the setups still lost, because the losses come in the first
+  weeks of a fall, while lagging averages still read "up"; 2018 and 2022 stay negative under every switch. Seven
+  switches on 11 years, so none would be adopted on a narrow pass either. Next candidate: a switch on the strategy's
+  own recent trades (stop after its recent results turn bad), which reacts to these names rather than the index.

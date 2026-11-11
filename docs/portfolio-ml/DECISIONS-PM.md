@@ -289,4 +289,5 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   instruments stay unscored. `rr_score_daily.scope` (migration 0011) names the first reason a row is outside:
   quarantine, young (< 260 sessions), sme (series not EQ/BE/BZ), cheap (< ₹20), thin (< ₹2 cr a day); those scores are
   extrapolation, shown grey with a ◌ flag. Picks still come only from universe ∧ investable rows, so the backtest
-  still describes them. Rank is over every scored row. The doubling model is unchanged.
+  still describes them. Rank: universe rows first by score, then the rest by score (their scores run higher on
+  average, young 0.18 vs 0.095, and would otherwise crowd the top). The doubling model is unchanged.

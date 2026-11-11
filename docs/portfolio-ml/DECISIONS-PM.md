@@ -247,3 +247,12 @@ Pre-taken with the pack (9 Nov 2026, ⚠ UNREVIEWED):
   positive is the market's own drift, and every setup loses in 2018, 2024 and 2025 with the universe. Worst single
   trades −28 % to −67 % (gaps through the stop). Not adopted; candidate next test: the same setups with a market
   regime gate fixed in advance.
+- **PM10c** ⚠ UNREVIEWED PM10b's setups with a market switch fixed before the run (`explore_rr_gate.py`, `out/rr_gate/`):
+  new trades only while NIFTY Smallcap 250 closes above its 100-session average at the signal close (plain, and
+  5-close-confirmed). Rule set in advance: model top 5 switched ≥ +0.5 % a trade net, profit factor ≥ 1.2, ≥ 8 of 11
+  years positive. **No setup passes**; the best meets the first two and fails the third: trail −7 % / 12 % h60, plain
+  switch, +1.17 % a trade (vs +0.90 % unswitched), PF 1.28, worst trade −27 % (vs −48 %), 63 % of sessions open, 6 of
+  11 years positive. The switch lifts the average and trims the tail but does not fix the bad years: the trades it
+  still takes in 2018 and 2022 (bear-market rallies) lose more (−4.7 %, −2.1 % a trade). Tighter setups gain nothing
+  from it. Not adopted. Next candidates, Maulik's question of the same day: regime-adaptive trailing for winners, a
+  time stop for non-movers, volatility-sized stops and positions.

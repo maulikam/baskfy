@@ -313,7 +313,8 @@ export function PortfoliosList({
               data-testid="confirm-delete-portfolio"
               onClick={() => {
                 if (pendingDelete) {
-                  void remove.mutateAsync(pendingDelete.id).then(() => {
+                  /* This dialog names the holdings that go, so it is the confirmation. */
+                  void remove.mutateAsync({ id: pendingDelete.id, confirmHoldings: true }).then(() => {
                     setPendingDelete(null);
                     router.refresh();
                   });

@@ -7,6 +7,7 @@ import { InvestmentActions } from "@/components/investments/investment-actions";
 import { ShowDetailsModal } from "@/components/investments/show-details-modal";
 import { SipForm } from "@/components/investments/sip-form";
 import { RebalanceSlot } from "@/components/portfolio/detail/detail-slots";
+import { DeletePortfolioControl } from "@/components/portfolio/manage/delete-portfolio-control";
 import { PortfolioDetailWorkspace } from "@/components/portfolio/detail/workspace";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -107,6 +108,14 @@ export default async function PortfolioDetailPage({
         }
       >
         {investment ? <ManageSection detail={investment} /> : null}
+        <DeletePortfolioControl
+          target={{
+            id: bundle.detail.summary.portfolio_id,
+            name: bundle.detail.summary.name,
+            /* Unknown counts as 0 here; the API still refuses (409) holdings sent unconfirmed. */
+            holdingsCount: bundle.detail.holdings?.length ?? 0,
+          }}
+        />
         <p className="text-xs text-muted-foreground">
           Read-only. Every action here ends in an order plan you take to your broker; this page
           never places an order.{" "}

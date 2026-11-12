@@ -8750,3 +8750,11 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Default count: the body's `top_n`, else the screen's saved `invest_count`, else 20. Rest of the path (MTF/cash, claim, margin check, desk order path) unchanged.
 - New nullable `screen.invest_count` (migration `0013_screen_invest_count.sql`, CHECK 1..=100), set by `PATCH /screens/{id}` (`invest_count`, null clears), copied on duplicate. Label "Stocks to show / invest": the list shows the top N with a "Show all" toggle, and the invest dialog defaults to it.
 - Rejected: a field on `ScreenDefinition` (changes definition hashes and the strict model). Reverse: drop the column, the PATCH field, and `top_n` from the invest body.
+
+## PORTFOLIO-DELETE — delete from the portfolio page (12 Nov 2026) · ⚠ UNREVIEWED
+
+- Maulik: "Give the user an option to delete the portfolio manually from the portfolio screen." `/portfolio/[id]` now has a Delete portfolio button and dialog (name, holdings count, "cannot be undone", typed name when it has holdings); on success it goes to `/portfolio/overview`.
+- `DELETE /portfolios/{id}` was already served. It now answers 200 with `PortfolioDeletedOut` (was 204), refuses 409 without `?confirm=holdings` while holdings are recorded, refuses 409 always while a `cb_investment` points at it, and nulls `reconciliation_item` references explicitly. It never reaches a broker, order or GTT.
+- Children are still promoted to roots, not refused: the live FKs are `ON DELETE SET NULL` (checked in `pg_constraint`, not NO ACTION as the lane brief said) and migration 0019 chose promotion on purpose.
+- The management drawer (`deletePortfolioConfirmedAction`) and the grouping list's dialog send the confirm, since both already name the holdings that go.
+- Reverse: drop the `confirm`/409 checks in `delete_portfolio` and the `DeletePortfolioControl` from the page.

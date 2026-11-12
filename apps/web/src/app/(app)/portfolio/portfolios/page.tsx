@@ -3,7 +3,7 @@ import type { SleeveListOut } from "@baskfy/api-client";
 
 import {
   createPortfolioAction,
-  deletePortfolioAction,
+  deletePortfolioConfirmedAction,
   loadSleevesAction,
   reattributePortfolioAction,
   renamePortfolioAction,
@@ -110,7 +110,7 @@ export default async function PortfolioPortfoliosPage() {
           loadSleeves: loadSleevesAction,
           saveSleeves: saveSleevesAction,
           reattribute: reattributePortfolioAction,
-          remove: deletePortfolioAction,
+          remove: deletePortfolioConfirmedAction,
         }}
       />
 

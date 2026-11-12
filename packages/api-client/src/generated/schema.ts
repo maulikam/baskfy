@@ -3383,10 +3383,11 @@ export interface paths {
          * @description Delete one portfolio. Its children are **promoted to roots**, not deleted with it.
          *
          *     ``portfolio.parent_id`` is ``ON DELETE SET NULL`` (migration 0019), deliberately: deleting a
-         *     grouping node must not silently delete the money underneath it. The children stay the
-         *     caller's own, visibly detached at the top of ``GET /portfolios``, with their holdings
-         *     untouched. This portfolio's *own* holdings go with it — ``portfolio_holding.portfolio_id``
-         *     is ``ON DELETE CASCADE``, which is the row being deleted, not somebody else's.
+         *     grouping node must not silently delete the money underneath it. This portfolio's *own* holdings
+         *     rows go with it, but only when ``confirm=holdings`` is passed; without it a portfolio that still
+         *     records holdings answers 409. A portfolio a basket investment (``cb_investment``) points at always
+         *     answers 409. Reconciliation items pointing at it are detached. Only Baskfy's record is removed:
+         *     no order, stop or broker call is made, and the shares stay at the broker.
          */
         delete: operations["deletePortfolio"];
         options?: never;
@@ -10441,6 +10442,27 @@ export interface components {
             parent_id?: number | null;
             /** Screen Public Id */
             screen_public_id?: string | null;
+        };
+        /**
+         * PortfolioDeletedOut
+         * @description What `DELETE /portfolios/{id}` removed. Only Baskfy's record goes: no order, no stop and no broker call is made, and the shares stay at the broker as unallocated.
+         */
+        PortfolioDeletedOut: {
+            /**
+             * Broker Untouched
+             * @constant
+             */
+            broker_untouched: true;
+            /** Children Promoted */
+            children_promoted: number;
+            /** Holdings Removed */
+            holdings_removed: number;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Note */
+            note: string;
         };
         /**
          * PortfolioForestOut
@@ -32903,7 +32925,10 @@ export interface operations {
     };
     deletePortfolio: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Required (as ``holdings``) to delete a portfolio that still records holdings. */
+                confirm?: "holdings" | null;
+            };
             header?: never;
             path: {
                 portfolio_id: number;
@@ -32913,11 +32938,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PortfolioDeletedOut"];
+                };
             };
             /** @description Bad request */
             400: {
@@ -32955,7 +32982,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description A scan is already in flight */
+            /** @description The portfolio still records holdings (pass confirm=holdings) or a basket investment links it */
             409: {
                 headers: {
                     [name: string]: unknown;

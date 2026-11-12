@@ -871,6 +871,57 @@ pub static BEAT_SCHEDULE: &[BeatEntry] = &[
         },
     },
     BeatEntry {
+        name: "strategy-books-session",
+        task: "baskfy.portfolio.sync_strategy_books",
+        schedule: Schedule::Crontab(Crontab {
+            minute: "*/15",
+            hour: "9-15",
+            day_of_week: "mon-fri",
+            day_of_month: "*",
+            month_of_year: "*",
+        }),
+        kwargs: &[],
+        options: BeatOptions {
+            queue: Queue::Compute,
+            expires: None,
+            countdown: None,
+        },
+    },
+    BeatEntry {
+        name: "strategy-books-close",
+        task: "baskfy.portfolio.sync_strategy_books",
+        schedule: Schedule::Crontab(Crontab {
+            minute: "0",
+            hour: "16",
+            day_of_week: "mon-fri",
+            day_of_month: "*",
+            month_of_year: "*",
+        }),
+        kwargs: &[],
+        options: BeatOptions {
+            queue: Queue::Compute,
+            expires: None,
+            countdown: None,
+        },
+    },
+    BeatEntry {
+        name: "strategy-books-after-nav",
+        task: "baskfy.portfolio.sync_strategy_books",
+        schedule: Schedule::Crontab(Crontab {
+            minute: "45",
+            hour: "20",
+            day_of_week: "mon-fri",
+            day_of_month: "*",
+            month_of_year: "*",
+        }),
+        kwargs: &[],
+        options: BeatOptions {
+            queue: Queue::Compute,
+            expires: None,
+            countdown: None,
+        },
+    },
+    BeatEntry {
         name: "swing-eod",
         task: "baskfy.swing.detect",
         schedule: Schedule::Crontab(Crontab {

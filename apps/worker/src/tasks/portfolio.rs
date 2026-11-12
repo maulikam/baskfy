@@ -28,10 +28,13 @@ mod capture;
 mod db_tests;
 pub mod ledger;
 pub mod nav;
+#[cfg(test)]
+mod strategy_books_db_tests;
 
 /// The tasks this lane has ported (the `tasks` listing and the cutover read it).
 pub const PORTED: &[&str] = &[
     "baskfy.portfolio.eod_nav",
+    "baskfy.portfolio.sync_strategy_books",
     "baskfy.pipeline.capture_kite_trades",
 ];
 
@@ -79,6 +82,28 @@ pub async fn portfolio_eod_nav_task(ctx: &TaskContext, args: BoundArgs) -> TaskR
     let payload = result.as_json()?;
     tx.commit().await?;
     Ok(payload)
+}
+
+/// `baskfy.portfolio.sync_strategy_books()` (STRATEGY-BOOKS, owner 12 Nov 2026): every user's
+/// live TWT / Swing / VBT lines, automated or ticket, filed into that strategy's own portfolio.
+/// Idempotent; database only.
+///
+/// # Errors
+/// The database's (the transaction is rolled back).
+pub async fn sync_strategy_books_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
+    let _ = args;
+    let mut tx = ctx.db.begin().await?;
+    let (users, r) = baskfy_api::strategy_books::sync_all(&mut tx).await?;
+    tx.commit().await?;
+    let count = |n: usize| int(i64::try_from(n).unwrap_or(i64::MAX));
+    Ok(object([
+        ("users", count(users)),
+        ("books_created", count(r.created)),
+        ("inserted", count(r.inserted)),
+        ("updated", count(r.updated)),
+        ("deleted", count(r.deleted)),
+        ("from_pile", s(r.from_pile.normalize().to_string())),
+    ]))
 }
 
 /// `swing_health.is_session_day`: a day the calendar does not carry is a session.

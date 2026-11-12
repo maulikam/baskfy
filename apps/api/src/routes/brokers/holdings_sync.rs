@@ -14,9 +14,6 @@ use crate::routes::portfolios::portfolio::symbols::{
     SymbolResolution, numeric_text, replace_holdings, resolve_symbols,
 };
 
-/// `SWING_PORTFOLIO_NAME`.
-const SWING_PORTFOLIO_NAME: &str = "Swing";
-
 /// One live row, as the sync reads it.
 #[derive(Debug, Clone)]
 pub(crate) struct SyncRow {
@@ -123,11 +120,13 @@ pub(crate) async fn sync_holdings_into_portfolio(
         .iter()
         .filter_map(|(id, q, _)| q.clone().map(|q| (*id, q)))
         .collect();
-    if let Err(e) = file_swing_positions(conn, user_id, broker_account_id, &held, as_of).await {
+    // STRATEGY-BOOKS: every sleeve line (auto or ticket) is filed before the pile is cut, in a
+    // savepoint so a failure leaves the sync itself intact.
+    if let Err(e) = file_strategy_books(conn, user_id).await {
         crate::logging::error(
             "baskfy_api.broker_holdings_sync",
-            &format!("could not file swing positions for broker account {broker_account_id}"),
-            &[("error", &e.detail)],
+            &format!("could not file strategy books for broker account {broker_account_id}"),
+            &[("error", &e.to_string())],
         );
     }
     let unjudgeable = might_have_meant(&symbols, &resolutions);
@@ -237,17 +236,18 @@ async fn reconcile_missing_positions(
          FROM portfolio_holding ph JOIN portfolio p ON p.id = ph.portfolio_id \
          JOIN instrument i ON i.id = ph.instrument_id \
          WHERE p.user_id = $1 AND ph.broker_account_id = $2 AND ph.portfolio_kind = 'CAPITAL' \
-         AND ph.portfolio_id != $3 AND ph.quantity IS NOT NULL AND ph.quantity > 0",
+         AND ph.portfolio_id != $3 AND ph.quantity IS NOT NULL AND ph.quantity > 0 \
+         AND (ph.first_bought_on IS NULL OR ph.first_bought_on < $4)",
     )
     .bind(user_id)
     .bind(broker_account_id)
     .bind(pile_portfolio_id)
+    // Shares bought today are a broker *position* until T+1; holdings cannot judge them yet.
+    .bind(as_of)
     .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
-    if filed.is_empty() {
-        return Ok(none());
-    }
+    let mut settled: BTreeSet<i64> = broker_quantities.keys().copied().collect();
     let mut slices: BTreeMap<i64, BTreeMap<i64, WideDecimal>> = BTreeMap::new();
     let mut symbols: HashMap<i64, String> = HashMap::new();
     for row in &filed {
@@ -280,6 +280,7 @@ async fn reconcile_missing_positions(
         if missing <= WideDecimal::zero() {
             continue;
         }
+        settled.remove(instrument_id);
         let sole = if held_by.len() == 1 {
             held_by.keys().next().copied()
         } else {
@@ -323,6 +324,20 @@ async fn reconcile_missing_positions(
         .await?;
         report.questions += 1;
     }
+    // A shortfall question the broker no longer backs (its holding now covers every filed
+    // share) is answered by this read; leaving it open freezes the name as "pending".
+    let settled: Vec<i64> = settled.into_iter().collect();
+    sqlx::query(
+        "UPDATE reconciliation_item SET state = 'DISMISSED', resolved_at = now() \
+         WHERE user_id = $1 AND broker_account_id = $2 AND state = 'OPEN' \
+         AND reason IN ('SPLIT_HOLDING', 'QUANTITY_MISMATCH') AND instrument_id = ANY($3)",
+    )
+    .bind(user_id)
+    .bind(broker_account_id)
+    .bind(&settled)
+    .execute(&mut *conn)
+    .await
+    .map_err(db::fail)?;
     Ok(report)
 }
 
@@ -456,8 +471,7 @@ async fn minus_what_is_filed_elsewhere(
     for (instrument_id, quantity, avg_price) in wanted {
         match (elsewhere.get(&instrument_id), quantity) {
             (Some(allocated), Some(q)) => {
-                let remaining = q.sub(allocated);
-                if remaining > WideDecimal::zero() {
+                if let Some(remaining) = pile_remainder(&q, allocated) {
                     out.push((instrument_id, Some(remaining), avg_price));
                 }
             }
@@ -467,146 +481,39 @@ async fn minus_what_is_filed_elsewhere(
     Ok(out)
 }
 
-/// `swing_portfolio(session, user_id=, as_of=)`.
-async fn swing_portfolio(
-    conn: &mut PgConnection,
-    user_id: i64,
-    as_of: NaiveDate,
-) -> Result<i64, Problem> {
-    let existing: Vec<i64> = sqlx::query_scalar(
-        "SELECT id FROM portfolio WHERE user_id = $1 AND source = 'MY_STRATEGY' AND name = $2",
-    )
-    .bind(user_id)
-    .bind(SWING_PORTFOLIO_NAME)
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(db::fail)?;
-    match existing.len() {
-        0 => {}
-        1 => return Ok(existing[0]),
-        _ => {
-            return Err(crate::routes::portfolios::portfolio::fail(
-                "MultipleResultsFound",
-            ));
-        }
-    }
-    sqlx::query_scalar(
-        "INSERT INTO portfolio (user_id, name, kind, source, started_on) \
-         VALUES ($1, $2, 'CAPITAL', 'MY_STRATEGY', $3) RETURNING id",
-    )
-    .bind(user_id)
-    .bind(SWING_PORTFOLIO_NAME)
-    .bind(as_of)
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(db::fail)
+/// Every sleeve line into its strategy book (`crate::strategy_books`), in a savepoint.
+async fn file_strategy_books(conn: &mut PgConnection, user_id: i64) -> Result<(), sqlx::Error> {
+    let mut sp = sqlx::Connection::begin(&mut *conn).await?;
+    crate::strategy_books::sync_user(&mut sp, user_id).await?;
+    sp.commit().await
 }
 
-/// `file_swing_positions(...)`: the rows written.
-async fn file_swing_positions(
-    conn: &mut PgConnection,
-    user_id: i64,
-    broker_account_id: i64,
-    held: &HashMap<i64, WideDecimal>,
-    as_of: NaiveDate,
-) -> Result<i64, Problem> {
-    let swing_id = swing_portfolio(conn, user_id, as_of).await?;
-    let open = sqlx::query(
-        "SELECT instrument_id, quantity_open::numeric AS quantity_open FROM sw_position \
-         WHERE user_id = $1 AND broker_account_id = $2 AND state IN ('OPEN', 'PARTIAL') \
-         AND quantity_open > 0",
-    )
-    .bind(user_id)
-    .bind(broker_account_id)
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(db::fail)?;
-    let mut wanted: HashMap<i64, WideDecimal> = HashMap::new();
-    for row in &open {
-        wanted.insert(
-            db::get(row, "instrument_id")?,
-            db::dec(row, "quantity_open")?,
-        );
+/// What the pile keeps of a broker holding: the shares no screen, strategy or group claims.
+fn pile_remainder(at_broker: &WideDecimal, claimed: &WideDecimal) -> Option<WideDecimal> {
+    let remaining = at_broker.sub(claimed);
+    (remaining > WideDecimal::zero()).then_some(remaining)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    fn w(s: &str) -> WideDecimal {
+        s.parse().unwrap()
     }
-    let (pile_id, _) =
-        portfolio_for_broker_account(conn, user_id, broker_account_id, "", as_of).await?;
-    let claimed = claimed(conn, user_id, broker_account_id, &[swing_id, pile_id]).await?;
-    let existing = sqlx::query(
-        "SELECT instrument_id, quantity FROM portfolio_holding WHERE portfolio_id = $1 \
-         AND broker_account_id = $2",
-    )
-    .bind(swing_id)
-    .bind(broker_account_id)
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(db::fail)?;
-    let mut already: HashMap<i64, Option<WideDecimal>> = HashMap::new();
-    for row in &existing {
-        already.insert(
-            db::get(row, "instrument_id")?,
-            db::opt_dec(row, "quantity")?,
-        );
+
+    #[test]
+    fn screen_plus_strategy_claim_everything_so_the_pile_keeps_nothing() {
+        // RATNAVEER on day two: holdings 754 (quantity + t1), screen 414 + Three-weeks-tight 340.
+        let claimed = w("414").add(&w("340"));
+        assert_eq!(pile_remainder(&w("754"), &claimed), None);
     }
-    let ids: BTreeSet<i64> = wanted.keys().chain(already.keys()).copied().collect();
-    let zero = WideDecimal::zero();
-    let mut written = 0;
-    for instrument_id in ids {
-        let free = held
-            .get(&instrument_id)
-            .unwrap_or(&zero)
-            .sub(claimed.get(&instrument_id).unwrap_or(&zero));
-        let free = if free > zero { free } else { zero.clone() };
-        let want = wanted.get(&instrument_id).cloned().unwrap_or_default();
-        let target = if free < want { free } else { want };
-        let current = already.get(&instrument_id).cloned().flatten();
-        if target <= zero {
-            if current.is_some() {
-                sqlx::query(
-                    "DELETE FROM portfolio_holding WHERE portfolio_id = $1 AND instrument_id = $2 \
-                     AND broker_account_id = $3",
-                )
-                .bind(swing_id)
-                .bind(instrument_id)
-                .bind(broker_account_id)
-                .execute(&mut *conn)
-                .await
-                .map_err(db::fail)?;
-            }
-            continue;
-        }
-        match current {
-            None => {
-                sqlx::query(
-                    "INSERT INTO portfolio_holding (portfolio_id, instrument_id, \
-                     broker_account_id, portfolio_kind, quantity, added_on) \
-                     VALUES ($1, $2, $3, 'CAPITAL', $4::numeric, $5)",
-                )
-                .bind(swing_id)
-                .bind(instrument_id)
-                .bind(broker_account_id)
-                .bind(numeric_text(Some(&target)))
-                .bind(as_of)
-                .execute(&mut *conn)
-                .await
-                .map_err(db::fail)?;
-                written += 1;
-            }
-            Some(c) if c != target => {
-                sqlx::query(
-                    "UPDATE portfolio_holding SET quantity = $1::numeric WHERE portfolio_id = $2 \
-                     AND instrument_id = $3 AND broker_account_id = $4",
-                )
-                .bind(numeric_text(Some(&target)))
-                .bind(swing_id)
-                .bind(instrument_id)
-                .bind(broker_account_id)
-                .execute(&mut *conn)
-                .await
-                .map_err(db::fail)?;
-                written += 1;
-            }
-            Some(_) => {}
-        }
+
+    #[test]
+    fn only_the_unclaimed_remainder_stays_in_the_pile() {
+        let claimed = w("414").add(&w("340"));
+        assert_eq!(pile_remainder(&w("800"), &claimed), Some(w("46")));
+        assert_eq!(pile_remainder(&w("100"), &w("0")), Some(w("100")));
     }
-    Ok(written)
 }

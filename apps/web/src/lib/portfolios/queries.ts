@@ -287,12 +287,23 @@ export function usePatchPortfolio() {
 }
 
 
+export interface DeletePortfolioInput {
+  id: number;
+  confirmHoldings?: boolean;
+}
+
 export function useDeletePortfolio() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number): Promise<void> => {
+    /* `confirmHoldings` is the caller saying its dialog named the holdings that go; without it
+       the API refuses (409) a portfolio that still records any. */
+    mutationFn: async (input: number | DeletePortfolioInput): Promise<void> => {
+      const { id, confirmHoldings = false } = typeof input === "number" ? { id: input } : input;
       const { error } = await browserApi().DELETE("/api/v1/portfolios/{portfolio_id}", {
-        params: { path: { portfolio_id: id } },
+        params: {
+          path: { portfolio_id: id },
+          ...(confirmHoldings ? { query: { confirm: "holdings" as const } } : {}),
+        },
       });
       if (error) throw ApiError.from(error, "The portfolio could not be deleted.");
     },

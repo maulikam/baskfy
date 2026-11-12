@@ -9,7 +9,7 @@
 
 use axum::extract::{Extension, Path, RawQuery, Request, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use baskfy_core::decimal::WideDecimal;
 use baskfy_db::OrderedJson;
 use chrono::{DateTime, Utc};
@@ -773,37 +773,159 @@ pub async fn update_portfolio(
     Ok(wire::json(&out))
 }
 
-/// `DELETE /portfolios/{portfolio_id}`: 204; children are promoted to roots (`ON DELETE SET NULL`).
+/// The only accepted value of `DELETE /portfolios/{id}?confirm=`.
+pub(crate) const CONFIRM_HOLDINGS: &str = "holdings";
+
+/// Said on every successful delete: the row is bookkeeping, the broker is never reached.
+pub(crate) const DELETE_NOTE: &str = "Only Baskfy's record of this portfolio was removed. \
+     No order was placed or cancelled and no stop was touched: any shares stay in your broker \
+     account and show up as unallocated.";
+
+/// What the database says about the portfolio about to be deleted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DeleteFacts {
+    pub(crate) holdings: i64,
+    pub(crate) children: i64,
+    pub(crate) investments: i64,
+}
+
+/// `PortfolioDeletedOut`.
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct PortfolioDeletedOut {
+    id: i64,
+    name: String,
+    holdings_removed: i64,
+    children_promoted: i64,
+    broker_untouched: bool,
+    note: &'static str,
+}
+
+/// A 409 for a delete the caller may not (or did not confirm to) make.
+fn delete_conflict(detail: String, reason: &str) -> Problem {
+    let mut p = Problem::new(ProblemType::BadRequest, detail)
+        .with("reason", OrderedJson::Str(reason.to_owned()));
+    p.status = StatusCode::CONFLICT.as_u16();
+    "Conflict".clone_into(&mut p.title);
+    p
+}
+
+/// The delete rules, pure: a linked basket investment always refuses; holdings refuse unless
+/// confirmed. Children never refuse (they are promoted to roots, migration 0019).
+pub(crate) fn delete_refusal(name: &str, facts: DeleteFacts, confirmed: bool) -> Option<Problem> {
+    if facts.investments > 0 {
+        return Some(delete_conflict(
+            format!(
+                "{name} is linked to {} basket investment{}. Exit or detach the investment first; \
+                 deleting the portfolio would leave it pointing at nothing.",
+                facts.investments,
+                if facts.investments == 1 { "" } else { "s" }
+            ),
+            "linked-investment",
+        ));
+    }
+    if facts.holdings > 0 && !confirmed {
+        return Some(delete_conflict(
+            format!(
+                "{name} still records {} holding{}. Pass confirm=holdings to delete it anyway: \
+                 that removes Baskfy's record only, never the shares at your broker.",
+                facts.holdings,
+                if facts.holdings == 1 { "" } else { "s" }
+            ),
+            "has-holdings",
+        ));
+    }
+    None
+}
+
+/// `confirm` from the query: absent is `false`; anything but `holdings` is a 400.
+fn confirm_param(q: &QueryParams, errors: &mut Errors) -> bool {
+    match q.get("confirm") {
+        None => false,
+        Some(v) if v == CONFIRM_HOLDINGS => true,
+        Some(_) => {
+            errors.push("confirm", "Input should be 'holdings'", "literal_error");
+            false
+        }
+    }
+}
+
+/// `DELETE /portfolios/{portfolio_id}`: 200 with what was removed; children are promoted to
+/// roots (`ON DELETE SET NULL`). Never reaches a broker.
 ///
 /// # Errors
-/// 400 for a non-integer id; 401 anonymous; 404 when not the caller's.
+/// 400 for a non-integer id or a bad `confirm`; 401 anonymous; 404 when not the caller's;
+/// 409 when a basket investment links it, or it has holdings and `confirm=holdings` is absent.
 pub async fn delete_portfolio(
     State(_state): State<AppState>,
     Extension(principal): Extension<Principal>,
     write: Option<Extension<WritePool>>,
     Path(raw_id): Path<String>,
+    RawQuery(raw): RawQuery,
 ) -> Result<Response, Problem> {
     let principal = require_authenticated(&principal)?.clone();
+    let q = QueryParams::parse(raw.as_deref());
     let mut errors = Errors::default();
     let id = path_id(&raw_id, &mut errors);
+    let confirmed = confirm_param(&q, &mut errors);
     errors.finish()?;
     let id = id.unwrap_or_default();
     let user_id = principal.require_user()?;
     let pool = pool(write)?;
-    session::run(&pool, move |tx| {
+    let out = session::run(&pool, move |tx| {
         Box::pin(async move {
             let conn: &mut PgConnection = tx;
             let portfolio = load(conn, id, user_id).await?;
+            // Lock the row so the counts below cannot go stale before the DELETE.
+            sqlx::query("SELECT id FROM portfolio WHERE id = $1 FOR UPDATE")
+                .bind(portfolio.id)
+                .execute(&mut *conn)
+                .await
+                .map_err(db::fail)?;
+            let (holdings, children, investments): (i64, i64, i64) = sqlx::query_as(
+                "SELECT (SELECT count(*) FROM portfolio_holding WHERE portfolio_id = $1), \
+                        (SELECT count(*) FROM portfolio WHERE parent_id = $1), \
+                        (SELECT count(*) FROM cb_investment WHERE portfolio_id = $1)",
+            )
+            .bind(portfolio.id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(db::fail)?;
+            let facts = DeleteFacts {
+                holdings,
+                children,
+                investments,
+            };
+            if let Some(p) = delete_refusal(&portfolio.name, facts, confirmed) {
+                return Err(p);
+            }
+            // Explicit, so it does not depend on the FK's ON DELETE rule.
+            sqlx::query(
+                "UPDATE reconciliation_item SET \
+                   resolved_portfolio_id = NULLIF(resolved_portfolio_id, $1), \
+                   suggested_portfolio_id = NULLIF(suggested_portfolio_id, $1) \
+                 WHERE resolved_portfolio_id = $1 OR suggested_portfolio_id = $1",
+            )
+            .bind(portfolio.id)
+            .execute(&mut *conn)
+            .await
+            .map_err(db::fail)?;
             sqlx::query("DELETE FROM portfolio WHERE id = $1")
                 .bind(portfolio.id)
                 .execute(&mut *conn)
                 .await
                 .map_err(db::fail)?;
-            Ok(())
+            Ok(PortfolioDeletedOut {
+                id: portfolio.id,
+                name: portfolio.name,
+                holdings_removed: facts.holdings,
+                children_promoted: facts.children,
+                broker_untouched: true,
+                note: DELETE_NOTE,
+            })
         })
     })
     .await?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok(wire::json(&out))
 }
 
 /// `PUT /portfolios/{portfolio_id}/holdings`: replace the holdings (a replacement, not a merge).
@@ -861,6 +983,65 @@ pub async fn put_holdings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn facts(holdings: i64, children: i64, investments: i64) -> DeleteFacts {
+        DeleteFacts {
+            holdings,
+            children,
+            investments,
+        }
+    }
+
+    #[test]
+    fn an_empty_portfolio_deletes_without_confirm() {
+        assert!(delete_refusal("Swing", facts(0, 0, 0), false).is_none());
+    }
+
+    #[test]
+    fn children_never_refuse_a_delete() {
+        assert!(delete_refusal("Swing", facts(0, 3, 0), false).is_none());
+    }
+
+    #[test]
+    fn holdings_refuse_until_confirmed() {
+        let p = delete_refusal("Tight", facts(3, 0, 0), false)
+            .unwrap_or_else(crate::problems::internal_error);
+        assert_eq!(p.status, 409);
+        assert!(p.detail.contains("3 holdings"));
+        assert!(p.detail.contains("confirm=holdings"));
+        assert!(delete_refusal("Tight", facts(3, 0, 0), true).is_none());
+    }
+
+    #[test]
+    fn a_linked_investment_refuses_even_when_confirmed() {
+        let p = delete_refusal("AVG", facts(2, 0, 1), true)
+            .unwrap_or_else(crate::problems::internal_error);
+        assert_eq!(p.status, 409);
+        assert!(p.detail.contains("1 basket investment."));
+    }
+
+    #[test]
+    fn confirm_accepts_only_holdings() {
+        let mut errors = Errors::default();
+        assert!(confirm_param(
+            &QueryParams::parse(Some("confirm=holdings")),
+            &mut errors
+        ));
+        assert!(!confirm_param(&QueryParams::parse(None), &mut errors));
+        assert!(errors.finish().is_ok());
+        let mut errors = Errors::default();
+        assert!(!confirm_param(
+            &QueryParams::parse(Some("confirm=yes")),
+            &mut errors
+        ));
+        assert_eq!(errors.finish().map_err(|p| p.status), Err(400));
+    }
+
+    #[test]
+    fn the_delete_note_says_the_broker_is_untouched() {
+        assert!(DELETE_NOTE.contains("No order was placed or cancelled"));
+        assert!(DELETE_NOTE.contains("shares stay in your broker"));
+    }
 
     #[test]
     fn an_import_is_named_from_its_file() {

@@ -183,14 +183,25 @@ export async function reattributePortfolioAction(
  * genuinely lost is the stored NAV series, the return since `started_on` and the dated flows XIRR
  * is solved from. PC6's panel says exactly that before it asks for the name to be typed.
  */
-export async function deletePortfolioAction(portfolioId: number): Promise<ManageOutcome> {
+export async function deletePortfolioAction(
+  portfolioId: number,
+  confirmHoldings = false,
+): Promise<ManageOutcome> {
   const api = await serverApi();
   const { error, response } = await api.DELETE("/api/v1/portfolios/{portfolio_id}", {
-    params: { path: { portfolio_id: portfolioId } },
+    params: {
+      path: { portfolio_id: portfolioId },
+      ...(confirmHoldings ? { query: { confirm: "holdings" as const } } : {}),
+    },
   });
   if (!response.ok) {
     return { ok: false, reason: reasonFrom(error, "The portfolio was not deleted.") };
   }
   revalidatePortfolioSurfaces();
   return { ok: true, portfolioId };
+}
+
+/** The management drawer's delete: its typed-name confirm is the holdings confirmation. */
+export async function deletePortfolioConfirmedAction(portfolioId: number): Promise<ManageOutcome> {
+  return deletePortfolioAction(portfolioId, true);
 }

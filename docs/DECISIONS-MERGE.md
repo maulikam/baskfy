@@ -8734,3 +8734,11 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Maulik: Confirm invest with MTF off always answered "Prices changed. Review the updated allocation before saving.", and "without using MTF, we are lacking a lot of features". Cause: MTF off re-priced at confirm and refused on any share-count change, and only wrote a paper book.
 - Choice: MTF off takes the same path as MTF on — the stored plan, claim/replay guard, margin check, a refreshed plan to review when prices move (not an error), market CNC buys through the desk's `/screen-invest/execute` (gateway, GTT stop, `plan_id:symbol` client id), and the portfolio from the buys that went through. The SCREEN-INVEST-LIVE line "cash invest still creates the paper book immediately" is superseded. Rebalance still sends no order.
 - Reverse: put back `if body.mtf { … } else { (None, Vec::new(), None) }` in `invest_from_screen` and the paper copy in `screen-invest.tsx`.
+
+## PORTFOLIO-DELETE — delete from the portfolio page (12 Nov 2026) · ⚠ UNREVIEWED
+
+- Maulik: "Give the user an option to delete the portfolio manually from the portfolio screen." `/portfolio/[id]` now has a Delete portfolio button and dialog (name, holdings count, "cannot be undone", typed name when it has holdings); on success it goes to `/portfolio/overview`.
+- `DELETE /portfolios/{id}` was already served. It now answers 200 with `PortfolioDeletedOut` (was 204), refuses 409 without `?confirm=holdings` while holdings are recorded, refuses 409 always while a `cb_investment` points at it, and nulls `reconciliation_item` references explicitly. It never reaches a broker, order or GTT.
+- Children are still promoted to roots, not refused: the live FKs are `ON DELETE SET NULL` (checked in `pg_constraint`, not NO ACTION as the lane brief said) and migration 0019 chose promotion on purpose.
+- The management drawer (`deletePortfolioConfirmedAction`) and the grouping list's dialog send the confirm, since both already name the holdings that go.
+- Reverse: drop the `confirm`/409 checks in `delete_portfolio` and the `DeletePortfolioControl` from the page.

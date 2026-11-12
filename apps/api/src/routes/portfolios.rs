@@ -746,6 +746,7 @@ async fn import_csv_as_id_delete(
         principal,
         write,
         Path("import-csv".to_owned()),
+        RawQuery(None),
     )
     .await
 }

@@ -15436,6 +15436,47 @@
         "title": "PortfolioCreateIn",
         "type": "object"
       },
+      "PortfolioDeletedOut": {
+        "additionalProperties": false,
+        "description": "What `DELETE /portfolios/{id}` removed. Only Baskfy's record goes: no order, no stop and no broker call is made, and the shares stay at the broker as unallocated.",
+        "properties": {
+          "broker_untouched": {
+            "const": true,
+            "title": "Broker Untouched",
+            "type": "boolean"
+          },
+          "children_promoted": {
+            "title": "Children Promoted",
+            "type": "integer"
+          },
+          "holdings_removed": {
+            "title": "Holdings Removed",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "holdings_removed",
+          "children_promoted",
+          "broker_untouched",
+          "note"
+        ],
+        "title": "PortfolioDeletedOut",
+        "type": "object"
+      },
       "PortfolioForestOut": {
         "description": "``GET /portfolios``: the caller's portfolios, nested.\n\n``data`` holds the roots. ``orphans`` holds fragments whose ``parent_id`` names a portfolio\nthat is not in the caller's set — impossible through this API, which refuses a foreign\nparent, and therefore a symptom of damage. They are reported rather than dropped, because a\ndropped fragment is holdings that vanish from a list without anyone being told.",
         "properties": {
@@ -49813,7 +49854,7 @@
     },
     "/api/v1/portfolios/{portfolio_id}": {
       "delete": {
-        "description": "Delete one portfolio. Its children are **promoted to roots**, not deleted with it.\n\n``portfolio.parent_id`` is ``ON DELETE SET NULL`` (migration 0019), deliberately: deleting a\ngrouping node must not silently delete the money underneath it. The children stay the\ncaller's own, visibly detached at the top of ``GET /portfolios``, with their holdings\nuntouched. This portfolio's *own* holdings go with it — ``portfolio_holding.portfolio_id``\nis ``ON DELETE CASCADE``, which is the row being deleted, not somebody else's.",
+        "description": "Delete one portfolio. Its children are **promoted to roots**, not deleted with it.\n\n``portfolio.parent_id`` is ``ON DELETE SET NULL`` (migration 0019), deliberately: deleting a\ngrouping node must not silently delete the money underneath it. This portfolio's *own* holdings\nrows go with it, but only when ``confirm=holdings`` is passed; without it a portfolio that still\nrecords holdings answers 409. A portfolio a basket investment (``cb_investment``) points at always\nanswers 409. Reconciliation items pointing at it are detached. Only Baskfy's record is removed:\nno order, stop or broker call is made, and the shares stay at the broker.",
         "operationId": "deletePortfolio",
         "parameters": [
           {
@@ -49824,10 +49865,35 @@
               "title": "Portfolio Id",
               "type": "integer"
             }
+          },
+          {
+            "description": "Required (as ``holdings``) to delete a portfolio that still records holdings.",
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "holdings",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Confirm"
+            }
           }
         ],
         "responses": {
-          "204": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioDeletedOut"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "400": {
@@ -49878,7 +49944,7 @@
                 }
               }
             },
-            "description": "A scan is already in flight"
+            "description": "The portfolio still records holdings (pass confirm=holdings) or a basket investment links it"
           },
           "422": {
             "content": {

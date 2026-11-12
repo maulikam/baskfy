@@ -8758,3 +8758,9 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Children are still promoted to roots, not refused: the live FKs are `ON DELETE SET NULL` (checked in `pg_constraint`, not NO ACTION as the lane brief said) and migration 0019 chose promotion on purpose.
 - The management drawer (`deletePortfolioConfirmedAction`) and the grouping list's dialog send the confirm, since both already name the holdings that go.
 - Reverse: drop the `confirm`/409 checks in `delete_portfolio` and the `DeletePortfolioControl` from the page.
+
+## SCREEN-INVEST-DRIFT — confirm sends the approved plan within a 2% price band (12 Nov 2026) — Maulik, in session
+
+- Maulik: "I keep seeing 'Prices or leverage changed. Review the updated allocation before sending.'" Cause: confirm compared every quantity and leverage exactly against a fresh live re-price, so market ticks and leverage-quote wobble forced a re-review on nearly every confirm.
+- Choice: `drifted()` — confirm sends the approved quantities unless the stock count, a name or its product changed, or a bought name's live price moved more than 2% from the reviewed price. Broker margin is still checked after, and still re-plans when it does not fit.
+- Reverse: use `allocation_changed` again at the confirm check in `invest_from_screen`.

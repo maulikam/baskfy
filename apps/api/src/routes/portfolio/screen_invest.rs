@@ -1264,6 +1264,43 @@ fn allocation_changed(approved: &SizedBook, fresh: &SizedBook) -> bool {
         })
 }
 
+/// How far a live price may move from the reviewed one before confirm asks for a fresh review.
+const CONFIRM_PRICE_DRIFT: f64 = 0.02;
+
+fn px_f64(v: Option<&WideDecimal>) -> Option<f64> {
+    v.and_then(|px| px.to_sci_string().parse::<f64>().ok())
+        .filter(|x| *x > 0.0)
+}
+
+/// Confirm-time check (Maulik, 12 Nov 2026: "Prices or leverage changed" on every confirm). The
+/// approved quantities are sent unless the basket itself changed (count, names, product) or a bought
+/// name's live price moved more than [`CONFIRM_PRICE_DRIFT`] from the reviewed price. Live ticks and
+/// small leverage-quote wobbles no longer force a re-review; broker margin is still checked after.
+fn drifted(approved: &SizedBook, fresh: &SizedBook) -> bool {
+    if approved.top_n != fresh.top_n {
+        return true;
+    }
+    let by_symbol: HashMap<&str, &ScreenInvestHoldingOut> = fresh
+        .holdings
+        .iter()
+        .map(|row| (row.symbol.as_str(), row))
+        .collect();
+    approved
+        .holdings
+        .iter()
+        .filter(|row| row.quantity.unwrap_or(0) > 0)
+        .any(|row| match by_symbol.get(row.symbol.as_str()) {
+            None => true,
+            Some(now) => {
+                now.product != row.product
+                    || match (px_f64(row.price.as_ref()), px_f64(now.price.as_ref())) {
+                        (Some(then), Some(live)) => (live / then - 1.0).abs() > CONFIRM_PRICE_DRIFT,
+                        _ => true,
+                    }
+            }
+        })
+}
+
 fn accepted_qty(order: &ScreenOrderOut, planned: i64) -> Option<i64> {
     match order.status.as_str() {
         "REJECTED" | "CANCELLED" | "ERROR" | "BLOCKED" | "RISK_BLOCKED" | "NOT_SENT"
@@ -1649,12 +1686,12 @@ pub async fn invest_from_screen(
                 let approved = *approved;
                 if approved.empty_reason.is_some()
                     || fresh.empty_reason.is_some()
-                    || allocation_changed(&approved, &fresh)
+                    || drifted(&approved, &fresh)
                     || approved.cash_outlay != money(&body.amount)
                 {
                     release_plan(&body.plan_id);
                     let reason = fresh.empty_reason.clone().unwrap_or_else(|| {
-                        "Prices or leverage changed. Review the updated allocation before sending."
+                        "A price moved more than 2% since you reviewed it. Review the updated allocation before sending."
                             .to_owned()
                     });
                     return needs_review(fresh, as_of, reason);
@@ -2357,6 +2394,26 @@ mod tests {
         )
         .unwrap();
         assert!(allocation_changed(&first, &moved));
+        assert!(
+            drifted(&first, &moved),
+            "a 24% move asks for a fresh review"
+        );
+        let ticked = [
+            px("A", 1, 500, "EQ"),
+            px("B", 2, 500, "EQ"),
+            px("C", 3, 505, "EQ"),
+        ];
+        let tick = size_book(
+            &ticked,
+            &dec(350_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
+        assert!(!drifted(&first, &tick), "a 1% tick sends the approved plan");
     }
 
     #[test]

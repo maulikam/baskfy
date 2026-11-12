@@ -8742,3 +8742,11 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Today's move overlays a Kite quote only while `useLiveMarks` is live; stale quotes are muted and labelled stale; otherwise the cell says "close <date>". Volumes and week/month/3-month stay on the published session. ⚠ UNREVIEWED
 - Explorer rows get "Add to watchlist" (`SaveInstrumentButton`, new optional labels), seeded from `GET /watchlist/instruments`.
 - Reverse: drop the PRIMARY_NAV entry and `watchlist` section key, restore the redirect, delete `src/app/(app)/watchlist`.
+
+## SCREEN-COUNT — number of stocks on invest and on the screen (12 Nov 2026) — Maulik, in session; details ⚠ UNREVIEWED
+
+- Maulik: a screen lists every survivor while Invest always sized the top 20 (`DEFAULT_TOP_N`); the count must be selectable, or editable on the screen.
+- Invest preview / invest / `from-screen` take an optional `top_n` (1..=100); the API sizes exactly that many top-ranked priced names (fewer only when the run ranks fewer). The response carries `top_n` and `available`; `top_n` is in the plan fingerprint and `allocation_changed`, so confirm never sends a plan sized for another count.
+- Default count: the body's `top_n`, else the screen's saved `invest_count`, else 20. Rest of the path (MTF/cash, claim, margin check, desk order path) unchanged.
+- New nullable `screen.invest_count` (migration `0013_screen_invest_count.sql`, CHECK 1..=100), set by `PATCH /screens/{id}` (`invest_count`, null clears), copied on duplicate. Label "Stocks to show / invest": the list shows the top N with a "Show all" toggle, and the invest dialog defaults to it.
+- Rejected: a field on `ScreenDefinition` (changes definition hashes and the strict model). Reverse: drop the column, the PATCH field, and `top_n` from the invest body.

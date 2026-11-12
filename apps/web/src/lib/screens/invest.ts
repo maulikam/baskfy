@@ -8,6 +8,34 @@ import type { PortfolioNodeOut } from "@baskfy/api-client";
 /** House MTF factor when the investor does not pick one (SCREEN-INVEST-RS). */
 export const DEFAULT_LEVERAGE = 4;
 export const DEFAULT_INVEST_AMOUNT = 100_000;
+/** The API's count when neither the body nor the screen names one. */
+export const DEFAULT_INVEST_COUNT = 20;
+/** `screen.invest_count` and `top_n` upper bound. */
+export const MAX_INVEST_COUNT = 100;
+
+/** The screen's count, else the API default, never more than the screen ranks. */
+export function defaultInvestCount(
+  investCount: number | null,
+  available: number | null,
+): number {
+  const wanted = investCount ?? DEFAULT_INVEST_COUNT;
+  return available !== null && available > 0 ? Math.min(wanted, available) : wanted;
+}
+
+/** A whole count in 1..=max, or the reason it is not one. */
+export function checkInvestCount(
+  count: number | null,
+  available: number | null,
+): string | null {
+  if (count === null || !Number.isInteger(count) || count < 1) {
+    return "Enter at least 1 stock.";
+  }
+  if (count > MAX_INVEST_COUNT) return `At most ${MAX_INVEST_COUNT} stocks.`;
+  if (available !== null && available > 0 && count > available) {
+    return `This screen ranks only ${available} stocks.`;
+  }
+  return null;
+}
 
 export interface ScreenInvestHolding {
   symbol: string;
@@ -43,6 +71,10 @@ export interface ScreenInvestPreview {
   contribution: string;
   funding: string;
   gross_target: string;
+  /** Names this plan was sized for. */
+  top_n?: number;
+  /** Ranked names the latest run offered. */
+  available?: number;
   plan_id: string;
   allocation_version: string;
   quoted_at: string;
@@ -71,6 +103,8 @@ export interface ScreenInvestRequest {
   reserve?: number;
   costs?: number;
   plan_id?: string;
+  /** Top-ranked names to size. */
+  top_n?: number;
 }
 
 function investBody(input: ScreenInvestRequest, name?: string): Record<string, unknown> {
@@ -82,6 +116,7 @@ function investBody(input: ScreenInvestRequest, name?: string): Record<string, u
     ...(input.reserve === undefined ? {} : { reserve: input.reserve }),
     ...(input.costs === undefined ? {} : { costs: input.costs }),
     ...(input.plan_id ? { plan_id: input.plan_id } : {}),
+    ...(input.top_n === undefined ? {} : { top_n: input.top_n }),
   };
 }
 

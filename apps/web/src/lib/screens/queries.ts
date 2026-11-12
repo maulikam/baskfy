@@ -163,6 +163,8 @@ export interface SavePayload {
   name?: string;
   definition?: ScreenDefinition;
   columns?: readonly string[];
+  /** Stocks to show / invest; `null` clears it. */
+  investCount?: number | null;
 }
 
 /** docs/08: the explicit "Update & Apply Filters" button persists via PATCH. */
@@ -177,6 +179,7 @@ export function useSaveScreen() {
           ...(rest.name === undefined ? {} : { name: rest.name }),
           ...(rest.definition === undefined ? {} : { definition: rest.definition }),
           ...(rest.columns === undefined ? {} : { columns: [...rest.columns] }),
+          ...(rest.investCount === undefined ? {} : { invest_count: rest.investCount }),
         },
       });
       if (!data) throw ApiError.from(error, "The screen could not be saved.");

@@ -38,7 +38,10 @@ const PUBLIC_ID_BYTES: usize = 6;
 const DEFAULT_COLUMNS: [&str; 3] = ["ret_12m", "vol_12m", "close_raw"];
 
 const SCREEN_COLUMNS: &str = "id, public_id, user_id, name, definition, columns, is_example, \
-                              created_at, updated_at";
+                              created_at, updated_at, invest_count";
+
+/// Upper bound of `screen.invest_count` (the migration's CHECK).
+const MAX_INVEST_COUNT: i128 = 100;
 
 /// `ScreenCreate`.
 fn screen_create() -> Model {
@@ -65,6 +68,14 @@ fn screen_update() -> Model {
                 "columns",
                 Ty::Opt(Box::new(Ty::List(Box::new(Ty::Str(None, None)), None))),
             ),
+            opt(
+                "invest_count",
+                Ty::Opt(Box::new(Ty::Int {
+                    gt: None,
+                    ge: Some(1),
+                    le: Some(MAX_INVEST_COUNT),
+                })),
+            ),
         ],
         forbid_extra: true,
     }
@@ -89,6 +100,7 @@ fn screen_row(r: &sqlx::postgres::PgRow) -> Result<ScreenRow, Problem> {
         is_example: r.try_get("is_example").map_err(db)?,
         created_at: row::timestamptz(r, "created_at").map_err(|e| crate::db_failure(&e))?,
         updated_at: row::timestamptz(r, "updated_at").map_err(|e| crate::db_failure(&e))?,
+        invest_count: r.try_get("invest_count").map_err(db)?,
     })
 }
 
@@ -207,10 +219,11 @@ async fn insert_screen(
     name: &str,
     definition_json: &str,
     columns_json: &str,
+    invest_count: Option<i16>,
 ) -> Result<ScreenRow, Problem> {
     let r = sqlx::query(&format!(
-        "INSERT INTO screen (public_id, user_id, name, definition, columns, is_example) \
-         VALUES ($1, $2, $3, ($4::text)::jsonb, ($5::text)::jsonb, false) \
+        "INSERT INTO screen (public_id, user_id, name, definition, columns, is_example, \
+         invest_count) VALUES ($1, $2, $3, ($4::text)::jsonb, ($5::text)::jsonb, false, $6) \
          RETURNING {SCREEN_COLUMNS}"
     ))
     .bind(new_public_id())
@@ -218,6 +231,7 @@ async fn insert_screen(
     .bind(name)
     .bind(definition_json)
     .bind(columns_json)
+    .bind(invest_count)
     .fetch_one(&mut **tx)
     .await
     .map_err(db)?;
@@ -279,6 +293,7 @@ pub async fn create_screen(
                 &name,
                 &definition_json(definition)?,
                 &columns_json(&columns)?,
+                None,
             )
             .await?;
             crate::idempotency::remember(
@@ -331,17 +346,25 @@ pub async fn update_screen(
                 screen.columns =
                     OrderedJson::Array(columns.into_iter().map(OrderedJson::Str).collect());
             }
+            // Absent keeps the count; an explicit null clears it.
+            match body.get("invest_count") {
+                V::Absent => {}
+                V::Int(n) => screen.invest_count = i16::try_from(*n).ok(),
+                _ => screen.invest_count = None,
+            }
             let now = write_kit::now_utc();
             sqlx::query(
                 "UPDATE screen SET name = $1, \
                  definition = COALESCE(($2::text)::jsonb, definition), \
-                 columns = COALESCE(($3::text)::jsonb, columns), updated_at = $4 WHERE id = $5",
+                 columns = COALESCE(($3::text)::jsonb, columns), updated_at = $4, \
+                 invest_count = $6 WHERE id = $5",
             )
             .bind(&screen.name)
             .bind(definition_text)
             .bind(columns_text)
             .bind(now)
             .bind(screen.id)
+            .bind(screen.invest_count)
             .execute(&mut **tx)
             .await
             .map_err(db)?;
@@ -422,7 +445,15 @@ pub async fn duplicate_screen(
                 .columns
                 .to_python_json()
                 .map_err(|_| internal_error())?;
-            let copy = insert_screen(tx, user_id, &name, &definition, &columns).await?;
+            let copy = insert_screen(
+                tx,
+                user_id,
+                &name,
+                &definition,
+                &columns,
+                source.invest_count,
+            )
+            .await?;
             crate::idempotency::remember(
                 &st.settings.redis_url,
                 &scope,

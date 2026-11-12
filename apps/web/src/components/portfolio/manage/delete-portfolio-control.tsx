@@ -8,7 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { canConfirmDelete, deleteDialogCopy, type DeleteTarget } from "@/lib/portfolio/delete-portfolio";
+import { ApiError } from "@/lib/api/errors";
 import { useDeletePortfolio } from "@/lib/portfolios/queries";
+
+/** The API's refusal for a portfolio that still records holdings (has-holdings, 409). */
+function refusedForHoldings(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 409) return false;
+  const reason = (error.problem as { reason?: unknown } | null)?.reason;
+  return reason === "has-holdings" || /holding/i.test(error.message);
+}
 
 /** "Delete portfolio" on the detail page: confirm, delete Baskfy's record, go to the overview. */
 export function DeletePortfolioControl({ target }: { target: DeleteTarget }) {
@@ -16,13 +24,20 @@ export function DeletePortfolioControl({ target }: { target: DeleteTarget }) {
   const remove = useDeletePortfolio();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
-  const copy = deleteDialogCopy(target);
-  const ready = canConfirmDelete(target, typed) && !remove.isPending;
+  // The page can list fewer holdings than the API counts (rows with no quantity, a broker pile).
+  // When the API says holdings remain, ask for the typed name and resend with the confirm.
+  const [escalated, setEscalated] = useState(false);
+  const effective: DeleteTarget = escalated
+    ? { ...target, holdingsCount: Math.max(target.holdingsCount, 1) }
+    : target;
+  const copy = deleteDialogCopy(effective);
+  const ready = canConfirmDelete(effective, typed) && !remove.isPending;
 
   function close(next: boolean) {
     setOpen(next);
     if (!next) {
       setTyped("");
+      setEscalated(false);
       remove.reset();
     }
   }
@@ -31,8 +46,9 @@ export function DeletePortfolioControl({ target }: { target: DeleteTarget }) {
     if (!ready) return;
     try {
       await remove.mutateAsync({ id: target.id, confirmHoldings: copy.needsTypedName });
-    } catch {
-      return; // remove.error renders the API's reason below
+    } catch (error) {
+      if (!copy.needsTypedName && refusedForHoldings(error)) setEscalated(true);
+      return; // remove.error renders the reason below
     }
     setOpen(false);
     router.push("/portfolio/overview");
@@ -87,7 +103,9 @@ export function DeletePortfolioControl({ target }: { target: DeleteTarget }) {
 
           {remove.error ? (
             <p role="alert" className="mt-3 text-sm text-negative" data-testid="delete-portfolio-error">
-              {remove.error.message}
+              {escalated && refusedForHoldings(remove.error)
+                ? "Baskfy still records holdings for this portfolio that this page does not list. Type its name to delete them with it."
+                : remove.error.message}
             </p>
           ) : null}
 

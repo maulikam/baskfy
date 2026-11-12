@@ -34,14 +34,15 @@ pub struct Policy {
 }
 
 impl Policy {
-    /// The recorded default: off, breakeven at +5%, trail 10% from +10%, 1% steps (TWT trails 20% from +20%).
+    /// The recorded default: off, breakeven at +3% (Maulik: "if stock is in profit, we always exit in
+    /// profit"), trail 10% from +10%, 1% steps (TWT trails 20% from +20%).
     #[must_use]
     pub fn default_for(strategy: &str) -> Self {
         let twt = strategy == "twt";
         Self {
             strategy: strategy.to_owned(),
             enabled: false,
-            breakeven_after_pct: 5.0,
+            breakeven_after_pct: 3.0,
             breakeven_buffer_pct: 0.5,
             trail_after_pct: if twt { 20.0 } else { 10.0 },
             trail_pct: if twt { 20.0 } else { 10.0 },
@@ -116,6 +117,20 @@ fn round2(x: f64) -> f64 {
     (x * 100.0).round() / 100.0
 }
 
+/// Up to the 0.05 tick: the breakeven floor never rounds below entry plus its buffer.
+#[must_use]
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+pub fn ceil_tick(x: f64) -> f64 {
+    let paise = (x * 100.0 - EPS).ceil() as i64;
+    let rem = paise.rem_euclid(TICK_PAISE);
+    (if rem == 0 {
+        paise
+    } else {
+        paise + TICK_PAISE - rem
+    }) as f64
+        / 100.0
+}
+
 /// Down to the 0.05 tick, so the stop never rounds above what the rule allows.
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
@@ -146,7 +161,7 @@ pub fn propose(p: &Policy, i: &Inputs) -> Proposal {
         return hold(i.current_stop, i.entry, "missing entry, stop or close");
     }
     let gain = (i.highest_close / i.entry - 1.0) * 100.0;
-    let floor = i.entry * (1.0 + p.breakeven_buffer_pct / 100.0);
+    let floor = ceil_tick(i.entry * (1.0 + p.breakeven_buffer_pct / 100.0));
     let mut cand = i.current_stop;
     let mut why = Vec::new();
     if gain + EPS >= p.breakeven_after_pct && floor > cand {
@@ -182,7 +197,11 @@ pub fn propose(p: &Policy, i: &Inputs) -> Proposal {
         cand = cap;
         why.push(format!("capped {CAP_GAP_PCT}% under last close"));
     }
-    let cand = floor_tick(cand);
+    let cand = if cand <= floor + EPS {
+        floor
+    } else {
+        floor_tick(cand).max(floor)
+    };
     if cand <= i.current_stop + EPS {
         return hold(i.current_stop, i.entry, "already at or above the proposal");
     }
@@ -257,8 +276,17 @@ mod tests {
     }
 
     #[test]
+    fn breakeven_never_rounds_below_entry_plus_buffer() {
+        let mut p = pol();
+        p.breakeven_buffer_pct = 0.0;
+        let out = propose(&p, &inp(610.7669, 488.6, 653.9, 653.9));
+        assert!(out.changed);
+        assert!(out.new_stop >= 610.7669, "{}", out.new_stop);
+    }
+
+    #[test]
     fn under_breakeven_holds() {
-        let p = propose(&pol(), &inp(100.0, 90.0, 104.0, 103.0));
+        let p = propose(&pol(), &inp(100.0, 90.0, 102.5, 102.0));
         assert!(!p.changed);
         assert!((p.new_stop - 90.0).abs() < 1e-9);
     }

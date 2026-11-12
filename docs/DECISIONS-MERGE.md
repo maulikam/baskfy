@@ -8782,3 +8782,11 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Writes: one guarded function (`lanes/gtt_trail/apply.rs`) → untouchable/SGB/G-sec and `EXCLUDED_SYMBOLS` refusal, up-only, below-price, flag → the gateway's `modify_gtt_quantity` (its rate limit, DRY_RUN simulation, journal). Live runs re-read the broker GTT list and keep its leg quantity and the sleeve's own sell-limit fraction (TWT/VBT 0.97, swing's setting). The book's stop/`gtt_trigger` is raised only after a live `GTT_MODIFIED`; DRY_RUN writes nothing to the book. ⚠ UNREVIEWED
 - Job: in-process, weekdays from 20:30 IST, once a day, only when some policy is enabled (journals FLAG_OFF lines while the master flag is off). Wired: swing, TWT, VBT (stored entry + GTT id). Screen-invest and weekly have no stored entry/GTT ledger, so their policies save but act on nothing yet. Desk: `GET/PUT /gtt-trail/settings`, `GET /gtt-trail/preview`, `GET /gtt-trail/journal`, `POST /gtt-trail/run` (confirm). Web: `/trailing-stops` on the Desk menu, linked from the swing/TWT/VBT exit-rule lines.
 - Reverse: unset the flag (or disable the policies); drop the routes, `spawn_daily`, the page and migration 0014's tables.
+
+## GTT-TRAIL review fixes (12 Nov 2026)
+
+- Manual `POST /gtt-trail/run` is refused 09:15–15:30 IST on weekdays: its inputs are the previous close, so a raise against a stale close could sit above the live price and fire at once. The daily run is at 20:30.
+- A failed broker GTT list writes the daily RUN marker, so it is not retried every five minutes until midnight.
+- The breakeven floor rounds UP to the 0.05 tick, so it never sits below entry plus its buffer (SUNTV: 613.85, not 613.80).
+- Default breakeven trigger lowered from +5% to +3% (Maulik: "if stock is in profit, we always exit in profit"); editable per strategy on /trailing-stops. ⚠ UNREVIEWED.
+- Portfolio delete: when the API refuses with has-holdings that the page did not list, the dialog asks for the typed name and resends with the confirm.

@@ -341,6 +341,18 @@ async fn run_post(State(state): State<AppState>, body: Bytes) -> Response<Body> 
             "confirm true is required; nothing was sent",
         );
     }
+    // During the session the inputs are the previous close: a stop raised against a stale close can
+    // sit above the live price and fire at once (review, 12 Nov 2026). The daily run is at 20:30.
+    let now = state.clock.now_ist();
+    let minutes = now.hour() * 60 + now.minute();
+    if !matches!(now.weekday(), Weekday::Sat | Weekday::Sun)
+        && (9 * 60 + 15..=15 * 60 + 30).contains(&minutes)
+    {
+        return fail(
+            StatusCode::CONFLICT,
+            "manual runs are blocked during market hours (09:15-15:30 IST); the daily run is at 20:30",
+        );
+    }
     match run(&state, "manual").await {
         Ok(results) => json_response(StatusCode::OK, &json!({ "results": results })),
         Err(e) => fail(StatusCode::SERVICE_UNAVAILABLE, e),
@@ -392,6 +404,12 @@ pub async fn run(state: &AppState, source: &str) -> Result<Vec<serde_json::Value
                 for l in &todo {
                     let en = entry_of(l, source, l.proposed_stop, "ERROR", &why);
                     store::journal(&mut conn, &en, now)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                // Count the day as run, so a failed list is not retried every five minutes.
+                if source == "daily" {
+                    store::journal(&mut conn, &run_marker(now, 0, &why), now)
                         .await
                         .map_err(|e| e.to_string())?;
                 }
@@ -479,34 +497,38 @@ pub async fn run(state: &AppState, source: &str) -> Result<Vec<serde_json::Value
         }));
     }
     if source == "daily" {
-        let marker = Entry {
-            source: "daily".to_owned(),
-            strategy: "*".to_owned(),
-            position_id: 0,
-            symbol: "*".to_owned(),
-            qty: 0,
-            entry: None,
-            as_of: Some(last_completed(now)),
-            highest_close: None,
-            last_close: None,
-            old_stop: None,
-            new_stop: None,
-            reason: format!("{} proposals", results.len()),
-            outcome: "RUN".to_owned(),
-            detail: if live {
-                "live"
-            } else if settings.gtt_trail_enabled {
-                "dry run"
-            } else {
-                "flag off"
-            }
-            .to_owned(),
+        let detail = if live {
+            "live"
+        } else if settings.gtt_trail_enabled {
+            "dry run"
+        } else {
+            "flag off"
         };
-        store::journal(&mut conn, &marker, now)
+        store::journal(&mut conn, &run_marker(now, results.len(), detail), now)
             .await
             .map_err(|e| e.to_string())?;
     }
     Ok(results)
+}
+
+/// The once-a-day marker `run_if_due` looks for.
+fn run_marker(now: DateTime<FixedOffset>, proposals: usize, detail: &str) -> Entry {
+    Entry {
+        source: "daily".to_owned(),
+        strategy: "*".to_owned(),
+        position_id: 0,
+        symbol: "*".to_owned(),
+        qty: 0,
+        entry: None,
+        as_of: Some(last_completed(now)),
+        highest_close: None,
+        last_close: None,
+        old_stop: None,
+        new_stop: None,
+        reason: format!("{proposals} proposals"),
+        outcome: "RUN".to_owned(),
+        detail: detail.to_owned(),
+    }
 }
 
 /// The sleeve's GTT sell-limit fraction, as its own arm/raise sends it.
@@ -629,7 +651,8 @@ mod tests {
         );
         assert!(out[0].would_change, "{:?}", out[0]);
         assert_eq!(out[0].as_of, Some(d(11)), "the 12th is not read");
-        assert!((out[0].proposed_stop.unwrap_or(0.0) - 613.8).abs() < 1e-9);
+        // entry 610.7669 × 1.005 = 613.82, rounded UP to the tick: never below entry plus the buffer
+        assert!((out[0].proposed_stop.unwrap_or(0.0) - 613.85).abs() < 1e-9);
         assert!(out[0].blocker.is_empty());
         assert!(!out[1].blocker.is_empty(), "a paper GTT is never acted on");
     }

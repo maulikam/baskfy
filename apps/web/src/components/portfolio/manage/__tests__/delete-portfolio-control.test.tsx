@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DeletePortfolioControl } from "@/components/portfolio/manage/delete-portfolio-control";
+import { ApiError } from "@/lib/api/errors";
 import { canConfirmDelete, deleteDialogCopy } from "@/lib/portfolio/delete-portfolio";
 
 const state = vi.hoisted(() => ({
@@ -89,6 +90,25 @@ describe("DeletePortfolioControl", () => {
     fireEvent.click(confirm);
     await waitFor(() => expect(state.push).toHaveBeenCalledWith("/portfolio/overview"));
     expect(state.calls).toEqual([{ id: 3, confirmHoldings: true }]);
+  });
+
+  it("asks for the typed name and resends when the API counts holdings the page did not list", async () => {
+    state.fail = new ApiError("Swing still records 2 holdings. Pass confirm=holdings to delete it anyway.", null, 409);
+    render(<DeletePortfolioControl target={empty} />);
+    fireEvent.click(screen.getByTestId("delete-portfolio-open"));
+    fireEvent.click(screen.getByTestId("delete-portfolio-confirm"));
+    const error = await screen.findByTestId("delete-portfolio-error");
+    expect(error).not.toHaveTextContent("confirm=holdings");
+    const confirm = screen.getByTestId("delete-portfolio-confirm");
+    expect(confirm).toBeDisabled();
+    state.fail = null;
+    fireEvent.change(screen.getByTestId("delete-portfolio-typed"), { target: { value: "Swing" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(state.push).toHaveBeenCalledWith("/portfolio/overview"));
+    expect(state.calls).toEqual([
+      { id: 4, confirmHoldings: false },
+      { id: 4, confirmHoldings: true },
+    ]);
   });
 
   it("shows the API's refusal and stays on the page", async () => {

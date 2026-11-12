@@ -44,6 +44,8 @@ use crate::wire;
 
 /// Names taken from a screen when the investor does not say otherwise (BALANCED profile).
 const DEFAULT_TOP_N: usize = 20;
+/// Most names one invest may size (`portfolio_sleeve.top_n` and `screen.invest_count` cap).
+const MAX_TOP_N: i64 = 100;
 /// Parsed when a caller still sends `leverage`. Sizing does not use it.
 const DEFAULT_LEVERAGE: i64 = 4;
 const MAX_LEVERAGE: i64 = 10;
@@ -196,6 +198,10 @@ pub struct ScreenInvestOut {
     /// Common position value before lot flooring.
     #[serde(serialize_with = "num::ser")]
     pub gross_target: WideDecimal,
+    /// Number of top-ranked names this plan was asked to size.
+    pub top_n: usize,
+    /// Ranked names the latest run offered (distinct symbols).
+    pub available: usize,
     /// Stable id of this allocation. Confirm sends it back.
     pub plan_id: String,
     /// [`gross_allocation::ALLOCATION_VERSION`].
@@ -248,6 +254,8 @@ struct InvestBody {
     plan_id: String,
     parent_id: Option<model::PyInt>,
     broker: Option<model::PyInt>,
+    /// Names to size; `None` takes the screen's own count, else [`DEFAULT_TOP_N`].
+    top_n: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -263,6 +271,8 @@ pub(crate) struct SizedBook {
     contribution: WideDecimal,
     funding: WideDecimal,
     gross_target: WideDecimal,
+    top_n: usize,
+    available: usize,
     plan_id: String,
     allocation_version: String,
     quoted_at: String,
@@ -285,6 +295,8 @@ fn bare_book(amount: &WideDecimal, mtf: bool) -> SizedBook {
         contribution: money(&dec(0)),
         funding: money(&dec(0)),
         gross_target: money(&dec(0)),
+        top_n: DEFAULT_TOP_N,
+        available: 0,
         plan_id: String::new(),
         allocation_version: gross_allocation::ALLOCATION_VERSION.to_owned(),
         quoted_at: String::new(),
@@ -334,6 +346,26 @@ fn clamp_leverage(raw: &WideDecimal) -> WideDecimal {
     }
 }
 
+fn distinct_symbols(rows: &[InvestCandidate]) -> usize {
+    rows.iter()
+        .map(|row| row.symbol.trim().to_ascii_uppercase())
+        .filter(|symbol| !symbol.is_empty())
+        .collect::<HashSet<_>>()
+        .len()
+}
+
+/// The body's count, else the screen's saved count, else [`DEFAULT_TOP_N`].
+fn resolve_top_n(requested: Option<usize>, screen: &ScreenRow) -> usize {
+    requested
+        .or_else(|| {
+            screen
+                .invest_count
+                .and_then(|n| usize::try_from(n).ok())
+                .filter(|n| *n >= 1)
+        })
+        .unwrap_or(DEFAULT_TOP_N)
+}
+
 /// Equal gross exposure. `reserve` and `costs` are explicit; nothing else is held back.
 ///
 /// # Errors
@@ -345,19 +377,26 @@ pub(crate) fn size_book(
     factors: &HashMap<String, WideDecimal>,
     reserve: &WideDecimal,
     costs: &WideDecimal,
+    top_n: usize,
 ) -> Result<SizedBook, Problem> {
     if *amount <= dec(0) {
         return Err(refuse("amount must be greater than 0"));
     }
+    let top_n = top_n.max(1);
     let mut book = bare_book(amount, mtf);
     book.reserve = money(reserve);
     book.costs = money(costs);
+    book.top_n = top_n;
+    book.available = distinct_symbols(rows);
 
     let mut seen = HashSet::new();
     let mut ordered: Vec<&InvestCandidate> = Vec::new();
     let mut ranked: Vec<&InvestCandidate> = rows.iter().collect();
     ranked.sort_by_key(|row| row.rank);
     for row in ranked {
+        if ordered.len() == top_n {
+            break;
+        }
         let symbol = row.symbol.trim().to_ascii_uppercase();
         if symbol.is_empty() || !seen.insert(symbol) {
             continue;
@@ -371,9 +410,6 @@ pub(crate) fn size_book(
             continue;
         }
         ordered.push(row);
-        if ordered.len() == DEFAULT_TOP_N {
-            break;
-        }
     }
     if ordered.is_empty() {
         book.empty_reason = Some(
@@ -540,6 +576,8 @@ fn out_of(
         contribution: book.contribution,
         funding: book.funding,
         gross_target: book.gross_target,
+        top_n: book.top_n,
+        available: book.available,
         plan_id: book.plan_id,
         allocation_version: book.allocation_version,
         quoted_at: book.quoted_at,
@@ -622,6 +660,18 @@ fn parse_invest_body(
     };
     let parent_id = model::optional_int(entries, "parent_id", "", Bounds::default(), errors);
     let broker = model::optional_int(entries, "broker_account_id", "", Bounds::default(), errors);
+    let top_n = model::optional_int(
+        entries,
+        "top_n",
+        "",
+        Bounds {
+            gt: None,
+            ge: Some(1),
+            le: Some(MAX_TOP_N),
+        },
+        errors,
+    )
+    .map(|n| n.and_then(|n| usize::try_from(n).ok()));
     model::forbid_extra(
         entries,
         &[
@@ -634,12 +684,13 @@ fn parse_invest_body(
             "plan_id",
             "parent_id",
             "broker_account_id",
+            "top_n",
         ],
         "",
         errors,
     );
     match (
-        name, amount, mtf, leverage, reserve, costs, plan_id, parent_id, broker,
+        name, amount, mtf, leverage, reserve, costs, plan_id, parent_id, broker, top_n,
     ) {
         (
             Some(name),
@@ -651,6 +702,7 @@ fn parse_invest_body(
             Some(plan_id),
             Ok(parent_id),
             Ok(broker),
+            Ok(top_n),
         ) => Some(InvestBody {
             name: {
                 let trimmed = name.trim();
@@ -672,6 +724,7 @@ fn parse_invest_body(
             plan_id,
             parent_id,
             broker,
+            top_n,
         }),
         _ => None,
     }
@@ -788,6 +841,7 @@ async fn candidates_for(
         .collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn preview_on(
     conn: &mut PgConnection,
     screen: &ScreenRow,
@@ -796,9 +850,12 @@ async fn preview_on(
     reserve: &WideDecimal,
     costs: &WideDecimal,
     fresh: bool,
+    top_n: Option<usize>,
 ) -> Result<(Option<NaiveDate>, SizedBook), Problem> {
+    let top_n = resolve_top_n(top_n, screen);
     let Some((as_of, results)) = latest_run(conn, screen.id).await? else {
         let mut waiting = bare_book(amount, mtf);
+        waiting.top_n = top_n;
         waiting.empty_reason =
             Some("Wait for the screen to finish ranking before investing.".to_owned());
         return Ok((None, waiting));
@@ -817,11 +874,11 @@ async fn preview_on(
         }
     }
     let factors = if mtf {
-        broker_factors(&rows, fresh).await?
+        broker_factors(&rows, fresh, top_n).await?
     } else {
         HashMap::new()
     };
-    let mut book = size_book(&rows, amount, mtf, &factors, reserve, costs)?;
+    let mut book = size_book(&rows, amount, mtf, &factors, reserve, costs, top_n)?;
     book.quoted_at = quote_stamp(Some(as_of));
     remember_plan(&screen.public_id, &mut book);
     Ok((Some(as_of), book))
@@ -830,8 +887,9 @@ async fn preview_on(
 async fn broker_factors(
     rows: &[InvestCandidate],
     fresh: bool,
+    top_n: usize,
 ) -> Result<HashMap<String, WideDecimal>, Problem> {
-    let lines = probe_lines(rows);
+    let lines = probe_lines(rows, top_n);
     if lines.is_empty() {
         return Ok(HashMap::new());
     }
@@ -876,7 +934,8 @@ async fn broker_factors(
     Ok(out)
 }
 
-fn probe_lines(rows: &[InvestCandidate]) -> Vec<(String, String, f64)> {
+fn probe_lines(rows: &[InvestCandidate], top_n: usize) -> Vec<(String, String, f64)> {
+    let top_n = top_n.max(1);
     let mut seen = HashSet::new();
     let mut ranked: Vec<&InvestCandidate> = rows.iter().collect();
     ranked.sort_by_key(|row| row.rank);
@@ -894,7 +953,7 @@ fn probe_lines(rows: &[InvestCandidate]) -> Vec<(String, String, f64)> {
             continue;
         }
         lines.push((symbol, row.tradingsymbol.clone(), px));
-        if lines.len() == DEFAULT_TOP_N {
+        if lines.len() == top_n {
             break;
         }
     }
@@ -1058,6 +1117,7 @@ fn fingerprint(screen_id: &str, book: &SizedBook) -> String {
     hasher.update(book.cash_outlay.to_sci_string().as_bytes());
     hasher.update(book.reserve.to_sci_string().as_bytes());
     hasher.update(book.costs.to_sci_string().as_bytes());
+    hasher.update(format!("top_n={}", book.top_n).as_bytes());
     for row in &book.holdings {
         hasher.update(row.symbol.as_bytes());
         hasher.update(row.product.as_bytes());
@@ -1189,7 +1249,7 @@ fn stored_book(plan_id: &str) -> Option<SizedBook> {
 }
 
 fn allocation_changed(approved: &SizedBook, fresh: &SizedBook) -> bool {
-    if approved.holdings.len() != fresh.holdings.len() {
+    if approved.top_n != fresh.top_n || approved.holdings.len() != fresh.holdings.len() {
         return true;
     }
     approved
@@ -1516,6 +1576,7 @@ pub async fn invest_preview(
         &body.reserve,
         &body.costs,
         false,
+        body.top_n,
     )
     .await?;
     Ok(wire::json(&out_of(book, as_of, None)))
@@ -1557,6 +1618,7 @@ pub async fn invest_from_screen(
             &body.reserve,
             &body.costs,
             true,
+            body.top_n,
         )
         .await?;
         drop(conn);
@@ -1667,6 +1729,7 @@ pub async fn invest_from_screen(
                     &body.reserve,
                     &body.costs,
                     false,
+                    body.top_n,
                 )
                 .await?;
                 if let Some(reason) = &book.empty_reason {
@@ -1902,6 +1965,7 @@ pub async fn rebalance_from_screen(
                 &body.reserve,
                 &body.costs,
                 false,
+                body.top_n,
             )
             .await?;
             if let Some(reason) = &book.empty_reason {
@@ -2000,7 +2064,17 @@ pub(crate) async fn sized_holdings_for_create(
     let Some(amount) = &link.amount else {
         return Ok(Some((screen, bare_book(&dec(0), false), Vec::new())));
     };
-    let (_, book) = preview_on(conn, &screen, amount, link.mtf, &dec(0), &dec(0), false).await?;
+    let (_, book) = preview_on(
+        conn,
+        &screen,
+        amount,
+        link.mtf,
+        &dec(0),
+        &dec(0),
+        false,
+        None,
+    )
+    .await?;
     if let Some(reason) = &book.empty_reason {
         return Err(refuse(reason.clone()));
     }
@@ -2091,7 +2165,16 @@ mod tests {
         factors.insert("AAA".to_owned(), dec(4));
         factors.insert("BBB".to_owned(), dec(2));
         factors.insert("CCC".to_owned(), dec(1));
-        let book = size_book(&rows, &dec(10_000), true, &factors, &dec(0), &dec(0)).unwrap();
+        let book = size_book(
+            &rows,
+            &dec(10_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
         assert!(book.mtf);
         assert!(book.exposure > book.cash_outlay);
         let aaa = book.holdings.iter().find(|h| h.symbol == "AAA").unwrap();
@@ -2119,6 +2202,7 @@ mod tests {
             &HashMap::new(),
             &dec(0),
             &dec(0),
+            DEFAULT_TOP_N,
         )
         .unwrap();
         assert!(!book.mtf);
@@ -2150,7 +2234,16 @@ mod tests {
         factors.insert("A".to_owned(), dec(1));
         factors.insert("B".to_owned(), dec(2));
         factors.insert("C".to_owned(), dec(4));
-        let book = size_book(&rows, &dec(350_000), true, &factors, &dec(0), &dec(0)).unwrap();
+        let book = size_book(
+            &rows,
+            &dec(350_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
         assert!(book.empty_reason.is_none(), "{:?}", book.empty_reason);
         assert!(book.reserve.is_zero());
         assert!(book.costs.is_zero());
@@ -2182,7 +2275,16 @@ mod tests {
         let rows = [px("A", 1, 500, "EQ"), px("B", 2, 500, "EQ")];
         let mut factors = HashMap::new();
         factors.insert("A".to_owned(), dec(4));
-        let book = size_book(&rows, &dec(350_000), true, &factors, &dec(0), &dec(0)).unwrap();
+        let book = size_book(
+            &rows,
+            &dec(350_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
         let reason = book.empty_reason.expect("shortfall");
         assert!(reason.contains('B'), "{reason}");
         assert!(book.holdings.iter().all(|row| row.quantity.is_none()));
@@ -2192,7 +2294,16 @@ mod tests {
     #[test]
     fn a_short_budget_names_the_name_it_cannot_buy() {
         let rows = [px("CHEAP", 1, 100, "EQ"), px("DEAR", 2, 10_000, "EQ")];
-        let book = size_book(&rows, &dec(5_000), false, &HashMap::new(), &dec(0), &dec(0)).unwrap();
+        let book = size_book(
+            &rows,
+            &dec(5_000),
+            false,
+            &HashMap::new(),
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
         let reason = book.empty_reason.expect("shortfall");
         assert!(reason.contains("DEAR"), "{reason}");
         assert!(book.holdings.iter().all(|row| row.quantity.is_none()));
@@ -2209,15 +2320,42 @@ mod tests {
         factors.insert("A".to_owned(), dec(1));
         factors.insert("B".to_owned(), dec(2));
         factors.insert("C".to_owned(), dec(4));
-        let first = size_book(&rows, &dec(350_000), true, &factors, &dec(0), &dec(0)).unwrap();
-        let second = size_book(&rows, &dec(350_000), true, &factors, &dec(0), &dec(0)).unwrap();
+        let first = size_book(
+            &rows,
+            &dec(350_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
+        let second = size_book(
+            &rows,
+            &dec(350_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
         assert!(!allocation_changed(&first, &second));
         let dear = [
             px("A", 1, 500, "EQ"),
             px("B", 2, 500, "EQ"),
             px("C", 3, 620, "EQ"),
         ];
-        let moved = size_book(&dear, &dec(350_000), true, &factors, &dec(0), &dec(0)).unwrap();
+        let moved = size_book(
+            &dear,
+            &dec(350_000),
+            true,
+            &factors,
+            &dec(0),
+            &dec(0),
+            DEFAULT_TOP_N,
+        )
+        .unwrap();
         assert!(allocation_changed(&first, &moved));
     }
 
@@ -2296,5 +2434,136 @@ mod tests {
     fn an_unreadable_margin_is_not_stored_as_one_times() {
         let reply = baskfy_providers::kite::KiteValue::from_json(br#"{"note":"empty"}"#).unwrap();
         assert!(leverage_from_margin(&reply, 500.0).is_none());
+    }
+
+    fn parsed(text: &str) -> (Option<InvestBody>, bool) {
+        let received = Received::Json(OrderedJson::parse(text).unwrap());
+        let mut errors = Errors::default();
+        let body = parse_invest_body(&received, false, &mut errors);
+        (body, errors.finish().is_ok())
+    }
+
+    #[test]
+    fn top_n_is_parsed_and_bounded() {
+        let (body, ok) = parsed(r#"{"amount": 100000, "top_n": 7}"#);
+        assert!(ok);
+        assert_eq!(body.unwrap().top_n, Some(7));
+        let (body, ok) = parsed(r#"{"amount": 100000}"#);
+        assert!(ok);
+        assert_eq!(body.unwrap().top_n, None);
+        let (body, ok) = parsed(r#"{"amount": 100000, "top_n": null}"#);
+        assert!(ok);
+        assert_eq!(body.unwrap().top_n, None);
+        assert!(!parsed(r#"{"amount": 100000, "top_n": 0}"#).1);
+        assert!(!parsed(r#"{"amount": 100000, "top_n": 101}"#).1);
+        assert!(!parsed(r#"{"amount": 100000, "top_n": "x"}"#).1);
+    }
+
+    #[test]
+    fn top_n_sizes_exactly_that_many_top_ranked_names() {
+        let rows = [
+            px("E", 5, 100, "EQ"),
+            px("A", 1, 100, "EQ"),
+            px("C", 3, 100, "EQ"),
+            px("B", 2, 100, "EQ"),
+            px("D", 4, 100, "EQ"),
+        ];
+        let book = size_book(
+            &rows,
+            &dec(30_000),
+            false,
+            &HashMap::new(),
+            &dec(0),
+            &dec(0),
+            3,
+        )
+        .unwrap();
+        let symbols: Vec<&str> = book.holdings.iter().map(|h| h.symbol.as_str()).collect();
+        assert_eq!(symbols, ["A", "B", "C"]);
+        assert_eq!(book.top_n, 3);
+        assert_eq!(book.available, 5);
+        let all = size_book(
+            &rows,
+            &dec(30_000),
+            false,
+            &HashMap::new(),
+            &dec(0),
+            &dec(0),
+            50,
+        )
+        .unwrap();
+        assert_eq!(all.holdings.len(), 5);
+        assert_eq!(all.top_n, 50);
+    }
+
+    #[test]
+    fn a_name_without_a_price_does_not_shrink_the_count() {
+        let mut rows = vec![
+            px("A", 1, 100, "EQ"),
+            px("B", 2, 100, "EQ"),
+            px("C", 3, 100, "EQ"),
+        ];
+        rows[0].price = None;
+        let book = size_book(
+            &rows,
+            &dec(30_000),
+            false,
+            &HashMap::new(),
+            &dec(0),
+            &dec(0),
+            2,
+        )
+        .unwrap();
+        let symbols: Vec<&str> = book.holdings.iter().map(|h| h.symbol.as_str()).collect();
+        assert_eq!(symbols, ["B", "C"]);
+        assert_eq!(book.skipped.len(), 1);
+    }
+
+    #[test]
+    fn a_plan_for_another_count_is_not_the_same_plan() {
+        let rows = [px("A", 1, 100, "EQ"), px("B", 2, 100, "EQ")];
+        let two = size_book(
+            &rows,
+            &dec(30_000),
+            false,
+            &HashMap::new(),
+            &dec(0),
+            &dec(0),
+            2,
+        )
+        .unwrap();
+        let five = size_book(
+            &rows,
+            &dec(30_000),
+            false,
+            &HashMap::new(),
+            &dec(0),
+            &dec(0),
+            5,
+        )
+        .unwrap();
+        assert_eq!(two.holdings.len(), five.holdings.len());
+        assert!(allocation_changed(&two, &five));
+        assert_ne!(fingerprint("s", &two), fingerprint("s", &five));
+    }
+
+    #[test]
+    fn the_body_count_beats_the_screens_which_beats_the_default() {
+        let mut screen = ScreenRow {
+            id: 1,
+            public_id: "abc".to_owned(),
+            user_id: Some(1),
+            name: "S".to_owned(),
+            definition: OrderedJson::Null,
+            columns: OrderedJson::Null,
+            is_example: false,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            invest_count: None,
+        };
+        assert_eq!(resolve_top_n(None, &screen), DEFAULT_TOP_N);
+        screen.invest_count = Some(8);
+        assert_eq!(resolve_top_n(None, &screen), 8);
+        assert_eq!(resolve_top_n(Some(4), &screen), 4);
     }
 }

@@ -100,6 +100,8 @@ export interface ResultsPanelProps {
    * omits it and only the compact card previews pin it.
    */
   topN?: number;
+  /** The screen's "Stocks to show / invest": only the top N ranks are listed; `null` lists all. */
+  showCount?: number | null;
   /** Needed to save the basket; absent for an unsaved definition, which has nothing to link to. */
   screenPublicId?: string;
   /** The definition that produced ``result``; with ``ranking_terms`` the peek explains each rank. */
@@ -196,15 +198,25 @@ export function ResultsPanel({
   className,
   screenName = "Screen basket",
   topN,
+  showCount = null,
   screenPublicId,
   definition,
 }: ResultsPanelProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const [peeked, setPeeked] = useState<ResultRow | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
-  const publishedRows = useMemo<readonly ResultRow[]>(
+  const allRows = useMemo<readonly ResultRow[]>(
     () => result?.rows ?? [],
     [result?.rows],
+  );
+  const limit = !showAll && showCount !== null && showCount < allRows.length ? showCount : null;
+  const publishedRows = useMemo<readonly ResultRow[]>(
+    () =>
+      limit === null
+        ? allRows
+        : [...allRows].sort((a, b) => a.rank - b.rank).slice(0, limit),
+    [allRows, limit],
   );
   const symbols = useMemo(
     () =>
@@ -257,6 +269,19 @@ export function ResultsPanel({
         >
           {isPending ? "…" : `${count} matches`}
         </p>
+        {!isPending && showCount !== null && showCount < allRows.length ? (
+          <p className="text-sm font-light text-muted-foreground" data-testid="result-show-count">
+            {showAll ? `Showing all ${allRows.length}` : `Showing top ${showCount}`} ·{" "}
+            <button
+              type="button"
+              className="underline underline-offset-4 hover:text-foreground"
+              data-testid="result-show-toggle"
+              onClick={() => setShowAll((all) => !all)}
+            >
+              {showAll ? `Top ${showCount} only` : "Show all"}
+            </button>
+          </p>
+        ) : null}
         {/* Which numbers move (21 Sep 2026): Price and today's change are live while the market
             is open and Kite answers; ranks and every factor stay on the published session. */}
         <p

@@ -18,6 +18,7 @@ import type { ColumnMeta } from "@/components/screens/result-columns";
 import { ScreenIdentity } from "@/components/screens/screen-identity";
 import { ScreenInvestActions } from "@/components/screens/screen-invest";
 import { ShareButton } from "@/components/screens/share-button";
+import { StockCountControl } from "@/components/screens/stock-count";
 import { StoryStrip } from "@/components/screens/story-strip";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,6 +75,8 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const columns = useColumns();
   const universes = useUniverses();
   const save = useSaveScreen();
+  const saveCount = useSaveScreen();
+  const investCount = screen.invest_count ?? null;
   const duplicate = useDuplicateScreen();
   const remove = useDeleteScreen();
   const [demoDismissed, setDemoDismissed] = useState(false);
@@ -209,6 +212,16 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
               ? "A template. Change the name or filters and Apply — that saves a copy you own, because the original is shared."
               : `Last updated ${formatTradeDate(screen.updated_at.slice(0, 10))}`}
           </p>
+          <StockCountControl
+            value={investCount}
+            available={preview.data?.result_count ?? null}
+            canEdit={screen.editable}
+            saving={saveCount.isPending}
+            error={saveCount.error ? "The count could not be saved." : null}
+            onSave={(next) =>
+              saveCount.mutate({ publicId: screen.public_id, investCount: next })
+            }
+          />
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -216,6 +229,8 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
             screenName={draftName.trim() || screen.name}
             screenPublicId={screen.public_id}
             result={preview.data}
+            investCount={investCount}
+            available={preview.data?.result_count ?? null}
           />
           {readOnly ? (
             <Button
@@ -340,6 +355,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
           screenName={screen.name}
           screenPublicId={screen.public_id}
           definition={settled}
+          showCount={investCount}
         />
         <PortfolioFit
           definition={settled}

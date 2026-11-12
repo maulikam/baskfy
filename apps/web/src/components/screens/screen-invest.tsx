@@ -17,7 +17,10 @@ import { ApiError } from "@/lib/api/errors";
 import { usePortfolios } from "@/lib/portfolios/queries";
 import {
   DEFAULT_INVEST_AMOUNT,
+  MAX_INVEST_COUNT,
+  checkInvestCount,
   confirmScreenInvest,
+  defaultInvestCount,
   linkedPortfoliosForScreen,
   nextInvestName,
   previewScreenInvest,
@@ -32,11 +35,17 @@ type Mode = "invest" | "rebalance" | "invest-again";
 export function ScreenInvestActions({
   screenName,
   screenPublicId,
+  investCount = null,
+  available = null,
 }: {
   screenName: string;
   screenPublicId: string;
   /** Kept so the existing editor call site still type-checks. Ranking is sized in Rust. */
   result?: unknown;
+  /** The screen's saved "Stocks to show / invest"; the dialog's default count. */
+  investCount?: number | null;
+  /** Ranked names the screen currently shows, when known. */
+  available?: number | null;
 }) {
   const portfolios = usePortfolios();
   const linked = useMemo(
@@ -131,6 +140,8 @@ export function ScreenInvestActions({
           linkedName={primary?.name ?? null}
           linkedId={primary?.id ?? null}
           existingNames={linked.map((row) => row.name)}
+          investCount={investCount}
+          available={available}
           onClose={() => setMode(null)}
         />
       ) : null}
@@ -145,6 +156,8 @@ function ScreenInvestDialog({
   linkedName,
   linkedId,
   existingNames,
+  investCount,
+  available,
   onClose,
 }: {
   mode: Mode;
@@ -153,6 +166,8 @@ function ScreenInvestDialog({
   linkedName: string | null;
   linkedId: number | null;
   existingNames: readonly string[];
+  investCount: number | null;
+  available: number | null;
   onClose: () => void;
 }) {
   const isRebalance = mode === "rebalance";
@@ -160,6 +175,10 @@ function ScreenInvestDialog({
     isRebalance ? (linkedName ?? screenName) : nextInvestName(screenName, existingNames),
   );
   const [amount, setAmount] = useState<number | null>(DEFAULT_INVEST_AMOUNT);
+  const [count, setCount] = useState<number | null>(() =>
+    defaultInvestCount(investCount, available),
+  );
+  const [countTouched, setCountTouched] = useState(false);
   const [mtf, setMtf] = useState(false);
   const [preview, setPreview] = useState<ScreenInvestPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -169,8 +188,17 @@ function ScreenInvestDialog({
   const [doneId, setDoneId] = useState<number | null>(null);
   const [orders, setOrders] = useState<ScreenOrderResult[]>([]);
 
+  const rankedCount = preview?.available ?? available;
+  const countError = checkInvestCount(count, rankedCount);
+  // An untouched default never asks for more names than the run ranks (adjusted during render).
+  const ranked = preview?.available;
+  if (!countTouched && ranked !== undefined && ranked > 0 && count !== null && count > ranked) {
+    setCount(ranked);
+  }
+  const requestCount = checkInvestCount(count, null) === null ? count : null;
+
   useEffect(() => {
-    if (amount === null || amount <= 0) {
+    if (amount === null || amount <= 0 || requestCount === null) {
       setPreview(null);
       setPreviewError(null);
       return;
@@ -181,6 +209,7 @@ function ScreenInvestDialog({
     void previewScreenInvest(screenPublicId, {
       amount,
       mtf,
+      top_n: requestCount,
     })
       .then((next) => {
         if (!controller.signal.aborted) setPreview(next);
@@ -198,7 +227,7 @@ function ScreenInvestDialog({
         if (!controller.signal.aborted) setLoadingPreview(false);
       });
     return () => controller.abort();
-  }, [amount, mtf, screenPublicId]);
+  }, [amount, mtf, requestCount, screenPublicId]);
 
   const sized = preview?.holdings.filter((row) => row.quantity != null) ?? [];
   const short =
@@ -213,6 +242,9 @@ function ScreenInvestDialog({
     amount !== null &&
     amount > 0 &&
     !short &&
+    countError === null &&
+    count !== null &&
+    (preview?.top_n === undefined || preview.top_n === count) &&
     sized.length > 0 &&
     name.trim().length > 0 &&
     preview !== null &&
@@ -220,11 +252,11 @@ function ScreenInvestDialog({
     (!isRebalance || linkedId !== null);
 
   async function confirm(): Promise<void> {
-    if (!canSubmit || amount === null || preview === null) return;
+    if (!canSubmit || amount === null || preview === null || count === null) return;
     setError(null);
     setBusy(true);
     try {
-      const input = { amount, mtf };
+      const input = { amount, mtf, top_n: count };
       const saved =
         isRebalance && linkedId !== null
           ? await rebalanceFromScreen(linkedId, { ...input, plan_id: preview.plan_id })
@@ -365,6 +397,45 @@ function ScreenInvestDialog({
                   : loadingPreview
                     ? "Sizing from the latest screen run…"
                     : "Enter an amount to size the portfolio."}
+              </span>
+            </label>
+
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium">Number of stocks</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={rankedCount && rankedCount > 0 ? Math.min(rankedCount, MAX_INVEST_COUNT) : MAX_INVEST_COUNT}
+                step={1}
+                value={count ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setCountTouched(true);
+                  setCount(raw === "" ? null : Math.trunc(Number(raw)) || 0);
+                }}
+                aria-label="Number of stocks"
+                aria-invalid={countError !== null}
+                aria-describedby="screen-invest-count-help"
+                data-testid="screen-invest-count"
+                className="w-32 rounded-md border border-input bg-card px-3 py-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <span
+                id="screen-invest-count-help"
+                data-testid="screen-invest-count-help"
+                className={cn(
+                  "text-xs",
+                  countError ? "text-warning-foreground" : "text-muted-foreground",
+                )}
+              >
+                {countError ??
+                  (preview?.top_n !== undefined
+                    ? `Top ${preview.top_n} ranked stocks${
+                        rankedCount ? ` of ${rankedCount}` : ""
+                      }.`
+                    : rankedCount
+                      ? `Top ${count} of ${rankedCount} ranked stocks.`
+                      : `Top ${count} ranked stocks.`)}
               </span>
             </label>
 

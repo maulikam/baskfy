@@ -11999,6 +11999,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Invest Count */
+            invest_count?: number | null;
         };
         /**
          * ScreenProvenanceOut
@@ -12168,6 +12170,8 @@ export interface components {
             definition?: components["schemas"]["ScreenDefinition-Input"] | null;
             /** Name */
             name?: string | null;
+            /** Invest Count */
+            invest_count?: number | null;
         };
         /**
          * SelectionConstraintsIn

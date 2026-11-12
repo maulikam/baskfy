@@ -8734,3 +8734,11 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Maulik: Confirm invest with MTF off always answered "Prices changed. Review the updated allocation before saving.", and "without using MTF, we are lacking a lot of features". Cause: MTF off re-priced at confirm and refused on any share-count change, and only wrote a paper book.
 - Choice: MTF off takes the same path as MTF on — the stored plan, claim/replay guard, margin check, a refreshed plan to review when prices move (not an error), market CNC buys through the desk's `/screen-invest/execute` (gateway, GTT stop, `plan_id:symbol` client id), and the portfolio from the buys that went through. The SCREEN-INVEST-LIVE line "cash invest still creates the paper book immediately" is superseded. Rebalance still sends no order.
 - Reverse: put back `if body.mtf { … } else { (None, Vec::new(), None) }` in `invest_from_screen` and the paper copy in `screen-invest.tsx`.
+
+## SCREEN-COUNT — number of stocks on invest and on the screen (12 Nov 2026) — Maulik, in session; details ⚠ UNREVIEWED
+
+- Maulik: a screen lists every survivor while Invest always sized the top 20 (`DEFAULT_TOP_N`); the count must be selectable, or editable on the screen.
+- Invest preview / invest / `from-screen` take an optional `top_n` (1..=100); the API sizes exactly that many top-ranked priced names (fewer only when the run ranks fewer). The response carries `top_n` and `available`; `top_n` is in the plan fingerprint and `allocation_changed`, so confirm never sends a plan sized for another count.
+- Default count: the body's `top_n`, else the screen's saved `invest_count`, else 20. Rest of the path (MTF/cash, claim, margin check, desk order path) unchanged.
+- New nullable `screen.invest_count` (migration `0013_screen_invest_count.sql`, CHECK 1..=100), set by `PATCH /screens/{id}` (`invest_count`, null clears), copied on duplicate. Label "Stocks to show / invest": the list shows the top N with a "Show all" toggle, and the invest dialog defaults to it.
+- Rejected: a field on `ScreenDefinition` (changes definition hashes and the strict model). Reverse: drop the column, the PATCH field, and `top_n` from the invest body.

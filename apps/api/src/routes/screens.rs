@@ -67,6 +67,8 @@ pub struct ScreenOut {
     /// `updated_at`.
     #[serde(serialize_with = "wire::ser::datetime")]
     pub updated_at: DateTime<Utc>,
+    /// Stocks to show / invest; `null` shows every ranked name and invest takes its default.
+    pub invest_count: Option<i64>,
 }
 
 /// `ScreenListOut`.
@@ -121,10 +123,12 @@ pub struct ScreenRow {
     pub created_at: DateTime<Utc>,
     /// `screen.updated_at`.
     pub updated_at: DateTime<Utc>,
+    /// `screen.invest_count`.
+    pub invest_count: Option<i16>,
 }
 
 const SCREEN_COLUMNS: &str = "id, public_id, user_id, name, definition, columns, is_example, \
-                              created_at, updated_at";
+                              created_at, updated_at, invest_count";
 
 fn screen_row(r: &PgRow) -> Result<ScreenRow, Problem> {
     Ok(ScreenRow {
@@ -137,6 +141,7 @@ fn screen_row(r: &PgRow) -> Result<ScreenRow, Problem> {
         is_example: r.try_get("is_example").map_err(db)?,
         created_at: row::timestamptz(r, "created_at").map_err(|e| dbe(&e))?,
         updated_at: row::timestamptz(r, "updated_at").map_err(|e| dbe(&e))?,
+        invest_count: r.try_get("invest_count").map_err(db)?,
     })
 }
 
@@ -281,6 +286,7 @@ pub fn to_out(screen: &ScreenRow, principal: &Principal) -> Result<ScreenOut, Pr
         editable: is_editable(screen, principal),
         created_at: screen.created_at,
         updated_at: screen.updated_at,
+        invest_count: screen.invest_count.map(i64::from),
     })
 }
 

@@ -19449,6 +19449,17 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "invest_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invest Count"
           }
         },
         "required": [
@@ -19858,6 +19869,19 @@
               }
             ],
             "title": "Name"
+          },
+          "invest_count": {
+            "anyOf": [
+              {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invest Count"
           }
         },
         "title": "ScreenUpdate",

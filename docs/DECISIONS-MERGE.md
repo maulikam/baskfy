@@ -8797,3 +8797,9 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Choice: `POST /screens/{id}/invest` accepts `portfolio_id`; the buys go through the same order path and are added to that portfolio's holdings (quantities summed, average price weighted, earliest purchase date kept; sleeve capital increased). The web's primary action for a screen with a portfolio is "Invest more"; Rebalance and "New portfolio" stay. The portfolio list is invalidated after every invest.
 - Screen invest now stamps `first_bought_on` = today on the holdings it creates, so period P&L counts from the purchase.
 - Reverse: drop `portfolio_id` handling in `invest_from_screen` and the Invest more button.
+
+## PNL-RECONCILE — period P&L per portfolio row, not per broker position (12 Nov 2026) — Maulik, in session
+
+- Cause: a capital portfolio's Today/Week/30-day (and the detail page's value/invested/quantity) used the broker position's total quantity and the first capital row's (often the pile's) `avg_price`/`first_bought_on`; RATNAVEER/SHILPAMED in portfolio 13 were measured at 754/289 shares from the pile's 11-Nov cost.
+- Choice: `Position.lots` keeps each capital row's own quantity, cost and date; a portfolio's members are its own lot (`in_portfolio`), and every period leg and cost is summed per lot (consolidated = all lots). Position `first_bought_on` is the earliest lot's.
+- Reverse: make `members_of` return the shared positions again and `position_legs` one leg per position.

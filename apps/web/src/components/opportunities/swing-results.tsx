@@ -10,7 +10,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import {
   MbScoresProvider,
@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/format";
 import { isGreen } from "@/lib/regime-signal/types";
+import { type LiveMarks, useLiveMarks } from "@/lib/screens/live-marks";
 import type {
   DataStatus,
   SwingOpportunity,
@@ -72,7 +73,7 @@ export function ActionableBadge({
   );
 }
 
-function columns(status: DataStatus) {
+function columns(status: DataStatus, live: LiveMarks) {
   return [
     column.display({
       id: "mb",
@@ -232,7 +233,7 @@ function columns(status: DataStatus) {
     column.display({
       id: "buy",
       header: () => <span className="sr-only">Buy</span>,
-      cell: ({ row }) => <SwingBuyButton opportunity={row.original} />,
+      cell: ({ row }) => <SwingBuyButton opportunity={row.original} live={live} />,
     }),
   ];
 }
@@ -253,9 +254,14 @@ export function SwingResultsTable({
   const data = greenOnly
     ? response.opportunities.filter((row) => isGreen(row.regime_signal))
     : response.opportunities;
+  const symbols = useMemo(
+    () => response.opportunities.map((o) => o.symbol),
+    [response.opportunities],
+  );
+  const live = useLiveMarks(symbols);
   const table = useReactTable({
     data,
-    columns: columns(response.data_status),
+    columns: columns(response.data_status, live),
     state: { sorting, expanded, rowSelection: selection },
     onSortingChange: setSorting,
     onRowSelectionChange: setSelection,
@@ -285,7 +291,7 @@ export function SwingResultsTable({
         <MultiBuyButton rows={selected} />
         <GreenOnlyToggle pressed={greenOnly} onChange={setGreenOnly} />
       </div>
-      <MbScoresProvider symbols={response.opportunities.map((o) => o.symbol)}>
+      <MbScoresProvider symbols={symbols}>
         <div className="overflow-x-auto" data-testid="swing-results">
           <table className="w-full min-w-[76rem] border-collapse text-sm">
             <thead>

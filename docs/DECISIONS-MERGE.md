@@ -8817,3 +8817,9 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Maulik: "turn on the trailing GTT flag once it's deployed" and "turn on all strategies too". `BASKFY_GTT_TRAIL_ENABLED` added to this Mac's `money.on` (an agent set it on his instruction, as TW18); every strategy's policy enabled on /trailing-stops. The in-repo default stays false.
 - Applied after the 15:30 close so the desk restart did not interrupt a session; the daily run is at 20:30 IST and only ever raises a stop.
 - Reverse: remove the line from `money.on`, `local.sh stage`, restart the desk; or disable a strategy on /trailing-stops.
+
+## MB-BUY — the shared Buy ticket on the model pages (12 Nov 2026) — Maulik, in session
+
+- Maulik: "The buy button is not available on any of these pages for the models' scoring that we gave. Do that as soon as possible so I can buy it right away."
+- Choice: `BuyTicketButton` (the OPPS-TICKET ticket: desk /swing/analyze → Place Buy Order → /swing/execute, gateway, same-session GTT) on /mb (Doubling ranking, source `doubling`), /mb/swing (tonight's picks and the top 50, source `swing-picks`) and /mb/explore (beside each symbol). The MB tree still holds no order code of its own; nothing is sent until Place Buy Order.
+- Strategy books file `doubling` and `swing-picks` lines with Swing until a Doubling book exists. ⚠ UNREVIEWED.

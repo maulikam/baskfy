@@ -1,5 +1,6 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FlagTip } from "@/components/mb/flag-tip";
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { SWING_SCOPE } from "@/lib/mb/flags";
 import {
   EMPTY_CELL,
@@ -226,7 +227,16 @@ function TodayPicks({ data }: { data: MbSwing }) {
                 </td>
                 <td className={`${TD} font-medium text-emerald-700 dark:text-emerald-400`}>{Number(p.score).toFixed(3)}</td>
                 <td className={TD}>{rupees(close)}</td>
-                <td className={TD}>next open</td>
+                <td className={TD}>
+                  <BuyTicketButton
+                    symbol={p.symbol}
+                    name={p.name}
+                    instrumentId={p.instrument_id}
+                    price={close === null ? null : Number(close)}
+                    source="swing-picks"
+                    stop={close === null ? null : Number(close) * (1 - stop)}
+                  />
+                </td>
                 <td className={TD}>{close === null ? EMPTY_CELL : rupees(Number(close) * (1 - stop))}</td>
               </tr>
             );
@@ -384,7 +394,7 @@ function Ranking({ names }: { names: readonly MbSwingName[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-[40rem] border-collapse text-sm" data-testid="swing-ranking">
-        <Head cols={["Rank", "Stock", "Score", "Close", "Sector", "Can be picked"]} />
+        <Head cols={["Rank", "Stock", "Score", "Close", "Sector", "Can be picked", "Buy"]} />
         <tbody>
           {names.map((n) => (
             <tr key={n.instrument_id} className="border-b border-border/40 tabular-nums">
@@ -403,6 +413,15 @@ function Ranking({ names }: { names: readonly MbSwingName[] }) {
                 ) : (
                   <FlagTip label="Not investable" meaning="Close under ₹50 or under ₹5 cr traded a day: scored, but never picked." className="text-red-600 dark:text-red-400">✗</FlagTip>
                 )}
+              </td>
+              <td className={TD}>
+                <BuyTicketButton
+                  symbol={n.symbol}
+                  name={n.name}
+                  instrumentId={n.instrument_id}
+                  price={n.close === null ? null : Number(n.close)}
+                  source="swing-picks"
+                />
               </td>
             </tr>
           ))}

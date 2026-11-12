@@ -1,7 +1,7 @@
 export type CashProduct = "CNC" | "MTF";
 export type OrderType = "MARKET" | "LIMIT";
 export type AmountBasis = "order_value" | "own";
-export type BuySource = "overlap" | "opportunities" | "swing" | "vbt" | "twt";
+export type BuySource = "overlap" | "opportunities" | "swing" | "vbt" | "twt" | "doubling" | "swing-picks";
 
 export interface DeskTicket {
   symbol: string;

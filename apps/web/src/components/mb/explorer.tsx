@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FlagTip } from "@/components/mb/flag-tip";
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { SaveInstrumentButton } from "@/components/watchlist/save-instrument-button";
 import { EMPTY_CELL, formatFraction, formatNumber, formatTradeDate } from "@/lib/format";
 import {
@@ -355,7 +356,16 @@ export function MbExplorerPanel({
                     <SwingCell n={n} total={swingN} />
                   </td>
                   <td className="px-3 py-1.5">
-                    <InstrumentLink symbol={n.symbol} flag={false} />
+                    <div className="flex items-center gap-2">
+                      <InstrumentLink symbol={n.symbol} flag={false} />
+                      <BuyTicketButton
+                        symbol={n.symbol}
+                        name={n.name}
+                        instrumentId={n.instrument_id}
+                        price={n.close === null ? null : Number(n.close)}
+                        source={(n.swing?.rank ?? Infinity) <= (n.doubling?.rank ?? Infinity) ? "swing-picks" : "doubling"}
+                      />
+                    </div>
                     {n.name ? <div className="max-w-[16rem] truncate text-xs text-muted-foreground">{n.name}</div> : null}
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">{n.sector ?? EMPTY_CELL}</td>

@@ -1,5 +1,6 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FlagTip } from "@/components/mb/flag-tip";
+import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import {
   EMPTY_CELL,
   formatFraction,
@@ -90,6 +91,7 @@ export function MbRanking({
                 "Profit TTM",
                 "63-day high",
                 "Score",
+                "Buy",
               ].map((h) => (
                 <th key={h} scope="col" className="py-2 pr-3 font-medium">
                   {h}
@@ -159,6 +161,15 @@ export function MbRanking({
                 </td>
                 <td className="py-2 pr-3 tabular-nums text-muted-foreground">
                   {n.score}
+                </td>
+                <td className="py-2 pr-3">
+                  <BuyTicketButton
+                    symbol={n.symbol}
+                    name={n.name}
+                    instrumentId={n.instrument_id}
+                    price={n.close === null ? null : Number(n.close)}
+                    source="doubling"
+                  />
                 </td>
               </tr>
             ))}

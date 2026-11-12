@@ -306,6 +306,12 @@ fn series_of(symbol: &str) -> &str {
 
 async fn arm_stop(state: &AppState, plan_id: &str, symbol: &str, qty: i64, price: f64) -> String {
     let trigger = stop_from_vol(price, 0.0, StopConfig::default());
+    // The gateway's GTT path requires the tenant (its buy path stamps one; this one does not), so
+    // every screen-invest stop was refused with a TypeError until 12 Nov 2026.
+    let tenant = match crate::lanes::twt::common::tenant(&state.settings_snapshot()) {
+        Ok(t) => t,
+        Err(e) => return format!("ValueError: {}", e.0),
+    };
     match state
         .gateway
         .place_gtt_stop(GttStop {
@@ -316,8 +322,8 @@ async fn arm_stop(state: &AppState, plan_id: &str, symbol: &str, qty: i64, price
             exchange: "NSE".to_owned(),
             series: Some("EQ".to_owned()),
             client_id: Some(format!("{plan_id}:{symbol}:stop")),
-            tenant: None,
-            plan_tenant: None,
+            tenant: Some(tenant),
+            plan_tenant: Some(tenant),
             limit_fraction: None,
             fo_plan: None,
         })

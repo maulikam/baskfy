@@ -3,10 +3,16 @@
 import { BuyTicketButton } from "@/components/orders/buy-ticket";
 import { Button } from "@/components/ui/button";
 import type { SwingOpportunity } from "@/lib/opportunities/types";
-import { useLiveMarks } from "@/lib/screens/live-marks";
+import type { LiveMarks } from "@/lib/screens/live-marks";
 
-export function SwingBuyButton({ opportunity }: { opportunity: SwingOpportunity }) {
-  const live = useLiveMarks([opportunity.symbol]);
+/** `live` comes from the table's one `useLiveMarks` call: a per-row fetch fired ~50 requests and drew 429s. */
+export function SwingBuyButton({
+  opportunity,
+  live,
+}: {
+  opportunity: SwingOpportunity;
+  live: LiveMarks;
+}) {
   const lastPrice =
     live.marks[opportunity.symbol] ??
     live.quotes[opportunity.symbol]?.lastPrice ??

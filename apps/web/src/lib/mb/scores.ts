@@ -15,6 +15,8 @@ export interface MbScores {
   bySymbol: Readonly<Record<string, MbVerdict>>;
   /** False until an answer arrives; a cell shows nothing rather than "not ranked" while waiting. */
   loaded: boolean;
+  /** Set once every retry failed (no token, 429, 5xx, timeout): the cell reads "unavailable", not "·". */
+  error?: string | null;
   /** PM11: the swing-picks model's verdicts, from its own newest session. */
   swing: SwingScores;
 }
@@ -110,6 +112,25 @@ export function mergeMbScores(parts: readonly MbScores[]): MbScores {
   };
 }
 
+/** A lookup that did not answer: why, and how long the server asked us to wait (429 Retry-After). */
+export class MbLookupError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+    this.name = "MbLookupError";
+  }
+}
+
+function retryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const secs = Number(header);
+  if (Number.isFinite(secs) && secs >= 0) return secs * 1000;
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
+
 async function fetchBatch(token: string, symbols: readonly string[]): Promise<MbScores> {
   const url = new URL("/api/v1/mb/lookup", apiOrigin());
   url.searchParams.set("symbols", symbols.join(","));
@@ -118,37 +139,80 @@ async function fetchBatch(token: string, symbols: readonly string[]): Promise<Mb
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   });
-  if (!response.ok) return EMPTY_MB_SCORES;
+  if (!response.ok) {
+    const why = response.status === 429 ? "rate limited (429)" : `HTTP ${response.status}`;
+    throw new MbLookupError(why, retryAfterMs(response.headers.get("Retry-After")));
+  }
   return parseMbScores((await response.json()) as Payload);
 }
 
-async function fetchMbScores(key: string): Promise<MbScores> {
+/** Throws `MbLookupError` (or a network error) on any failure; never returns a fake "loading" value. */
+export async function fetchMbScores(key: string): Promise<MbScores> {
   const token = await accessToken();
-  if (!token) return EMPTY_MB_SCORES;
+  if (!token) throw new MbLookupError("not signed in (no access token)");
   const all = key.split(",");
   const batches: string[][] = [];
   for (let i = 0; i < all.length; i += LOOKUP_BATCH) batches.push(all.slice(i, i + LOOKUP_BATCH));
   return mergeMbScores(await Promise.all(batches.map((b) => fetchBatch(token, b))));
 }
 
+/** Retries after a failed lookup; Retry-After wins when the server sends one (capped). */
+export const MB_RETRY_DELAYS_MS: readonly number[] = [1_000, 4_000];
+const MAX_RETRY_WAIT_MS = 30_000;
+
+function describe(err: unknown): string {
+  if (err instanceof MbLookupError) return err.message;
+  if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"))
+    return "timed out";
+  return "network error";
+}
+
 /** Scores change once a day, after the nightly; a 10-minute refresh is plenty. No react-query: the
  * column must render anywhere a table does, with or without a query client. */
 export function useMbScores(symbols: readonly string[]): MbScores {
   const key = mbScoresKey(symbols);
-  const [scores, setScores] = useState<MbScores>(EMPTY_MB_SCORES);
+  const [state, setState] = useState<{ key: string; scores: MbScores }>({
+    key: "",
+    scores: EMPTY_MB_SCORES,
+  });
   useEffect(() => {
     if (!key) return;
     let live = true;
-    const load = () =>
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const load = (attempt: number) => {
       fetchMbScores(key)
-        .then((s) => live && setScores(s))
-        .catch(() => undefined);
-    void load();
-    const timer = setInterval(() => void load(), 600_000);
+        .then((scores) => {
+          if (live) setState({ key, scores });
+        })
+        .catch((err: unknown) => {
+          if (!live) return;
+          const base = MB_RETRY_DELAYS_MS[attempt];
+          if (base === undefined) {
+            // Keep an earlier good answer for this key; otherwise say the lookup is unavailable.
+            setState((prev) =>
+              prev.key === key && prev.scores.loaded && !prev.scores.error
+                ? prev
+                : { key, scores: { ...EMPTY_MB_SCORES, loaded: true, error: describe(err) } },
+            );
+            return;
+          }
+          const hinted = err instanceof MbLookupError ? err.retryAfterMs : null;
+          const wait = Math.min(MAX_RETRY_WAIT_MS, Math.max(base, hinted ?? 0));
+          retry = setTimeout(() => load(attempt + 1), wait);
+        });
+    };
+    load(0);
+    const timer = setInterval(() => {
+      clearTimeout(retry);
+      load(0);
+    }, 600_000);
     return () => {
       live = false;
       clearInterval(timer);
+      clearTimeout(retry);
     };
   }, [key]);
-  return scores;
+  // A new symbol set (a fresh scan) reads as loading until its own answer arrives, never as the
+  // previous table's "not scored".
+  return state.key === key ? state.scores : EMPTY_MB_SCORES;
 }

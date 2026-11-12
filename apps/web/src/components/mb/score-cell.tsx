@@ -46,10 +46,27 @@ export function SwingScoreHeadLink() {
   );
 }
 
+/** The lookup failed after its retries: say so, never an endless "·". */
+function ScoresUnavailable({ model, error, testId }: { model: string; error: string; testId: string }) {
+  return (
+    <span data-testid={testId}>
+      <FlagTip
+        label={`${model} score unavailable`}
+        meaning={`The score lookup failed (${error}). Reload the page to try again.`}
+        className="text-amber-600 dark:text-amber-400"
+        testId={`${testId}-unavailable`}
+      >
+        ?
+      </FlagTip>
+    </span>
+  );
+}
+
 /** The swing-picks model's score for one stock (PM11). Information only: it never filters the row. */
 export function SwingScoreValue({ symbol }: { symbol: string }) {
-  const { swing, loaded } = useMbScoresContext();
+  const { swing, loaded, error } = useMbScoresContext();
   if (!loaded) return <span className="text-muted-foreground">·</span>;
+  if (error) return <ScoresUnavailable model="Swing" error={error} testId="swing-score-cell" />;
   const v = swing.bySymbol[symbol.trim().toUpperCase()];
   if (!v)
     return (
@@ -154,8 +171,9 @@ export function MbScoreHeadLink() {
 
 /** The model's rank for one stock and its flags. Information only: it never filters the row. */
 export function MbScoreValue({ symbol }: { symbol: string }) {
-  const { bySymbol, universeN, loaded } = useMbScoresContext();
+  const { bySymbol, universeN, loaded, error } = useMbScoresContext();
   if (!loaded) return <span className="text-muted-foreground">·</span>;
+  if (error) return <ScoresUnavailable model="Doubling" error={error} testId="mb-score-cell" />;
   const v = bySymbol[symbol.trim().toUpperCase()];
   return (
     <span

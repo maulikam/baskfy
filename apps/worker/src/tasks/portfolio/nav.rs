@@ -243,21 +243,32 @@ async fn load_portfolios(
     Ok(out)
 }
 
-/// `_load_holdings`: `(portfolio_id, key, quantity)` for every positive holding in a capital
-/// portfolio, in the order the database returns them.
+/// One capital-portfolio holding row the job values.
+#[derive(Debug, Clone, Copy)]
+struct HoldingRow {
+    portfolio_id: i64,
+    key: HoldingKey,
+    quantity: Decimal,
+}
+
+/// `_load_holdings`: every positive holding in a capital portfolio that had joined it by the
+/// date, so a re-run of a past date has no history before the holding arrived.
 async fn load_holdings(
     conn: &mut PgConnection,
     capital_ids: &[i64],
-) -> Result<Vec<(i64, HoldingKey, Decimal)>, WorkerError> {
+    as_of: NaiveDate,
+) -> Result<Vec<HoldingRow>, WorkerError> {
     if capital_ids.is_empty() {
         return Ok(Vec::new());
     }
     let rows = sqlx::query(
         "SELECT portfolio_holding.portfolio_id, portfolio_holding.instrument_id, \
          portfolio_holding.broker_account_id, portfolio_holding.quantity \
-         FROM portfolio_holding WHERE portfolio_holding.portfolio_id = ANY($1)",
+         FROM portfolio_holding WHERE portfolio_holding.portfolio_id = ANY($1) \
+         AND (portfolio_holding.added_on IS NULL OR portfolio_holding.added_on <= $2)",
     )
     .bind(capital_ids)
+    .bind(as_of)
     .fetch_all(&mut *conn)
     .await?;
     let mut out = Vec::with_capacity(rows.len());
@@ -270,7 +281,45 @@ async fn load_holdings(
             instrument_id: row.try_get("instrument_id")?,
             broker_account_id: row.try_get("broker_account_id")?,
         };
-        out.push((row.try_get("portfolio_id")?, key, quantity));
+        out.push(HoldingRow {
+            portfolio_id: row.try_get("portfolio_id")?,
+            key,
+            quantity,
+        });
+    }
+    Ok(out)
+}
+
+/// The latest stored row before the date, per portfolio (`None` = consolidated).
+#[derive(Debug, Clone, Copy)]
+struct PreviousRow {
+    date: NaiveDate,
+    market_value: Decimal,
+}
+
+async fn load_previous_rows(
+    conn: &mut PgConnection,
+    user_id: i64,
+    as_of: NaiveDate,
+) -> Result<HashMap<Option<i64>, PreviousRow>, WorkerError> {
+    let rows = sqlx::query(
+        "SELECT DISTINCT ON (portfolio_id) portfolio_id, date, market_value \
+         FROM portfolio_nav_daily WHERE user_id = $1 AND date < $2 \
+         ORDER BY portfolio_id, date DESC",
+    )
+    .bind(user_id)
+    .bind(as_of)
+    .fetch_all(&mut *conn)
+    .await?;
+    let mut out = HashMap::with_capacity(rows.len());
+    for row in &rows {
+        out.insert(
+            row.try_get::<Option<i64>, _>("portfolio_id")?,
+            PreviousRow {
+                date: row.try_get("date")?,
+                market_value: row.try_get("market_value")?,
+            },
+        );
     }
     Ok(out)
 }
@@ -392,14 +441,14 @@ async fn value_user(
     if portfolios.is_empty() && flows.is_empty() {
         return Ok(None);
     }
-    let holding_rows = load_holdings(conn, &capital_ids).await?;
+    let holding_rows = load_holdings(conn, &capital_ids, as_of).await?;
 
     refuse_monitoring_flows(&portfolios, &flows)?;
 
     let frozen_keys = load_open_reconciliations(conn, user_id, as_of).await?;
     let instrument_ids: Vec<i64> = holding_rows
         .iter()
-        .map(|(_, key, _)| key.instrument_id)
+        .map(|row| row.key.instrument_id)
         .collect::<BTreeSet<i64>>()
         .into_iter()
         .collect();
@@ -408,21 +457,27 @@ async fn value_user(
     let mut holdings: Vec<Holding> = Vec::new();
     let mut allocations: Vec<Allocation> = Vec::new();
     let mut pending_portfolios: HashSet<i64> = HashSet::new();
+    let mut valued: Vec<HoldingRow> = Vec::new();
     let mut frozen_count = 0usize;
     let mut unpriced_count = 0usize;
-    for (portfolio_id, key, quantity) in &holding_rows {
-        if frozen_keys.contains(key) {
+    for row in &holding_rows {
+        if frozen_keys.contains(&row.key) {
             frozen_count += 1;
-            pending_portfolios.insert(*portfolio_id);
+            pending_portfolios.insert(row.portfolio_id);
             continue;
         }
-        if !prices.contains_key(&key.instrument_id) {
+        if !prices.contains_key(&row.key.instrument_id) {
             unpriced_count += 1;
-            pending_portfolios.insert(*portfolio_id);
+            pending_portfolios.insert(row.portfolio_id);
             continue;
         }
-        holdings.push(Holding::new(*key, *quantity)?);
-        allocations.push(Allocation::new(*key, Some(*portfolio_id), *quantity)?);
+        holdings.push(Holding::new(row.key, row.quantity)?);
+        allocations.push(Allocation::new(
+            row.key,
+            Some(row.portfolio_id),
+            row.quantity,
+        )?);
+        valued.push(*row);
     }
 
     let values = ledger::portfolio_values(&holdings, &allocations, &portfolios, &prices)?;
@@ -438,26 +493,56 @@ async fn value_user(
 
     let consolidated_pending = !frozen_keys.is_empty() || !pending_portfolios.is_empty();
 
+    let previous = load_previous_rows(conn, user_id, as_of).await?;
+    let mut prices_before: HashMap<NaiveDate, HashMap<i64, Decimal>> = HashMap::new();
+    for row in previous.values() {
+        if let std::collections::hash_map::Entry::Vacant(slot) = prices_before.entry(row.date) {
+            slot.insert(load_prices(conn, &instrument_ids, row.date).await?);
+        }
+    }
+    let book_flow = |portfolio_id: Option<i64>, market_value: Decimal| {
+        let members: Vec<&HoldingRow> = valued
+            .iter()
+            .filter(|h| portfolio_id.is_none_or(|id| h.portfolio_id == id))
+            .collect();
+        let prev = previous.get(&portfolio_id);
+        let before = prev.and_then(|p| prices_before.get(&p.date));
+        let (retained_today, retained_prev) = retained_values(&members, &prices, before)?;
+        implied_market_flow(
+            market_value,
+            prev.map_or(Decimal::ZERO, |p| p.market_value),
+            retained_today,
+            retained_prev,
+            stock_legs(&day_flows, portfolio_id)?,
+        )
+    };
+
     let mut rows = Vec::with_capacity(capital_ids.len());
     for portfolio_id in &capital_ids {
+        let market_value = values.get(Some(*portfolio_id)).unwrap_or(Decimal::ZERO);
+        let implied = book_flow(Some(*portfolio_id), market_value)?;
         rows.push(NavRow {
             user_id,
             portfolio_id: Some(*portfolio_id),
-            market_value: values.get(Some(*portfolio_id)).unwrap_or(Decimal::ZERO),
+            market_value,
             cash: portfolio_cash
                 .iter()
                 .find(|(id, _)| id == portfolio_id)
                 .map_or(Decimal::ZERO, |(_, v)| *v),
-            net_flow: internal_net_flow(&day_flows, *portfolio_id)?,
+            net_flow: ledger::money(ledger::add(
+                internal_net_flow(&day_flows, *portfolio_id)?,
+                implied,
+            )?),
             pending_reconciliation: pending_portfolios.contains(portfolio_id),
         });
     }
+    let implied = book_flow(None, consolidated_market_value)?;
     let consolidated = NavRow {
         user_id,
         portfolio_id: None,
         market_value: consolidated_market_value,
         cash: ledger::total_cash(&flows)?,
-        net_flow: external_net_flow(&day_flows)?,
+        net_flow: ledger::money(ledger::add(external_net_flow(&day_flows)?, implied)?),
         pending_reconciliation: consolidated_pending,
     };
     Ok(Some(UserNav {
@@ -518,6 +603,77 @@ fn internal_net_flow(
         }
     }
     Ok(ledger::money(total))
+}
+
+/// Today's and the previous valued day's value of the holdings priced on both days.
+fn retained_values(
+    members: &[&HoldingRow],
+    today: &HashMap<i64, Decimal>,
+    before: Option<&HashMap<i64, Decimal>>,
+) -> Result<(Decimal, Decimal), WorkerError> {
+    let (mut now, mut then) = (Decimal::ZERO, Decimal::ZERO);
+    let Some(before) = before else {
+        return Ok((now, then));
+    };
+    for h in members {
+        if !before.contains_key(&h.key.instrument_id) {
+            continue;
+        }
+        now = ledger::add(now, ledger::holding_value(h.key, h.quantity, today)?)?;
+        then = ledger::add(then, ledger::holding_value(h.key, h.quantity, before)?)?;
+    }
+    Ok((now, then))
+}
+
+/// `SELL` minus `BUY` cash on the day, for one portfolio or (`None`) the whole account.
+fn stock_legs(
+    day_flows: &[&LedgerCashFlow],
+    portfolio_id: Option<i64>,
+) -> Result<Decimal, WorkerError> {
+    let mut total = Decimal::ZERO;
+    for flow in day_flows {
+        if portfolio_id.is_some_and(|id| flow.portfolio_id != Some(id)) {
+            continue;
+        }
+        match flow.kind {
+            CashFlowKind::Sell => total = ledger::add(total, flow.amount)?,
+            CashFlowKind::Buy => total = ledger::sub(total, flow.amount)?,
+            _ => {}
+        }
+    }
+    Ok(total)
+}
+
+/// The part of a day's market-value change that is money moving rather than a return (owner,
+/// 12 Nov 2026: P&L counts from the day a holding was bought).
+///
+/// What the previous day's book would be worth today is `mv_prev` grown by the price move of the
+/// holdings valued on both days (`retained_today / retained_prev`); the rest of today's market
+/// value arrived (an acquisition, booked at today's close) or left (a disposal, at the previous
+/// close grown by the same move). A `BUY`/`SELL` already moved portfolio cash, so its cash leg is
+/// added back and a cash-funded buy nets to about zero. With no previous row the whole value is
+/// the inflow that funds the first day.
+///
+/// # Errors
+/// An overflow (never on stored values).
+pub fn implied_market_flow(
+    mv_today: Decimal,
+    mv_prev: Decimal,
+    retained_today: Decimal,
+    retained_prev: Decimal,
+    stock_legs: Decimal,
+) -> Result<Decimal, WorkerError> {
+    let carried = if retained_prev.is_zero() {
+        mv_prev
+    } else {
+        ledger::mul(mv_prev, retained_today)?
+            .checked_div(retained_prev)
+            .ok_or_else(|| ledger::value_error("division overflow"))?
+    };
+    Ok(ledger::money(ledger::add(
+        ledger::sub(mv_today, carried)?,
+        stock_legs,
+    )?))
 }
 
 /// `_external_net_flow`: deposits minus withdrawals on the day.
@@ -635,4 +791,68 @@ async fn mark_since_grouped(
     .fetch_all(&mut *conn)
     .await?;
     Ok(marked.len())
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    fn dec(s: &str) -> Decimal {
+        s.parse().unwrap()
+    }
+
+    /// The API's chain-link factor: `(V_t - F_t) / V_{t-1}`.
+    fn factor(prev: &str, today: &str, flow: Decimal) -> Decimal {
+        (dec(today) - flow) / dec(prev)
+    }
+
+    fn flow(today: &str, prev: &str, kept_now: &str, kept_then: &str, legs: &str) -> Decimal {
+        implied_market_flow(
+            dec(today),
+            dec(prev),
+            dec(kept_now),
+            dec(kept_then),
+            dec(legs),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_new_holding_is_a_deposit_not_a_gain() {
+        // Day 1: 10 x 100. Day 2: price flat, 5 x 200 of a new stock arrives.
+        let f = flow("2000", "1000", "1000", "1000", "0");
+        assert_eq!(f, dec("1000.00"));
+        assert_eq!(factor("1000", "2000", f), Decimal::ONE);
+    }
+
+    #[test]
+    fn a_price_move_on_the_day_of_an_acquisition_is_still_counted() {
+        // Old book 1000 -> 1100 (+10%); a holding worth 500 at today's close joins.
+        let f = flow("1600", "1000", "1100", "1000", "0");
+        assert_eq!(f, dec("500.00"));
+        assert_eq!(factor("1000", "1600", f), dec("1.1"));
+    }
+
+    #[test]
+    fn a_disposal_is_a_withdrawal_not_a_loss() {
+        // 1000 of A and 1000 of B; B leaves, A rises 5%.
+        let f = flow("1050", "2000", "1050", "1000", "0");
+        assert_eq!(f, dec("-1050.00"));
+        assert_eq!(factor("2000", "1050", f), dec("1.05"));
+    }
+
+    #[test]
+    fn the_first_funded_day_is_all_inflow_and_a_cash_funded_buy_nets_out() {
+        assert_eq!(flow("900", "0", "0", "0", "-900"), dec("0.00"));
+        assert_eq!(flow("900", "0", "0", "0", "0"), dec("900.00"));
+    }
+
+    #[test]
+    fn an_unchanged_book_books_no_flow() {
+        let f = flow("970", "1000", "970", "1000", "0");
+        assert_eq!(f, dec("0.00"));
+        assert_eq!(factor("1000", "970", f), dec("0.97"));
+    }
 }

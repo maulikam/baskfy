@@ -23,6 +23,7 @@ pub(crate) mod multipart;
 pub(crate) mod nav;
 pub(crate) mod num;
 pub(crate) mod params;
+pub(crate) mod period;
 pub(crate) mod portfolio_csv;
 pub(crate) mod portfolios_writes;
 pub(crate) mod pycsv;

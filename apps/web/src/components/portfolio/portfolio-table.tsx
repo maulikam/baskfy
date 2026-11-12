@@ -200,19 +200,19 @@ export function PortfolioTable({ overview, onSelect, onRowsChange }: PortfolioTa
                       </td>
                       <td
                         className={cn("px-3 py-2 text-right tabular-nums", toneFor(row.todays_pnl.amount))}
-                        title={row.todays_pnl.label}
+                        title={[row.todays_pnl.label, row.todays_pnl.note].filter(Boolean).join(". ")}
                       >
                         <MoneyDelta value={row.todays_pnl.amount ?? null} />
                       </td>
                       <td
                         className={cn("px-3 py-2 text-right tabular-nums", toneFor(row.week_pnl?.amount))}
-                        title={row.week_pnl?.label}
+                        title={[row.week_pnl?.label, row.week_pnl?.note].filter(Boolean).join(". ")}
                       >
                         <MoneyDelta value={row.week_pnl?.amount ?? null} />
                       </td>
                       <td
                         className={cn("px-3 py-2 text-right tabular-nums", toneFor(row.month_pnl?.amount))}
-                        title={row.month_pnl?.label}
+                        title={[row.month_pnl?.label, row.month_pnl?.note].filter(Boolean).join(". ")}
                       >
                         <MoneyDelta value={row.month_pnl?.amount ?? null} />
                       </td>

@@ -282,7 +282,7 @@ function ScreenInvestDialog({
             ? "Replace this portfolio with the screen's current names and weights. Nothing here buys or sells anything."
             : mtf
               ? "Each selected name is bought for about the same position value. MTF changes only how much of that value you pay, at that stock's Zerodha leverage. A name without MTF is bought in cash for the same position value. Buys are market orders with market protection."
-              : "Creates a portfolio under Portfolios, named after this screen. Paper tracking only — no broker order."}
+              : "Each selected name is bought in cash (CNC) for about the same position value, as a market order with market protection, and gets its GTT stop. The portfolio is created from the buys that go through."}
         </DialogDescription>
 
         {doneId !== null ? (
@@ -532,7 +532,7 @@ function ScreenInvestDialog({
                     ? "Confirm rebalance"
                     : mtf
                       ? "Send MTF orders"
-                      : "Confirm invest"}
+                      : "Send cash orders"}
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={onClose}>
                 Cancel

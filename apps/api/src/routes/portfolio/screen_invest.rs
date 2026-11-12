@@ -1544,14 +1544,16 @@ pub async fn invest_from_screen(
     let user_id = principal.require_user()?;
     let write = pool(write)?;
     let public_id = public_id.clone();
-    let (seed, orders, sent_plan) = if body.mtf {
+    // Cash and MTF both send their buys through the desk (Maulik, 12 Nov 2026: cash invest
+    // re-priced at confirm and refused on any tick, and never bought; it now takes the MTF path).
+    let (seed, orders, sent_plan) = {
         let mut conn = db::acquire(&state).await?;
         let screen = load_visible_on(&mut conn, &public_id, &principal).await?;
         let (as_of, fresh) = preview_on(
             &mut conn,
             &screen,
             &body.amount,
-            true,
+            body.mtf,
             &body.reserve,
             &body.costs,
             true,
@@ -1649,8 +1651,6 @@ pub async fn invest_from_screen(
                 (Some((as_of, filled)), orders, Some(plan_id))
             }
         }
-    } else {
-        (None, Vec::new(), None)
     };
     let mut out = session::run(&write, move |tx| {
         Box::pin(async move {

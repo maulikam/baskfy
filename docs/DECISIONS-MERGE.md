@@ -8728,3 +8728,9 @@ at `/opt/mb` (`deploy/Dockerfile.rust`, stage `mb`; runtime adds `libgomp1`). Wh
 booster over features computed by `portfolioml`; nothing in the locked stack scores one, and a Rust port of the
 features and a tree walker is a later module. The worker runs it as a subprocess after the nightly commits; it writes
 only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `run_nightly` hook. Details: DECISIONS-PM PM6.1.
+
+## SCREEN-INVEST-CASH — cash invest sends its buys too (12 Nov 2026) — Maulik, in session
+
+- Maulik: Confirm invest with MTF off always answered "Prices changed. Review the updated allocation before saving.", and "without using MTF, we are lacking a lot of features". Cause: MTF off re-priced at confirm and refused on any share-count change, and only wrote a paper book.
+- Choice: MTF off takes the same path as MTF on — the stored plan, claim/replay guard, margin check, a refreshed plan to review when prices move (not an error), market CNC buys through the desk's `/screen-invest/execute` (gateway, GTT stop, `plan_id:symbol` client id), and the portfolio from the buys that went through. The SCREEN-INVEST-LIVE line "cash invest still creates the paper book immediately" is superseded. Rebalance still sends no order.
+- Reverse: put back `if body.mtf { … } else { (None, Vec::new(), None) }` in `invest_from_screen` and the paper copy in `screen-invest.tsx`.

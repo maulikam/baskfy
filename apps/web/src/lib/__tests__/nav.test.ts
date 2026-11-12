@@ -364,6 +364,7 @@ describe("the sidebar IA", () => {
       "/regime",
       "/tradebook",
       "/stops",
+      "/trailing-stops",
       "/reconcile",
       "/lifecycle",
       "/swing",

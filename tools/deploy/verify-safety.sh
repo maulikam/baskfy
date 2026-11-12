@@ -69,6 +69,8 @@ grep -q 'BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"'
 # must be named-and-false in compose so the default on a fresh box is the rail.
 grep -q 'BASKFY_TWT_AUTO_EXECUTE: "${BASKFY_TWT_AUTO_EXECUTE:-false}"' "$C" \
   || fail "BASKFY_TWT_AUTO_EXECUTE is not named-and-false in compose.prod.yml"
+grep -q 'BASKFY_GTT_TRAIL_ENABLED: "${BASKFY_GTT_TRAIL_ENABLED:-false}"' "$C" \
+  || fail "BASKFY_GTT_TRAIL_ENABLED is not named-and-false in compose.prod.yml"
 
 # 4. Postgres and Redis must not be published to the host. On a box with a public EIP, 5432 is
 #    the most-scanned port on the internet.

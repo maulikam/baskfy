@@ -360,6 +360,10 @@ export const PAGES = {
     title: "Stops",
     blurb: "Positions without a working stop, and the GTT triggers that would cover them.",
   },
+  "/trailing-stops": {
+    title: "Trailing stops",
+    blurb: "Per-strategy rules that raise a GTT stop as a position gains; applied only with the desk's master flag.",
+  },
   "/lifecycle": {
     title: "Lifecycle",
     blurb: "Open positions as the desk tracks them, and adopting a hand-bought one.",

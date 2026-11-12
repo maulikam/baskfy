@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { useIsStaff } from "@/components/shell/staff-context";
@@ -602,7 +603,7 @@ function Book({ view, simulated, onDone }: { view: SwingDeskView; simulated: boo
         Book — {positions.length} open
         {naked > 0 ? <span className="text-negative">, {naked} without a stop</span> : null}
       </h3>
-      <p className="text-xs text-muted-foreground">Exit rule: {view.exit_rule}</p>
+      <p className="text-xs text-muted-foreground">Exit rule: {view.exit_rule}.{" "}<Link href="/trailing-stops" className="underline underline-offset-2">Trailing stops</Link></p>
       <Card>
         <table className="w-full min-w-[64rem] border-collapse text-sm" aria-label="Open swing positions">
           <thead>

@@ -399,6 +399,9 @@ services:
       # variable this file does not name never reaches the container; `twt-auto` inherits it via
       # `<<: *desk`. Default false. Setting it in `.env.staging.compose` is Maulik's hand only.
       BASKFY_TWT_AUTO_EXECUTE: "${BASKFY_TWT_AUTO_EXECUTE:-false}"
+      # GTT-TRAIL (Maulik, 12 Nov 2026): the trailing-stop job may raise resting GTT triggers. Default
+      # false; flipping it is his hand. It never places, sells or lowers anything.
+      BASKFY_GTT_TRAIL_ENABLED: "${BASKFY_GTT_TRAIL_ENABLED:-false}"
       BASKFY_SWING_TIMING_PROBE: "${BASKFY_SWING_TIMING_PROBE:-false}"
       # BASKFY_SOLE_USER_ID / BASKFY_SOLE_BROKER_ACCOUNT_ID (P4.3, the tenant pair every order
       # carries) come from `.env.staging` through env_file, exactly as the api reads them —

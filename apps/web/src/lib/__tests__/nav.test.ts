@@ -23,19 +23,29 @@ import { PAGES } from "@/lib/vocabulary";
  * it five tabs of its own. Desk is a staff item on the primary bar; Account and Help stay
  * in the user menu. Real money and Operator remain in NAV_GROUPS for the command palette.
  *
- * Five, not four, and the count is asserted rather than inferred: a sixth destination is an IA
- * decision, and it should have to change a test that says so out loud.
+ * Six since 12 Nov 2026: Maulik added Watchlist after Portfolio. The count is asserted rather
+ * than inferred: a new destination is an IA decision, and it should have to change a test.
  */
 describe("the primary consumer IA", () => {
-  it("exposes exactly five primary destinations, home first", () => {
+  it("exposes exactly six primary destinations, home first, watchlist last", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
       "Market",
       "Discover",
       "Build",
       "Portfolio",
+      "Watchlist",
     ]);
-    expect(PRIMARY_NAV).toHaveLength(5);
+    expect(PRIMARY_NAV).toHaveLength(6);
+  });
+
+  it("makes /watchlist its own page that lights the Watchlist pill, not a redirect", () => {
+    expect(PRIMARY_NAV.find((item) => item.label === "Watchlist")?.href).toBe("/watchlist");
+    expect(primarySection("/watchlist")).toBe("watchlist");
+    expect(primaryNavLabel("/watchlist", false)).toBe("Watchlist");
+    expect(LEGACY_REDIRECTS.map((r) => r.source)).not.toContain("/watchlist");
+    expect(PAGES["/watchlist"].title).toBe("Watchlist");
+    expect(SECTION_TABS.watchlist).toEqual([]);
   });
 
   /*
@@ -79,6 +89,7 @@ describe("the primary consumer IA", () => {
       "/discover",
       "/build",
       "/portfolio/overview",
+      "/watchlist",
     ]);
   });
 
@@ -232,7 +243,7 @@ describe("the primary consumer IA", () => {
   });
 
   it("documents every legacy permanent redirect, so no old path silently 404s", () => {
-    expect(LEGACY_REDIRECTS).toHaveLength(24);
+    expect(LEGACY_REDIRECTS).toHaveLength(23);
   });
 
   it("keeps every `/baskets*` path resolving after the rename to Discover", () => {
@@ -257,7 +268,6 @@ describe("the primary consumer IA", () => {
     // The pre-Tree-6 flat paths are re-pointed at the new homes, not chained through `/me/*`.
     expect(map.get("/investments")).toBe("/portfolio/overview");
     expect(map.get("/portfolios")).toBe("/portfolio/portfolios");
-    expect(map.get("/watchlist")).toBe("/portfolio/watchlist");
     for (const destination of map.values()) {
       expect(destination.startsWith("/me/"), `${destination} still lands under Me`).toBe(false);
     }
@@ -415,7 +425,9 @@ describe("the sidebar IA", () => {
     expect(primarySection("/opportunities/options")).toBe("opportunities");
     expect(primarySection("/options")).toBe("options");
     expect(SECTION_LABEL.opportunities).toBe("Build");
-    expect(PRIMARY_NAV).toHaveLength(5);
+    /* Opportunities added no destination; the sixth is Watchlist (12 Nov 2026). */
+    expect(PRIMARY_NAV.map((item) => item.label)).not.toContain("Opportunities");
+    expect(PRIMARY_NAV).toHaveLength(6);
   });
 
   it("lists the account group with fees and brokers", () => {

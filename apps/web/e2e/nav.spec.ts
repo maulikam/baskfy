@@ -25,18 +25,19 @@ async function signIn(page: Page): Promise<void> {
 }
 
 test.describe("the primary navigation", () => {
-  test("has exactly the five destinations the IA agreed on", () => {
+  test("has exactly the six destinations the IA agreed on", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
       "Market",
       "Discover",
       "Build",
       "Portfolio",
+      "Watchlist",
     ]);
   });
 
   for (const width of [768, 1024, 1280] as const) {
-    test(`desktop nav shows Home · Market · Discover · Build · Portfolio at ${width}px`, async ({ page }) => {
+    test(`desktop nav shows Home · Market · Discover · Build · Portfolio · Watchlist at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/market/indices");
 

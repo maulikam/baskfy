@@ -88,7 +88,7 @@ function page(href: PagePath & Route, icon: NavIconName): NavItem {
 }
 
 /**
- * The five consumer destinations in the sticky header / mobile bottom bar.
+ * The six consumer destinations in the sticky header / mobile bottom bar (Watchlist sixth, 12 Nov 2026).
  * Labels are fixed one-word IA tokens — not the section page titles (Today, Explore, …).
  */
 export const PRIMARY_NAV: readonly NavItem[] = [
@@ -139,6 +139,14 @@ export const PRIMARY_NAV: readonly NavItem[] = [
     label: "Portfolio",
     blurb: "Everything you hold, across baskets and brokers, in one picture.",
     icon: "briefcase",
+    status: "ready",
+  },
+  /* Sixth destination (Maulik, 12 Nov 2026): the stocks you watch, with today's and recent moves. */
+  {
+    href: "/watchlist",
+    label: "Watchlist",
+    blurb: "Stocks you are keeping an eye on: today's move, volumes, and week, month and 3-month change.",
+    icon: "bookmark",
     status: "ready",
   },
 ] as const;
@@ -268,6 +276,8 @@ export const SECTION_TABS = {
     /* `docs/options/05` §2: the options book's settings, beside the swing book's. */
     { href: "/me/options" as Route, label: "Options settings" },
   ],
+  /* A single page, like Home: nothing for a tab row to switch between. */
+  watchlist: [],
 } as const;
 
 /**
@@ -290,6 +300,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   opportunities: "Build",
   portfolio: "Portfolio",
   me: "Me",
+  watchlist: "Watchlist",
 };
 
 /**
@@ -323,7 +334,6 @@ export const LEGACY_REDIRECTS = [
   { source: "/investments", destination: "/portfolio/overview" },
   { source: "/investments/foo/bar", destination: "/portfolio/foo/bar" },
   { source: "/portfolios", destination: "/portfolio/portfolios" },
-  { source: "/watchlist", destination: "/portfolio/watchlist" },
   { source: "/me/investments", destination: "/portfolio/overview" },
   { source: "/me/investments/foo/bar", destination: "/portfolio/foo/bar" },
   { source: "/me/portfolios", destination: "/portfolio/portfolios" },
@@ -403,7 +413,7 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/vbt", label: "Volume" },
   { href: "/twt", label: "Tight" },
   /* PM7: the MB ranking, read-only. */
-  { href: "/mb" as Route, label: "Doubling" },
+  { href: "/mb", label: "Doubling" },
   /* `docs/options/05` §1: appended after Tight. The Overlap matrix gains no Options column — an
      option contract is never an equity name several sleeves hold. */
   { href: "/options", label: "Options" },
@@ -484,6 +494,7 @@ export function primarySection(pathname: string): SectionKey | null {
   )
     return "portfolio";
   if (pathname === "/me" || pathname.startsWith("/me/")) return "me";
+  if (pathname === "/watchlist" || pathname.startsWith("/watchlist/")) return "watchlist";
   // Legacy paths still mark the right pill while redirects settle.
   if (
     pathname.startsWith("/dashboard") ||
@@ -495,8 +506,7 @@ export function primarySection(pathname: string): SectionKey | null {
   if (pathname.startsWith("/screens") || pathname.startsWith("/backtests")) return "build";
   if (
     pathname.startsWith("/investments") ||
-    pathname.startsWith("/portfolios") ||
-    pathname.startsWith("/watchlist")
+    pathname.startsWith("/portfolios")
   )
     return "portfolio";
   return null;

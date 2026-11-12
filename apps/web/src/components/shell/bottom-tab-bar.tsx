@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bookmark,
   Briefcase,
   Compass,
   House,
@@ -28,11 +29,12 @@ const ICONS: Record<string, LucideIcon> = {
   Baskets: Store,
   Build: Wrench,
   Portfolio: Briefcase,
+  Watchlist: Bookmark,
 };
 
 /**
- * App-style bottom tab bar for &lt;768px (Tree 6, five tabs since SC9's `/home`).
- * Safe-area padded; active tab tinted. Five is what the observed product carries too — the row
+ * App-style bottom tab bar for &lt;768px (Tree 6; six tabs since Watchlist, 12 Nov 2026).
+ * Safe-area padded; active tab tinted. The row
  * is `justify-around` on a flex track, so the tabs narrow rather than overflow.
  */
 export function BottomTabBar({ showDesk = true }: { showDesk?: boolean }) {

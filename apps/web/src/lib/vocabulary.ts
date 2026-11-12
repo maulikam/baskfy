@@ -307,8 +307,8 @@ export const PAGES = {
     blurb: "Baskets you hold, what they are worth, and what still needs a decision.",
   },
   "/watchlist": {
-    title: "Watchlist · Me",
-    blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
+    title: "Watchlist",
+    blurb: "Stocks you are keeping an eye on: today's move, volumes, and week, month and 3-month change.",
   },
   "/fees": {
     title: "Fees",

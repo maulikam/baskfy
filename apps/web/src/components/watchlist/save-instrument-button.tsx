@@ -16,10 +16,14 @@ export function SaveInstrumentButton({
   symbol,
   initiallySaved = false,
   className,
+  savedLabel = "Saved",
+  unsavedLabel = "Save to watchlist",
 }: {
   symbol: string;
   initiallySaved?: boolean;
   className?: string;
+  savedLabel?: string;
+  unsavedLabel?: string;
 }) {
   const [saved, setSaved] = useState(initiallySaved);
   const [busy, setBusy] = useState(false);
@@ -65,7 +69,7 @@ export function SaveInstrumentButton({
         data-saved={saved ? "true" : "false"}
         className="rounded-md border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
       >
-        {saved ? "Saved" : "Save to watchlist"}
+        {saved ? savedLabel : unsavedLabel}
       </button>
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
     </div>

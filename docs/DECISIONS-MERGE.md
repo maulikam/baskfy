@@ -8811,3 +8811,9 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - One writer: worker task `baskfy.portfolio.sync_strategy_books` (Beat every 15 min 09:00–15:45 + 16:00 + 20:45, weekdays) and the broker holdings sync, which calls it in place of its old Swing filer. Shares moved into a book leave the broker pile; the holdings sync's pile is broker − (screens + books + groups).
 - Holdings sync: a slice first bought today is not judged against holdings (still a T1 position), and an OPEN SPLIT_HOLDING / QUANTITY_MISMATCH item is DISMISSED once the broker covers every filed share.
 - Book rows are written `history_source = MANUAL` so trade capture's instrument-wide re-dating leaves the sleeve's entry date alone; updates never rewrite `added_on`, so a T+1 rollover books no NAV flow. Reverse: drop the Beat entries and the call in `holdings_sync`, `DROP COLUMN strategy_key`.
+
+## GTT-TRAIL-ON — trailing stops enabled locally (12 Nov 2026) — Maulik, in session
+
+- Maulik: "turn on the trailing GTT flag once it's deployed" and "turn on all strategies too". `BASKFY_GTT_TRAIL_ENABLED` added to this Mac's `money.on` (an agent set it on his instruction, as TW18); every strategy's policy enabled on /trailing-stops. The in-repo default stays false.
+- Applied after the 15:30 close so the desk restart did not interrupt a session; the daily run is at 20:30 IST and only ever raises a stop.
+- Reverse: remove the line from `money.on`, `local.sh stage`, restart the desk; or disable a strategy on /trailing-stops.

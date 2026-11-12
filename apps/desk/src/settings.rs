@@ -363,6 +363,8 @@ impl Settings {
                 raw: e.clone(),
                 python_error: "ValueError".to_owned(),
             })?;
+        out.gtt_trail_enabled = lookup("BASKFY_GTT_TRAIL_ENABLED")
+            .is_some_and(|v| v.trim().eq_ignore_ascii_case("true"));
         Ok(out)
     }
 
@@ -405,7 +407,9 @@ impl Settings {
             });
         };
         *slot.1 = value;
+        let trail = self.gtt_trail_enabled;
         *self = Self::from_values(&values)?;
+        self.gtt_trail_enabled = trail;
         Ok(())
     }
 
@@ -808,6 +812,8 @@ pub struct Settings {
     /// `BASKFY_REGIME_MODE` / `_MIN_LEADING` / `_INDEX_GROUPS` (Rust-only, beside
     /// `SWING_INDEX_SLUG`; not in [`ENV_VARS`], which is Python's answer key).
     pub regime: baskfy_core::regime::RegimeConfig,
+    /// `BASKFY_GTT_TRAIL_ENABLED` (Rust-only): the trailing-stop job may modify GTTs. Default false.
+    pub gtt_trail_enabled: bool,
 }
 
 impl Settings {
@@ -936,6 +942,7 @@ impl Settings {
             service_name: take_str(values, "SERVICE_NAME")?,
             sentry_dsn: take_str(values, "SENTRY_DSN")?,
             regime: baskfy_core::regime::RegimeConfig::default(),
+            gtt_trail_enabled: false,
         })
     }
 

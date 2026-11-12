@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { Row, Table, Td, Th } from "@/components/desk/ui";
@@ -379,7 +380,7 @@ function BookSection({ v }: { v: VbtDeskView }) {
       <h3 className="text-sm font-medium">
         Positions <span className="font-normal text-muted-foreground">what this strategy bought, and nothing else</span>
       </h3>
-      <p className="text-sm text-muted-foreground">Exit rule: {v.exit_rule}</p>
+      <p className="text-sm text-muted-foreground">Exit rule: {v.exit_rule}.{" "}<Link href="/trailing-stops" className="underline underline-offset-2">Trailing stops</Link></p>
       <Table
         caption="Open volume-breakout positions"
         head={

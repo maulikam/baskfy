@@ -37,6 +37,17 @@ export async function deskGet<T>(path: string, params: Record<string, string> = 
   return (await response.json()) as T;
 }
 
+export async function deskJson<T>(method: "POST" | "PUT", path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${DESK}${path}`, {
+    method,
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new DeskError(response.status, await readDetail(response));
+  return (await response.json()) as T;
+}
+
 export async function deskForm<T>(path: string, fields: Record<string, string>): Promise<T> {
   const response = await fetch(`${DESK}${path}`, {
     method: "POST",

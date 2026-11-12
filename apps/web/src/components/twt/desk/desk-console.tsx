@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { Notice, Row, Table, Td, Th } from "@/components/desk/ui";
@@ -257,7 +258,7 @@ export function TwtDeskConsole() {
 
       <div className="space-y-2">
         <h3 className="font-semibold">Positions <span className="font-normal text-muted-foreground">— only what this strategy bought</span></h3>
-        {view.exit_rule ? <p className="text-xs text-muted-foreground">Exit rule: {view.exit_rule}</p> : null}
+        {view.exit_rule ? <p className="text-xs text-muted-foreground">Exit rule: {view.exit_rule}.{" "}<Link href="/trailing-stops" className="underline underline-offset-2">Trailing stops</Link></p> : null}
         {view.book.length ? (
           <Table
             caption="Strategy positions"

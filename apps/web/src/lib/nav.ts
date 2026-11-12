@@ -382,6 +382,7 @@ export const DESK_MENU: readonly (readonly DeskMenuLink[])[] = [
     },
     { label: "Tradebook", href: "/tradebook" },
     { label: "Stops", href: "/stops" },
+    { label: "Trailing stops", href: "/trailing-stops" },
     { label: "Reconcile", href: "/reconcile" },
     { label: "Lifecycle", href: "/lifecycle" },
   ],

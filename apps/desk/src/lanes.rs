@@ -4,6 +4,7 @@
 pub mod analytics;
 pub mod exec_core;
 pub mod fno;
+pub mod gtt_trail;
 pub mod options;
 pub mod service_loop;
 pub mod session;
@@ -28,6 +29,7 @@ pub fn routes() -> Router<AppState> {
         .merge(fno::routes())
         .merge(options::routes())
         .merge(session::routes())
+        .merge(gtt_trail::routes())
 }
 
 /// Every lane's template globals.

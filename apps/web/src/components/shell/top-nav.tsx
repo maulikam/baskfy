@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Tree 6 consumer chrome: logo · destinations · search · date · theme · avatar.
- * Desk sits on this row with Home, Market, Discover, Build and Portfolio, and opens the
+ * Desk sits on this row with Home, Market, Discover, Build, Portfolio and Watchlist, and opens the
  * console at `/desk`. Under md the row hides and Desk is a sixth bottom tab.
  * Mobile bottom tabs live in `BottomTabBar`; this header shrinks to logo · search · avatar under md.
  *

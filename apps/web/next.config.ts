@@ -198,7 +198,9 @@ const nextConfig: NextConfig = {
        *
        * Two families of source, all landing in `/portfolio`:
        *
-       * - the flat pre-Tree-6 paths (`/investments`, `/portfolios`, `/watchlist`), re-pointed at
+       * (`/watchlist` left this list 12 Nov 2026: it is the sixth primary destination now.)
+       *
+       * - the flat pre-Tree-6 paths (`/investments`, `/portfolios`), re-pointed at
        *   the new homes instead of chaining through `/me/*` — the first hop's destination holds
        *   no page any more, and a two-hop redirect is a second thing to keep correct;
        * - the Tree-6 `/me/*` paths themselves, which is what a bookmark from this week is.
@@ -213,7 +215,6 @@ const nextConfig: NextConfig = {
       { source: "/investments", destination: "/portfolio/overview", permanent: true },
       { source: "/investments/:path*", destination: "/portfolio/:path*", permanent: true },
       { source: "/portfolios", destination: "/portfolio/portfolios", permanent: true },
-      { source: "/watchlist", destination: "/portfolio/watchlist", permanent: true },
       { source: "/me/investments", destination: "/portfolio/overview", permanent: true },
       { source: "/me/investments/:path*", destination: "/portfolio/:path*", permanent: true },
       { source: "/me/portfolios", destination: "/portfolio/portfolios", permanent: true },

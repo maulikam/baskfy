@@ -8734,3 +8734,11 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - Maulik: Confirm invest with MTF off always answered "Prices changed. Review the updated allocation before saving.", and "without using MTF, we are lacking a lot of features". Cause: MTF off re-priced at confirm and refused on any share-count change, and only wrote a paper book.
 - Choice: MTF off takes the same path as MTF on — the stored plan, claim/replay guard, margin check, a refreshed plan to review when prices move (not an error), market CNC buys through the desk's `/screen-invest/execute` (gateway, GTT stop, `plan_id:symbol` client id), and the portfolio from the buys that went through. The SCREEN-INVEST-LIVE line "cash invest still creates the paper book immediately" is superseded. Rebalance still sends no order.
 - Reverse: put back `if body.mtf { … } else { (None, Vec::new(), None) }` in `invest_from_screen` and the paper copy in `screen-invest.tsx`.
+
+## WATCHLIST-PAGE — Watchlist is the sixth primary destination (12 Nov 2026) — Maulik, in session
+
+- Maulik: "create in the main menu the watch list menu item … give me the facility to add and remove stocks"; nav pins six (Home, Market, Discover, Build, Portfolio, Watchlist), HOME1's five is superseded.
+- `/watchlist` is now a page (stocks board from `GET /watchlist/board`), so its permanent redirect to `/portfolio/watchlist` is removed from `next.config.ts` and `LEGACY_REDIRECTS` (24 → 23). `/me/watchlist` still redirects there; Portfolio → Watchlist keeps baskets + stocks. ⚠ UNREVIEWED
+- Today's move overlays a Kite quote only while `useLiveMarks` is live; stale quotes are muted and labelled stale; otherwise the cell says "close <date>". Volumes and week/month/3-month stay on the published session. ⚠ UNREVIEWED
+- Explorer rows get "Add to watchlist" (`SaveInstrumentButton`, new optional labels), seeded from `GET /watchlist/instruments`.
+- Reverse: drop the PRIMARY_NAV entry and `watchlist` section key, restore the redirect, delete `src/app/(app)/watchlist`.

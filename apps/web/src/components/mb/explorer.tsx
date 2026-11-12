@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FlagTip } from "@/components/mb/flag-tip";
+import { SaveInstrumentButton } from "@/components/watchlist/save-instrument-button";
 import { EMPTY_CELL, formatFraction, formatNumber, formatTradeDate } from "@/lib/format";
 import {
   DEFAULT_FILTERS,
@@ -176,7 +177,15 @@ const RANK_BY: readonly { key: SortKey; label: string }[] = [
 ];
 
 /** `/mb/explore` (PM11): every scored stock, filtered on several measures and ranked by either model or both. Read-only. */
-export function MbExplorerPanel({ data }: { data: MbExplorer | null }) {
+export function MbExplorerPanel({
+  data,
+  watched = [],
+}: {
+  data: MbExplorer | null;
+  /** Symbols already on the viewer's stock watchlist, so each row's button starts in the right state. */
+  watched?: readonly string[];
+}) {
+  const watchedSet = useMemo(() => new Set(watched.map((s) => s.toUpperCase())), [watched]);
   const [f, setF] = useState<ExplorerFilters>(DEFAULT_FILTERS);
   const [key, setKey] = useState<SortKey>("combined");
   const [asc, setAsc] = useState(true);
@@ -317,6 +326,9 @@ export function MbExplorerPanel({ data }: { data: MbExplorer | null }) {
                   </button>
                 </th>
               ))}
+              <th scope="col" className="px-3 py-2 font-medium">
+                Watch
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -356,6 +368,14 @@ export function MbExplorerPanel({ data }: { data: MbExplorer | null }) {
                   <td className="px-3 py-1.5">{age === null ? EMPTY_CELL : formatNumber(age, { decimals: 1, suffix: " y" })}</td>
                   <td className={`px-3 py-1.5 ${tone(n.ttm_rev_yoy_fraction)}`}>{formatFraction(n.ttm_rev_yoy_fraction, 0)}</td>
                   <td className={`px-3 py-1.5 ${tone(n.ttm_pat_yoy_fraction)}`}>{formatFraction(n.ttm_pat_yoy_fraction, 0)}</td>
+                  <td className="px-3 py-1.5">
+                    <SaveInstrumentButton
+                      symbol={n.symbol}
+                      initiallySaved={watchedSet.has(n.symbol.toUpperCase())}
+                      savedLabel="On watchlist"
+                      unsavedLabel="Add to watchlist"
+                    />
+                  </td>
                 </tr>
               );
             })}

@@ -413,7 +413,7 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/vbt", label: "Volume" },
   { href: "/twt", label: "Tight" },
   /* PM7: the MB ranking, read-only. */
-  { href: "/mb", label: "Doubling" },
+  { href: "/mb" as Route, label: "Doubling" },
   /* `docs/options/05` §1: appended after Tight. The Overlap matrix gains no Options column — an
      option contract is never an equity name several sleeves hold. */
   { href: "/options", label: "Options" },

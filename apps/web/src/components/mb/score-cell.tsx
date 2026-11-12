@@ -29,6 +29,11 @@ export function MbScoresProvider({
   );
 }
 
+/** The same context from a value the caller already fetched (a table that also sorts by the scores). */
+export function MbScoresValueProvider({ value, children }: { value: MbScores; children: ReactNode }) {
+  return <MbScoresContext.Provider value={value}>{children}</MbScoresContext.Provider>;
+}
+
 export function useMbScoresContext(): MbScores {
   return useContext(MbScoresContext);
 }

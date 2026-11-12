@@ -13,11 +13,11 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 
 import {
-  MbScoresProvider,
   MbScoreValue,
-  SwingScoreHeadLink,
+  MbScoresValueProvider,
   SwingScoreValue,
 } from "@/components/mb/score-cell";
+import { type MbScores, useMbScores } from "@/lib/mb/scores";
 import { SwingBuyButton } from "@/components/opportunities/buy-panel";
 import { MultiBuyButton } from "@/components/opportunities/multi-buy";
 import { SortableHeader } from "@/components/opportunities/sortable-header";
@@ -73,24 +73,36 @@ export function ActionableBadge({
   );
 }
 
-function columns(status: DataStatus, live: LiveMarks) {
+function scoreOf(map: Readonly<Record<string, { score: string }>>, symbol: string): number | undefined {
+  const v = map[symbol.trim().toUpperCase()];
+  if (!v) return undefined;
+  const n = Number(v.score);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function columns(status: DataStatus, live: LiveMarks, scores: MbScores) {
   return [
-    column.display({
+    // Click to sort by the model's score, highest first; unscored names sort last (12 Nov 2026).
+    column.accessor((r) => scoreOf(scores.bySymbol, r.symbol), {
       id: "mb",
       header: () => (
-        <a
-          href="/mb"
-          className="underline decoration-dotted underline-offset-2"
-          title="The doubling model's score (higher is likelier to double within a year) and its flags"
-        >
+        <span title="Sort by the doubling model's score (higher is likelier to double within a year). Hover a score for its flags.">
           Model
-        </a>
+        </span>
       ),
+      sortDescFirst: true,
+      sortUndefined: "last",
       cell: ({ row }) => <MbScoreValue symbol={row.original.symbol} />,
     }),
-    column.display({
+    column.accessor((r) => scoreOf(scores.swing.bySymbol, r.symbol), {
       id: "swing_model",
-      header: () => <SwingScoreHeadLink />,
+      header: () => (
+        <span title="Sort by the swing model's score (chance of +14% under a −7% stop trailing 12%, within 60 sessions). ★ = tonight's pick.">
+          Swing
+        </span>
+      ),
+      sortDescFirst: true,
+      sortUndefined: "last",
       cell: ({ row }) => <SwingScoreValue symbol={row.original.symbol} />,
     }),
     column.display({
@@ -259,9 +271,10 @@ export function SwingResultsTable({
     [response.opportunities],
   );
   const live = useLiveMarks(symbols);
+  const scores = useMbScores(symbols);
   const table = useReactTable({
     data,
-    columns: columns(response.data_status, live),
+    columns: columns(response.data_status, live, scores),
     state: { sorting, expanded, rowSelection: selection },
     onSortingChange: setSorting,
     onRowSelectionChange: setSelection,
@@ -291,7 +304,7 @@ export function SwingResultsTable({
         <MultiBuyButton rows={selected} />
         <GreenOnlyToggle pressed={greenOnly} onChange={setGreenOnly} />
       </div>
-      <MbScoresProvider symbols={symbols}>
+      <MbScoresValueProvider value={scores}>
         <div className="overflow-x-auto" data-testid="swing-results">
           <table className="w-full min-w-[76rem] border-collapse text-sm">
             <thead>
@@ -345,7 +358,7 @@ export function SwingResultsTable({
             </tbody>
           </table>
         </div>
-      </MbScoresProvider>
+      </MbScoresValueProvider>
     </div>
   );
 }

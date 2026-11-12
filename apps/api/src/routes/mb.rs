@@ -834,9 +834,104 @@ pub async fn get_explorer(
     ))
 }
 
+fn frac(r: &PgRow, c: &str) -> Result<J, Problem> {
+    Ok(col::<Option<f64>>(r, c)?.map_or(J::Null, |v| J::Dec(quantize(decimal_of_float(v), 4))))
+}
+
+/// `GET /watchlist/board` (Maulik, 12 Nov 2026) — every watched stock with its last session's move and
+/// volume, its 5- and 21-session volume, and its 5-, 21- and 63-session returns, from the published
+/// daily bars (`ohlcv_daily`; returns on the adjusted close, volume on the raw print), plus both models'
+/// newest scores. The browser overlays today's live price where a Kite session exists. Read-only.
+///
+/// # Errors
+/// 401, 404 not the sole tenant.
+pub async fn get_watch_board(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+) -> Result<Response, Problem> {
+    require_authenticated(&principal)?;
+    let user_id = scoped_sole_user_id(&state, principal.user_id, None).await?;
+    let rows = sqlx::query(
+        "WITH w AS (SELECT w.instrument_id, w.watched_at, i.symbol, i.name FROM instrument_watch_item w \
+                    JOIN instrument i ON i.id = w.instrument_id WHERE w.user_id = $1), \
+              b AS (SELECT o.instrument_id, o.date, o.close::float8 AS c, o.close_raw, o.volume_raw::float8 AS v, \
+                    row_number() OVER (PARTITION BY o.instrument_id ORDER BY o.date DESC) AS rn \
+                    FROM ohlcv_daily o WHERE o.instrument_id IN (SELECT instrument_id FROM w) \
+                    AND o.date >= current_date - 150), \
+              a AS (SELECT instrument_id, max(date) FILTER (WHERE rn = 1) AS last_date, \
+                    max(close_raw) FILTER (WHERE rn = 1) AS close_raw, \
+                    max(c) FILTER (WHERE rn = 1) AS c0, max(c) FILTER (WHERE rn = 2) AS c1, \
+                    max(c) FILTER (WHERE rn = 6) AS c5, max(c) FILTER (WHERE rn = 22) AS c21, \
+                    max(c) FILTER (WHERE rn = 64) AS c63, \
+                    max(v) FILTER (WHERE rn = 1) AS v1, sum(v) FILTER (WHERE rn <= 5) AS v5, \
+                    sum(v) FILTER (WHERE rn <= 21) AS v21, avg(v) FILTER (WHERE rn BETWEEN 2 AND 21) AS v_avg20 \
+                    FROM b GROUP BY instrument_id) \
+         SELECT w.instrument_id, w.symbol, w.name, w.watched_at, sec.sector, a.last_date, a.close_raw, \
+           a.c0 / NULLIF(a.c1, 0) - 1 AS d1, a.c0 / NULLIF(a.c5, 0) - 1 AS d5, \
+           a.c0 / NULLIF(a.c21, 0) - 1 AS d21, a.c0 / NULLIF(a.c63, 0) - 1 AS d63, \
+           a.v1, a.v5, a.v21, a.v1 / NULLIF(a.v_avg20, 0) AS v_ratio, \
+           m.score AS mb_score, m.rank AS mb_rank, m.scope AS mb_scope, \
+           r.score AS rr_score, r.rank AS rr_rank, r.scope AS rr_scope, \
+           EXISTS (SELECT 1 FROM rr_pick p WHERE p.signal_date = r.date AND p.instrument_id = w.instrument_id) AS picked \
+         FROM w LEFT JOIN a ON a.instrument_id = w.instrument_id \
+         LEFT JOIN instrument_sector sec ON sec.instrument_id = w.instrument_id \
+         LEFT JOIN mb_score_daily m ON m.instrument_id = w.instrument_id AND m.date = (SELECT max(date) FROM mb_score_daily) \
+         LEFT JOIN rr_score_daily r ON r.instrument_id = w.instrument_id AND r.date = (SELECT max(date) FROM rr_score_daily) \
+         ORDER BY w.watched_at DESC",
+    )
+    .bind(user_id)
+    .fetch_all(state.db.pool())
+    .await
+    .map_err(db)?;
+    let mut items = Vec::with_capacity(rows.len());
+    let mut as_of: Option<chrono::NaiveDate> = None;
+    for r in &rows {
+        let last: Option<chrono::NaiveDate> = col(r, "last_date")?;
+        as_of = as_of.max(last);
+        let int = |c: &str| -> Result<J, Problem> {
+            Ok(col::<Option<f64>>(r, c)?.map_or(J::Null, |v| {
+                #[allow(clippy::cast_possible_truncation)]
+                J::Int(v.round() as i64)
+            }))
+        };
+        items.push(
+            Obj::new()
+                .put("symbol", J::Str(col(r, "symbol")?))
+                .put("name", J::opt_str(col(r, "name")?))
+                .put("sector", J::opt_str(col(r, "sector")?))
+                .put("watched_at", J::opt_dt(col(r, "watched_at")?))
+                .put("last_date", J::opt_date(last))
+                .put("close", J::opt_dec(odec(r, "close_raw")?))
+                .put("day_change_fraction", frac(r, "d1")?)
+                .put("week_change_fraction", frac(r, "d5")?)
+                .put("month_change_fraction", frac(r, "d21")?)
+                .put("three_month_change_fraction", frac(r, "d63")?)
+                .put("day_volume", int("v1")?)
+                .put("week_volume", int("v5")?)
+                .put("month_volume", int("v21")?)
+                .put("volume_vs_avg20", frac(r, "v_ratio")?)
+                .put("doubling_score", J::opt_dec(odec(r, "mb_score")?))
+                .put("doubling_rank", opt_i(r, "mb_rank")?)
+                .put("doubling_scope", J::opt_str(col(r, "mb_scope")?))
+                .put("swing_score", J::opt_dec(odec(r, "rr_score")?))
+                .put("swing_rank", opt_i(r, "rr_rank")?)
+                .put("swing_scope", J::opt_str(col(r, "rr_scope")?))
+                .put("swing_picked", J::Bool(col(r, "picked")?))
+                .done(),
+        );
+    }
+    Ok(canonical_response(
+        &Obj::new()
+            .put("as_of", J::opt_date(as_of))
+            .put("items", J::Arr(items))
+            .done(),
+    ))
+}
+
 /// The `/mb` routes: GET only.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/watchlist/board", get(get_watch_board))
         .route("/mb/explorer", get(get_explorer))
         .route("/mb/swing", get(get_swing))
         .route("/mb/today", get(get_today))

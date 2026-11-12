@@ -28,8 +28,7 @@ use super::portfolios::portfolio::costs::{ESTIMATE_CAVEAT, TradeFlow, estimate_p
 use super::portfolios::portfolio::db;
 use super::portfolios::portfolio::ledger::{
     Holding, LedgerPortfolio, MetricKind, PortfolioKind, PortfolioSource, ReturnFigure,
-    consolidated_value, cost_basis, holding_value, model_figure, money, portfolio_values,
-    unallocated_holdings,
+    consolidated_value, holding_value, model_figure, money, portfolio_values, unallocated_holdings,
 };
 use super::portfolios::portfolio::load::{
     BrokerRow, InstrumentRow, Ledger, NavRow, Position, load_ledger, model_return_values,
@@ -962,15 +961,12 @@ fn chain_linked(points: &[NavPoint]) -> Result<Option<Dec>, Problem> {
 }
 
 fn todays_move(ledger: &Ledger, positions: &[&Position], label: &str) -> MoneyMoveOut {
-    let legs = positions.iter().filter_map(|p| {
+    let legs = positions.iter().flat_map(|p| {
         let id = p.key.instrument_id;
         let since = ledger.prices.previous_dated.get(&id).copied();
-        position_leg(
-            p,
-            ledger.prices.latest.get(&id)?,
-            ledger.prices.previous.get(&id),
-            since,
-        )
+        ledger.prices.latest.get(&id).map_or_else(Vec::new, |now| {
+            position_legs(p, now, ledger.prices.previous.get(&id), since)
+        })
     });
     period_out(
         sum_legs(legs),
@@ -980,21 +976,39 @@ fn todays_move(ledger: &Ledger, positions: &[&Position], label: &str) -> MoneyMo
     )
 }
 
-/// One position's leg: base is the later of the period start and its purchase (`period`).
-fn position_leg(
+/// One leg per lot, each based on the later of the period start and its own purchase
+/// (`period`); a position with no capital row is one leg at its own quantity.
+fn position_legs(
     p: &Position,
     price_now: &Dec,
     start_close: Option<&Dec>,
     since: Option<NaiveDate>,
-) -> Option<Leg> {
-    period_leg(&LegInput {
-        quantity: &p.holding.quantity,
-        price_now,
-        start_close,
-        since,
-        acquired_on: p.first_bought_on,
-        avg_price: p.holding.avg_price.as_ref(),
-    })
+) -> Vec<Leg> {
+    if p.lots.is_empty() {
+        return period_leg(&LegInput {
+            quantity: &p.holding.quantity,
+            price_now,
+            start_close,
+            since,
+            acquired_on: p.first_bought_on,
+            avg_price: p.holding.avg_price.as_ref(),
+        })
+        .into_iter()
+        .collect();
+    }
+    p.lots
+        .iter()
+        .filter_map(|l| {
+            period_leg(&LegInput {
+                quantity: &l.quantity,
+                price_now,
+                start_close,
+                since,
+                acquired_on: l.first_bought_on,
+                avg_price: l.avg_price.as_ref(),
+            })
+        })
+        .collect()
 }
 
 fn period_out(
@@ -1025,9 +1039,11 @@ fn move_since(
     label: &str,
     reason: &str,
 ) -> MoneyMoveOut {
-    let legs = positions.iter().filter_map(|p| {
+    let legs = positions.iter().flat_map(|p| {
         let id = p.key.instrument_id;
-        position_leg(p, ledger.prices.latest.get(&id)?, base_map.get(&id), since)
+        ledger.prices.latest.get(&id).map_or_else(Vec::new, |now| {
+            position_legs(p, now, base_map.get(&id), since)
+        })
     });
     period_out(sum_legs(legs), label, since, reason)
 }
@@ -1086,7 +1102,7 @@ fn cost_and_value(
     let mut unknown = 0;
     let mut known = false;
     for p in positions {
-        let basis = cost_basis(&p.holding);
+        let basis = p.cost();
         let value = ledger.value_of(&p.holding)?;
         let (Some(basis), Some(value)) = (basis, value) else {
             unknown += 1;
@@ -1310,16 +1326,21 @@ async fn owned_portfolio(
     db::get(&row, "benchmark_index_id")
 }
 
-fn members_of<'a>(ledger: &'a Ledger, portfolio: &LedgerPortfolio) -> Vec<&'a Position> {
+/// A capital portfolio's members at its own quantity, cost and purchase date (never the
+/// broker's total); a monitoring view's members whole.
+fn members_of(ledger: &Ledger, portfolio: &LedgerPortfolio) -> Result<Vec<Position>, Problem> {
     let id = portfolio.portfolio_id;
-    ledger
-        .positions
-        .iter()
-        .filter(|p| match portfolio.kind {
-            PortfolioKind::Capital => p.has_slice(id),
-            PortfolioKind::Monitoring => p.monitoring_portfolio_ids.contains(&id),
-        })
-        .collect()
+    let mut out = Vec::new();
+    for p in &ledger.positions {
+        match portfolio.kind {
+            PortfolioKind::Capital if p.has_slice(id) => out.extend(p.in_portfolio(id)?),
+            PortfolioKind::Monitoring if p.monitoring_portfolio_ids.contains(&id) => {
+                out.push(p.clone());
+            }
+            _ => {}
+        }
+    }
+    Ok(out)
 }
 
 fn monitoring_value(ledger: &Ledger, members: &[&Position]) -> Result<Dec, Problem> {
@@ -1757,7 +1778,8 @@ pub async fn portfolio_overview(
         if ledger.pile_ids.contains(id) {
             continue;
         }
-        let members = members_of(&ledger, portfolio);
+        let owned = members_of(&ledger, portfolio)?;
+        let members: Vec<&Position> = owned.iter().collect();
         let priced_members = priced(&ledger, &members);
         let points: Vec<NavPoint> = series
             .get(&Some(*id))
@@ -1905,8 +1927,15 @@ fn broker_line(
             .get(&position.key.instrument_id)
             .cloned(),
         value,
-        avg_price: position.holding.avg_price.clone(),
-        cost_basis: cost_basis(&position.holding),
+        avg_price: if position.lots.len() > 1 {
+            position
+                .cost()
+                .and_then(|c| c.div(&position.holding.quantity))
+                .map(|a| money(&a))
+        } else {
+            position.holding.avg_price.clone()
+        },
+        cost_basis: position.cost(),
         allocation,
         monitoring_views: position
             .monitoring_portfolio_ids
@@ -1983,7 +2012,7 @@ pub async fn portfolio_holdings(
         if only_unallocated {
             unallocated_count += 1;
         }
-        let bases: Vec<Option<Dec>> = group.iter().map(|p| cost_basis(&p.holding)).collect();
+        let bases: Vec<Option<Dec>> = group.iter().map(|p| p.cost()).collect();
         let invested = if bases.iter().any(Option::is_none) {
             None
         } else {
@@ -2712,7 +2741,8 @@ async fn detail_on(
         .get(&pid)
         .ok_or_else(|| fail(&format!("KeyError: {pid}")))?
         .clone();
-    let members = members_of(&ledger, &portfolio);
+    let owned = members_of(&ledger, &portfolio)?;
+    let members: Vec<&Position> = owned.iter().collect();
     let freeze = freeze_report(&ledger.entries, &ledger.ledger_positions()?);
     let model_values = model_return_values(conn, &ledger).await?;
     let rows = nav_rows(conn, user_id, Some(pid)).await?;
@@ -2745,23 +2775,19 @@ async fn detail_on(
             continue;
         };
         let hv = ledger.value_of(&p.holding)?;
-        let basis = cost_basis(&p.holding);
-        let latest = ledger.prices.latest.get(&p.key.instrument_id);
-        let previous = ledger.prices.previous.get(&p.key.instrument_id);
+        let basis = p.cost();
+        let today = todays_move(&ledger, &[*p], TODAY_LABEL);
         holdings.push(DetailHoldingOut {
             instrument: instrument_ref(instrument),
             broker: broker_ref(account),
             quantity: p.holding.quantity.clone(),
             avg_price: p.holding.avg_price.clone(),
-            price: latest.cloned(),
+            price: ledger.prices.latest.get(&p.key.instrument_id).cloned(),
             weight: match &hv {
                 Some(h) if !value.is_zero() => h.div(&value).map(|r| quantize_return_even(&r)),
                 _ => None,
             },
-            todays_contribution: match (latest, previous) {
-                (Some(l), Some(pr)) => Some(money(&p.holding.quantity.mul(&l.sub(pr)))),
-                _ => None,
-            },
+            todays_contribution: today.amount,
             total_contribution: match (&basis, &hv) {
                 (Some(b), Some(h)) => Some(money(&h.sub(b))),
                 _ => None,
@@ -2890,6 +2916,141 @@ pub fn router() -> Router<AppState> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use super::super::portfolios::portfolio::load::{HoldingDbRow, positions_from};
+
+    fn nov(day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, day).unwrap_or_default()
+    }
+
+    /// Portfolio 13 on 12 Nov 2026 (DB rows): 20 names bought today; RATNAVEER (2133),
+    /// SHILPAMED (11) and 2495 also sit in the broker pile (3), bought earlier.
+    /// (portfolio, instrument, quantity, avg_price, bought on (Nov), close of 11 Nov)
+    const BOOK: [(i64, i64, &str, &str, u32, &str); 23] = [
+        (13, 1, "403.0000", "382.5984", 12, "354.0000"),
+        (13, 5, "31.0000", "4703.5129", 12, "4655.1000"),
+        (13, 6, "80.0000", "1914.6525", 12, "1868.2000"),
+        (13, 8, "62.0000", "2395.7065", 12, "2429.0000"),
+        (13, 9, "145.0000", "1051.5824", 12, "983.4000"),
+        (13, 10, "34.0000", "4219.3265", 12, "4212.8000"),
+        (3, 11, "132.0000", "939.4500", 11, "934.1500"),
+        (13, 11, "157.0000", "964.6392", 12, "934.1500"),
+        (13, 19, "64.0000", "2377.1812", 12, "2385.0000"),
+        (13, 34, "12.0000", "11422.4167", 12, "11367.0000"),
+        (13, 39, "80.0000", "1900.2925", 12, "1918.6000"),
+        (13, 1353, "429.0000", "359.9816", 12, "363.2000"),
+        (13, 1557, "632.0000", "244.6790", 12, "236.7600"),
+        (13, 1713, "793.0000", "195.0064", 12, "192.1400"),
+        (3, 2133, "340.0000", "366.4000", 11, "370.5500"),
+        (13, 2133, "414.0000", "373.1660", 12, "370.5500"),
+        (13, 2209, "89.0000", "1713.9584", 12, "1723.3000"),
+        (13, 2274, "2225.0000", "69.6077", 12, "68.5100"),
+        (13, 2314, "167.0000", "912.0371", 12, "902.6500"),
+        (13, 2353, "174.0000", "882.2776", 12, "881.2000"),
+        (13, 2448, "270.0000", "569.3135", 12, "542.8500"),
+        (3, 2495, "204.0000", "610.7669", 9, "653.9000"),
+        (13, 2586, "927.0000", "166.7756", 12, "166.3100"),
+    ];
+
+    /// Live quote = 11 Nov close + 1 for every name; Today is measured from 11 Nov.
+    fn book_ledger() -> Ledger {
+        let rows = BOOK
+            .iter()
+            .map(|(pid, iid, q, avg, on, _)| HoldingDbRow {
+                portfolio_id: *pid,
+                instrument_id: *iid,
+                broker_account_id: 1,
+                quantity: Some(Dec::lit(q)),
+                avg_price: Some(Dec::lit(avg)),
+                portfolio_kind: "CAPITAL".to_owned(),
+                first_bought_on: Some(nov(*on)),
+                history_source: "NONE".to_owned(),
+            })
+            .collect();
+        let piles: HashSet<i64> = [3].into_iter().collect();
+        let mut ledger = Ledger {
+            positions: positions_from(rows, &piles).unwrap_or_else(|_| unreachable!()),
+            ..Ledger::default()
+        };
+        for (_, iid, _, _, _, close) in BOOK {
+            let close = Dec::lit(close);
+            ledger.prices.latest.insert(iid, close.add(&Dec::lit("1")));
+            ledger.prices.previous.insert(iid, close);
+            ledger.prices.previous_dated.insert(iid, nov(11));
+            ledger.prices.week_base.insert(iid, Dec::lit("1"));
+            ledger.prices.month_base.insert(iid, Dec::lit("1"));
+        }
+        ledger.prices.week_since = Some(nov(6));
+        ledger.prices.month_since = NaiveDate::from_ymd_opt(2026, 10, 13);
+        ledger.prices.live_overlay = true;
+        ledger
+    }
+
+    fn amount(m: &MoneyMoveOut) -> String {
+        m.amount
+            .as_ref()
+            .map(Dec::to_sci_string)
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn bought_today_portfolio_counts_every_period_from_its_own_purchase() {
+        let ledger = book_ledger();
+        let p13 = LedgerPortfolio {
+            portfolio_id: 13,
+            name: "AVG SHARP 12-1M".to_owned(),
+            kind: PortfolioKind::Capital,
+            source: PortfolioSource::MyScreen,
+            started_on: nov(12),
+        };
+        let owned = members_of(&ledger, &p13).unwrap_or_else(|_| unreachable!());
+        let members: Vec<&Position> = owned.iter().collect();
+        assert_eq!(members.len(), 20);
+        let ratnaveer = owned
+            .iter()
+            .find(|p| p.key.instrument_id == 2133)
+            .unwrap_or_else(|| unreachable!());
+        assert_eq!(ratnaveer.holding.quantity.to_sci_string(), "414.0000");
+        assert_eq!(ratnaveer.first_bought_on, Some(nov(12)));
+        let (invested, value, _) =
+            cost_and_value(&ledger, &members).unwrap_or_else(|_| unreachable!());
+        let since_purchase = value
+            .unwrap_or_else(Dec::zero)
+            .sub(&invested.unwrap_or_else(Dec::zero));
+        // Σ qty × (close + 1 − avg) = (Σ qty × close − cost) + Σ qty = −46,196.19 + 7,188.
+        assert_eq!(since_purchase.to_sci_string(), "-39008.19");
+        for m in [
+            todays_move(&ledger, &members, TODAY_LABEL),
+            week_move(&ledger, &members),
+            month_move(&ledger, &members),
+        ] {
+            assert_eq!(amount(&m), "-39008.19", "{}", m.label);
+            assert!(m.note.is_none());
+        }
+    }
+
+    #[test]
+    fn consolidated_counts_each_lot_from_its_own_purchase() {
+        let ledger = book_ledger();
+        let all: Vec<&Position> = ledger.positions.iter().collect();
+        let ratnaveer = all
+            .iter()
+            .find(|p| p.key.instrument_id == 2133)
+            .unwrap_or_else(|| unreachable!());
+        assert_eq!(ratnaveer.holding.quantity.to_sci_string(), "754.0000");
+        assert_eq!(
+            ratnaveer.cost().map(|c| c.to_sci_string()),
+            Some("279066.72400000".to_owned())
+        );
+        // Pile lots were held at 11 Nov's close: +1 a share on 340 + 132 + 204.
+        assert_eq!(
+            amount(&todays_move(&ledger, &all, TODAY_LABEL)),
+            "-38332.19"
+        );
+        // This week the pile lots count from their own cost: 340 × (371.55 − 366.40)
+        // + 132 × (935.15 − 939.45) + 204 × (654.90 − 610.7669) = 10,186.5524.
+        assert_eq!(amount(&week_move(&ledger, &all)), "-28821.63");
+    }
 
     #[test]
     fn ranges_and_labels() {

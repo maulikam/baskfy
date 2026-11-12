@@ -9,7 +9,7 @@ use super::cash::{CashFlowKind, LedgerCashFlow};
 use super::db;
 use super::ledger::{
     Allocation, Holding, HoldingKey, LedgerPortfolio, LedgerQuestion, PortfolioKind,
-    PortfolioSource, ReconciliationReason, holding_value,
+    PortfolioSource, ReconciliationReason, cost_basis, holding_value,
 };
 use super::pydec::Dec;
 use super::recon::{InboxEntry, LedgerPosition, ReconciliationState};
@@ -125,9 +125,49 @@ pub(crate) struct Position {
     pub(crate) monitoring_portfolio_ids: Vec<i64>,
     pub(crate) first_bought_on: Option<NaiveDate>,
     pub(crate) history_source: String,
+    /// Each capital row (piles included) at its own quantity, cost and purchase date.
+    pub(crate) lots: Vec<Lot>,
+}
+
+/// One portfolio's share of a position, as its `portfolio_holding` row records it.
+#[derive(Debug, Clone)]
+pub(crate) struct Lot {
+    pub(crate) portfolio_id: i64,
+    pub(crate) quantity: Dec,
+    pub(crate) avg_price: Option<Dec>,
+    pub(crate) first_bought_on: Option<NaiveDate>,
+    pub(crate) history_source: String,
 }
 
 impl Position {
+    /// What the shares cost: Σ lot quantity × that lot's price; `None` when any lot has none.
+    pub(crate) fn cost(&self) -> Option<Dec> {
+        if self.lots.is_empty() {
+            return cost_basis(&self.holding);
+        }
+        self.lots.iter().try_fold(Dec::lit("0"), |acc, l| {
+            l.avg_price.as_ref().map(|p| acc.add(&l.quantity.mul(p)))
+        })
+    }
+
+    /// This position as one capital portfolio holds it: its own quantity, cost and date.
+    pub(crate) fn in_portfolio(&self, portfolio_id: i64) -> Result<Option<Self>, Problem> {
+        let Some(lot) = self.lots.iter().find(|l| l.portfolio_id == portfolio_id) else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            key: self.key,
+            holding: Holding::new(self.key, lot.quantity.clone(), lot.avg_price.clone())
+                .map_err(fail)?,
+            capital_slices: vec![(portfolio_id, lot.quantity.clone())],
+            pile_slices: Vec::new(),
+            monitoring_portfolio_ids: Vec::new(),
+            first_bought_on: lot.first_bought_on,
+            history_source: lot.history_source.clone(),
+            lots: vec![lot.clone()],
+        }))
+    }
+
     /// `sole_capital_portfolio_id`.
     pub(crate) fn sole_capital_portfolio_id(&self) -> Option<i64> {
         if self.capital_slices.len() == 1 {
@@ -250,19 +290,19 @@ impl Ledger {
     }
 }
 
-struct HoldingDbRow {
-    portfolio_id: i64,
-    instrument_id: i64,
-    broker_account_id: i64,
-    quantity: Option<Dec>,
-    avg_price: Option<Dec>,
-    portfolio_kind: String,
-    first_bought_on: Option<NaiveDate>,
-    history_source: String,
+pub(crate) struct HoldingDbRow {
+    pub(crate) portfolio_id: i64,
+    pub(crate) instrument_id: i64,
+    pub(crate) broker_account_id: i64,
+    pub(crate) quantity: Option<Dec>,
+    pub(crate) avg_price: Option<Dec>,
+    pub(crate) portfolio_kind: String,
+    pub(crate) first_bought_on: Option<NaiveDate>,
+    pub(crate) history_source: String,
 }
 
 /// `_positions_from`.
-fn positions_from(
+pub(crate) fn positions_from(
     rows: Vec<HoldingDbRow>,
     pile_ids: &HashSet<i64>,
 ) -> Result<Vec<Position>, Problem> {
@@ -309,11 +349,23 @@ fn positions_from(
         let mut sorted_capital = capital.clone();
         sorted_capital.sort_by_key(|r| r.portfolio_id);
         let mut filed: Vec<(i64, Dec)> = Vec::new();
+        let mut lots: Vec<Lot> = Vec::new();
         for r in sorted_capital {
             if let Some(q) = &r.quantity {
+                let lot = Lot {
+                    portfolio_id: r.portfolio_id,
+                    quantity: q.clone(),
+                    avg_price: r.avg_price.clone(),
+                    first_bought_on: r.first_bought_on,
+                    history_source: r.history_source.clone(),
+                };
                 match filed.iter_mut().find(|(p, _)| *p == r.portfolio_id) {
                     Some(slot) => slot.1 = q.clone(),
                     None => filed.push((r.portfolio_id, q.clone())),
+                }
+                match lots.iter_mut().find(|l| l.portfolio_id == r.portfolio_id) {
+                    Some(slot) => *slot = lot,
+                    None => lots.push(lot),
                 }
             }
         }
@@ -338,8 +390,13 @@ fn positions_from(
             capital_slices: slices,
             pile_slices: piles,
             monitoring_portfolio_ids: monitoring,
-            first_bought_on: source_row.first_bought_on,
+            first_bought_on: lots
+                .iter()
+                .filter_map(|l| l.first_bought_on)
+                .min()
+                .or(source_row.first_bought_on),
             history_source: source_row.history_source.clone(),
+            lots,
         });
     }
     Ok(positions)

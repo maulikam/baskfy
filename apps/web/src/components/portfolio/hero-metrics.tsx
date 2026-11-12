@@ -81,6 +81,9 @@ function MoveFigure({ move, testId }: { move: Hero["todays_pnl"]; testId: string
           {move.unavailable_reason}
         </p>
       ) : null}
+      {move.amount !== null && move.note ? (
+        <p className="mt-1 max-w-[34ch] text-[11px] leading-snug text-muted-foreground">{move.note}</p>
+      ) : null}
     </div>
   );
 }

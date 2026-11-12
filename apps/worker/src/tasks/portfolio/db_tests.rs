@@ -328,8 +328,10 @@ async fn net_flow_divides_the_day_for_the_right_pot() {
 
     let result = run_portfolio_nav(&mut c, valuation()).await.unwrap();
     let user = &result.users[0];
-    assert_eq!(row_for(user, momentum).net_flow, dec("1500.00"));
-    assert_eq!(user.consolidated.net_flow, dec("9000.00"));
+    // ASSIGN/RELEASE (1500) and the deposit (9000), plus the first day's implied stock flow:
+    // 5 x 100 of shares less the 400 BUY that paid for some of them (owner, 12 Nov 2026).
+    assert_eq!(row_for(user, momentum).net_flow, dec("1600.00"));
+    assert_eq!(user.consolidated.net_flow, dec("9100.00"));
 }
 
 #[tokio::test]

@@ -95,6 +95,8 @@ pub(crate) struct Prices {
     pub(crate) as_of: Option<NaiveDate>,
     pub(crate) latest: HashMap<i64, Dec>,
     pub(crate) previous: HashMap<i64, Dec>,
+    /// The session of each `previous` close.
+    pub(crate) previous_dated: HashMap<i64, NaiveDate>,
     pub(crate) dated: HashMap<i64, NaiveDate>,
     pub(crate) unpriced: Vec<i64>,
     pub(crate) live_overlay: bool,
@@ -417,6 +419,7 @@ async fn load_prices(conn: &mut PgConnection, ids: &[i64]) -> Result<Prices, Pro
             prices.dated.insert(id, db::date(row, "date")?);
         } else {
             prices.previous.insert(id, close);
+            prices.previous_dated.insert(id, db::date(row, "date")?);
         }
     }
     let now = now_ist();
@@ -444,6 +447,9 @@ async fn load_prices(conn: &mut PgConnection, ids: &[i64]) -> Result<Prices, Pro
         }
         if let Some(stored) = prices.latest.get(&id).cloned() {
             prices.previous.insert(id, stored);
+        }
+        if let Some(on) = prices.dated.get(&id).copied() {
+            prices.previous_dated.insert(id, on);
         }
         prices.latest.insert(id, Dec::from_decimal(price));
         prices.live_overlay = true;

@@ -9119,6 +9119,8 @@ export interface components {
             amount?: string | null;
             /** Label */
             label: string;
+            /** Note */
+            note?: string | null;
             /** Pct */
             pct?: string | null;
             /** Since */

@@ -40,6 +40,9 @@ use super::portfolios::portfolio::nav::{
     since_grouped_figure, twr_figure,
 };
 use super::portfolios::portfolio::params::{self, IntBounds};
+use super::portfolios::portfolio::period::{
+    Leg, LegInput, PeriodTotal, period_leg, sum_legs, undated_note,
+};
 use super::portfolios::portfolio::pydec::Dec;
 use super::portfolios::portfolio::recon::{
     AttentionInputs, FreezeReport, InboxEntry, ReconciliationState, attention_items, freeze_report,
@@ -223,6 +226,9 @@ pub struct MoneyMoveOut {
     #[serde(serialize_with = "wire::ser::opt_date")]
     since: Option<NaiveDate>,
     unavailable_reason: Option<String>,
+    /// Set when some holdings could not be measured from their purchase.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
 }
 
 fn money_move(
@@ -238,6 +244,7 @@ fn money_move(
         label: label.to_owned(),
         since,
         unavailable_reason: reason.map(str::to_owned),
+        note: None,
     }
 }
 
@@ -955,38 +962,59 @@ fn chain_linked(points: &[NavPoint]) -> Result<Option<Dec>, Problem> {
 }
 
 fn todays_move(ledger: &Ledger, positions: &[&Position], label: &str) -> MoneyMoveOut {
-    let mut mv = Dec::lit("0");
-    let mut base = Dec::lit("0");
-    let mut measured = false;
-    for p in positions {
+    let legs = positions.iter().filter_map(|p| {
         let id = p.key.instrument_id;
-        let (Some(latest), Some(previous)) = (
-            ledger.prices.latest.get(&id),
+        let since = ledger.prices.previous_dated.get(&id).copied();
+        position_leg(
+            p,
+            ledger.prices.latest.get(&id)?,
             ledger.prices.previous.get(&id),
-        ) else {
-            continue;
-        };
-        measured = true;
-        let q = &p.holding.quantity;
-        mv = mv.add(&q.mul(&latest.sub(previous)));
-        base = base.add(&q.mul(previous));
-    }
-    if !measured {
-        return money_move(
-            None,
-            None,
-            label,
-            None,
-            Some("No previous close to compare against yet"),
-        );
-    }
+            since,
+        )
+    });
+    period_out(
+        sum_legs(legs),
+        label,
+        None,
+        "No previous close to compare against yet",
+    )
+}
+
+/// One position's leg: base is the later of the period start and its purchase (`period`).
+fn position_leg(
+    p: &Position,
+    price_now: &Dec,
+    start_close: Option<&Dec>,
+    since: Option<NaiveDate>,
+) -> Option<Leg> {
+    period_leg(&LegInput {
+        quantity: &p.holding.quantity,
+        price_now,
+        start_close,
+        since,
+        acquired_on: p.first_bought_on,
+        avg_price: p.holding.avg_price.as_ref(),
+    })
+}
+
+fn period_out(
+    total: PeriodTotal,
+    label: &str,
+    since: Option<NaiveDate>,
+    reason: &str,
+) -> MoneyMoveOut {
+    let (Some(mv), Some(base)) = (total.amount, total.base) else {
+        return money_move(None, None, label, since, Some(reason));
+    };
     let amount = money(&mv);
     let pct = if base.is_zero() {
         None
     } else {
         amount.div(&base).map(|r| quantize_return_even(&r))
     };
-    money_move(Some(amount), pct, label, None, None)
+    let mut out = money_move(Some(amount), pct, label, since, None);
+    out.note = undated_note(total.undated);
+    out
 }
 
 fn move_since(
@@ -997,29 +1025,11 @@ fn move_since(
     label: &str,
     reason: &str,
 ) -> MoneyMoveOut {
-    let mut mv = Dec::lit("0");
-    let mut total_base = Dec::lit("0");
-    let mut measured = false;
-    for p in positions {
+    let legs = positions.iter().filter_map(|p| {
         let id = p.key.instrument_id;
-        let (Some(latest), Some(start)) = (ledger.prices.latest.get(&id), base_map.get(&id)) else {
-            continue;
-        };
-        measured = true;
-        let q = &p.holding.quantity;
-        mv = mv.add(&q.mul(&latest.sub(start)));
-        total_base = total_base.add(&q.mul(start));
-    }
-    if !measured {
-        return money_move(None, None, label, since, Some(reason));
-    }
-    let amount = money(&mv);
-    let pct = if total_base.is_zero() {
-        None
-    } else {
-        amount.div(&total_base).map(|r| quantize_return_even(&r))
-    };
-    money_move(Some(amount), pct, label, since, None)
+        position_leg(p, ledger.prices.latest.get(&id)?, base_map.get(&id), since)
+    });
+    period_out(sum_legs(legs), label, since, reason)
 }
 
 fn week_move(ledger: &Ledger, positions: &[&Position]) -> MoneyMoveOut {

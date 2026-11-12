@@ -44,6 +44,7 @@ pub mod security;
 pub mod session;
 pub mod settings;
 pub mod state;
+pub mod strategy_books;
 pub mod wire;
 
 pub use app::build_app;

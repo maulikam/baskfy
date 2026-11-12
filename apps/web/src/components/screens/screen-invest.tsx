@@ -2,6 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { formatRupees } from "@/lib/discover/metrics";
 import { ApiError } from "@/lib/api/errors";
-import { usePortfolios } from "@/lib/portfolios/queries";
+import { portfolioKeys, usePortfolios } from "@/lib/portfolios/queries";
 import {
   DEFAULT_INVEST_AMOUNT,
   MAX_INVEST_COUNT,
@@ -30,7 +31,7 @@ import {
 } from "@/lib/screens/invest";
 import { cn } from "@/lib/utils";
 
-type Mode = "invest" | "rebalance" | "invest-again";
+type Mode = "invest" | "rebalance" | "invest-again" | "invest-more";
 
 export function ScreenInvestActions({
   screenName,
@@ -93,6 +94,17 @@ export function ScreenInvestActions({
             variant="primary"
             size="sm"
             className="rounded-full px-5"
+            data-testid="screen-invest-more"
+            title={`Buy more and add it to ${primary.name}`}
+            onClick={() => setMode("invest-more")}
+          >
+            Invest more
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="vaaya-pill rounded-full"
             data-testid="screen-rebalance"
             title={`Update ${primary.name} from this screen`}
             onClick={() => setMode("rebalance")}
@@ -101,14 +113,14 @@ export function ScreenInvestActions({
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="vaaya-pill rounded-full"
+            className="rounded-full"
             data-testid="screen-invest-again"
-            title="Create another portfolio from this screen"
+            title="Create a separate portfolio from this screen"
             onClick={() => setMode("invest-again")}
           >
-            Invest again
+            New portfolio
           </Button>
           <Link
             href={`/portfolio/${primary.id}` as Route}
@@ -171,6 +183,8 @@ function ScreenInvestDialog({
   onClose: () => void;
 }) {
   const isRebalance = mode === "rebalance";
+  const isMore = mode === "invest-more";
+  const queryClient = useQueryClient();
   const [name, setName] = useState(() =>
     isRebalance ? (linkedName ?? screenName) : nextInvestName(screenName, existingNames),
   );
@@ -264,6 +278,7 @@ function ScreenInvestDialog({
               ...input,
               name: name.trim(),
               plan_id: preview.plan_id,
+              ...(isMore && linkedId !== null ? { portfolio_id: linkedId } : {}),
             });
       if (saved.already_sent) {
         setOrders(saved.orders ?? []);
@@ -286,6 +301,9 @@ function ScreenInvestDialog({
       }
       setOrders(saved.orders ?? []);
       setDoneId(id);
+      // The screen's buttons read the portfolio list: refresh it, so a second invest offers
+      // "Invest more" into this portfolio, not a new one (12 Nov 2026: two AVG SHARP portfolios).
+      void queryClient.invalidateQueries({ queryKey: portfolioKeys.list });
     } catch (caught) {
       setError(
         caught instanceof ApiError
@@ -301,7 +319,9 @@ function ScreenInvestDialog({
 
   const title = isRebalance
     ? `Rebalance ${linkedName ?? name}`
-    : mode === "invest-again"
+    : isMore
+      ? `Invest more in ${linkedName ?? screenName}`
+      : mode === "invest-again"
       ? `Invest again in ${screenName}`
       : `Invest in ${screenName}`;
 
@@ -320,8 +340,8 @@ function ScreenInvestDialog({
         {doneId !== null ? (
           <div className="mt-4 space-y-3" data-testid="screen-invest-done">
             <p className="text-sm">
-              {isRebalance ? "Updated" : "Created"}{" "}
-              <span className="font-medium">{name.trim()}</span>.
+              {isRebalance ? "Updated" : isMore ? "Added to" : "Created"}{" "}
+              <span className="font-medium">{isMore ? (linkedName ?? name.trim()) : name.trim()}</span>.
             </p>
             {orders.length > 0 ? (
               <ul className="space-y-1 text-xs text-muted-foreground" data-testid="screen-invest-orders">
@@ -351,7 +371,13 @@ function ScreenInvestDialog({
               </p>
             ) : null}
 
-            {isRebalance ? null : (
+            {isMore && linkedName ? (
+              <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground" data-testid="screen-invest-more-note">
+                The buys are added to {linkedName}: quantities add up and the average price is recalculated.
+              </p>
+            ) : null}
+
+            {isRebalance || isMore ? null : (
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium">Portfolio name</span>
                 <Input

@@ -105,6 +105,8 @@ export interface ScreenInvestRequest {
   plan_id?: string;
   /** Top-ranked names to size. */
   top_n?: number;
+  /** Invest more into this existing portfolio from the same screen, instead of creating one. */
+  portfolio_id?: number;
 }
 
 function investBody(input: ScreenInvestRequest, name?: string): Record<string, unknown> {
@@ -117,6 +119,7 @@ function investBody(input: ScreenInvestRequest, name?: string): Record<string, u
     ...(input.costs === undefined ? {} : { costs: input.costs }),
     ...(input.plan_id ? { plan_id: input.plan_id } : {}),
     ...(input.top_n === undefined ? {} : { top_n: input.top_n }),
+    ...(input.portfolio_id === undefined ? {} : { portfolio_id: input.portfolio_id }),
   };
 }
 

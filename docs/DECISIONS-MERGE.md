@@ -8790,3 +8790,10 @@ only `mb_model` / `mb_score_daily`. **Reverse:** delete the `mb` stage and the `
 - The breakeven floor rounds UP to the 0.05 tick, so it never sits below entry plus its buffer (SUNTV: 613.85, not 613.80).
 - Default breakeven trigger lowered from +5% to +3% (Maulik: "if stock is in profit, we always exit in profit"); editable per strategy on /trailing-stops. ⚠ UNREVIEWED.
 - Portfolio delete: when the API refuses with has-holdings that the page did not list, the dialog asks for the typed name and resends with the confirm.
+
+## SCREEN-INVEST-MORE — a second invest through the same screen goes into the same portfolio (12 Nov 2026) — Maulik, in session
+
+- Maulik: "I invested 10 lakh and then 5 lakh, so our system created two portfolios. It should be in a single one since we have invested through this same screen." Cause: after an invest the page never refreshed its portfolio list, so it kept offering a plain Invest (create).
+- Choice: `POST /screens/{id}/invest` accepts `portfolio_id`; the buys go through the same order path and are added to that portfolio's holdings (quantities summed, average price weighted, earliest purchase date kept; sleeve capital increased). The web's primary action for a screen with a portfolio is "Invest more"; Rebalance and "New portfolio" stay. The portfolio list is invalidated after every invest.
+- Screen invest now stamps `first_bought_on` = today on the holdings it creates, so period P&L counts from the purchase.
+- Reverse: drop `portfolio_id` handling in `invest_from_screen` and the Invest more button.

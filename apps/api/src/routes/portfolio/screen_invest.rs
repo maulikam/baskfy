@@ -256,6 +256,8 @@ struct InvestBody {
     broker: Option<model::PyInt>,
     /// Names to size; `None` takes the screen's own count, else [`DEFAULT_TOP_N`].
     top_n: Option<usize>,
+    /// Invest more into this existing portfolio built from the same screen, instead of a new one.
+    into_portfolio_id: Option<model::PyInt>,
 }
 
 #[derive(Debug, Clone)]
@@ -660,6 +662,7 @@ fn parse_invest_body(
     };
     let parent_id = model::optional_int(entries, "parent_id", "", Bounds::default(), errors);
     let broker = model::optional_int(entries, "broker_account_id", "", Bounds::default(), errors);
+    let into = model::optional_int(entries, "portfolio_id", "", Bounds::default(), errors);
     let top_n = model::optional_int(
         entries,
         "top_n",
@@ -685,12 +688,13 @@ fn parse_invest_body(
             "parent_id",
             "broker_account_id",
             "top_n",
+            "portfolio_id",
         ],
         "",
         errors,
     );
     match (
-        name, amount, mtf, leverage, reserve, costs, plan_id, parent_id, broker, top_n,
+        name, amount, mtf, leverage, reserve, costs, plan_id, parent_id, broker, top_n, into,
     ) {
         (
             Some(name),
@@ -703,6 +707,7 @@ fn parse_invest_body(
             Ok(parent_id),
             Ok(broker),
             Ok(top_n),
+            Ok(into),
         ) => Some(InvestBody {
             name: {
                 let trimmed = name.trim();
@@ -725,6 +730,7 @@ fn parse_invest_body(
             parent_id,
             broker,
             top_n,
+            into_portfolio_id: into,
         }),
         _ => None,
     }
@@ -1097,6 +1103,82 @@ async fn write_holdings(
         return Err(too_many(holdings.len()));
     }
     apply(conn, portfolio, &rows_from_body(&holdings)).await
+}
+
+/// "Invest more" (Maulik, 12 Nov 2026: a second invest through the same screen belongs in the same
+/// portfolio): today's buys are added to the portfolio's holdings — quantities summed, average price
+/// weighted by quantity — and each name keeps the earliest purchase date it had.
+async fn add_to_holdings(
+    conn: &mut PgConnection,
+    portfolio: &OwnedPortfolio,
+    book: &SizedBook,
+) -> Result<ImportReportOut, Problem> {
+    let rows = sqlx::query(
+        "SELECT i.symbol, h.quantity::text AS q, h.avg_price::text AS p, \
+         COALESCE(h.first_bought_on, h.added_on) AS since \
+         FROM portfolio_holding h JOIN instrument i ON i.id = h.instrument_id WHERE h.portfolio_id = $1",
+    )
+    .bind(portfolio.id)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(db::fail)?;
+    let parse = |t: Option<String>| t.and_then(|v| v.parse::<WideDecimal>().ok());
+    let mut merged: Vec<(String, WideDecimal, WideDecimal)> = Vec::new();
+    let mut since: Vec<(String, NaiveDate)> = Vec::new();
+    for row in &rows {
+        let symbol: String = db::get(row, "symbol")?;
+        let (Some(q), Some(p)) = (parse(db::get(row, "q")?), parse(db::get(row, "p")?)) else {
+            continue;
+        };
+        if let Some(d) = db::get::<Option<NaiveDate>>(row, "since")? {
+            since.push((symbol.clone(), d));
+        }
+        merged.push((symbol, q, p));
+    }
+    for row in &book.holdings {
+        let (Some(qty), Some(price)) = (row.quantity.filter(|q| *q > 0), row.price.clone()) else {
+            continue;
+        };
+        let add = dec(qty);
+        match merged.iter_mut().find(|(s, _, _)| *s == row.symbol) {
+            Some((_, q, p)) => {
+                let total = q.clone().add(&add);
+                let cost = q.clone().mul(p).add(&add.clone().mul(&price));
+                *p = cost.div(&total).unwrap_or_else(|_| price.clone());
+                *q = total;
+            }
+            None => merged.push((row.symbol.clone(), add, price)),
+        }
+    }
+    let holdings: Vec<HoldingIn> = merged
+        .into_iter()
+        .map(|(s, q, p)| HoldingIn::sized(s, q, p))
+        .collect();
+    if holdings.len() > MAX_IMPORT_ROWS {
+        return Err(too_many(holdings.len()));
+    }
+    let report = apply(conn, portfolio, &rows_from_body(&holdings)).await?;
+    for (symbol, d) in since {
+        sqlx::query(
+            "UPDATE portfolio_holding h SET first_bought_on = $3 FROM instrument i \
+             WHERE h.portfolio_id = $1 AND h.instrument_id = i.id AND i.symbol = $2",
+        )
+        .bind(portfolio.id)
+        .bind(&symbol)
+        .bind(d)
+        .execute(&mut *conn)
+        .await
+        .map_err(db::fail)?;
+    }
+    sqlx::query(
+        "UPDATE portfolio_holding SET first_bought_on = (now() AT TIME ZONE 'Asia/Kolkata')::date \
+         WHERE portfolio_id = $1 AND first_bought_on IS NULL",
+    )
+    .bind(portfolio.id)
+    .execute(&mut *conn)
+    .await
+    .map_err(db::fail)?;
+    Ok(report)
 }
 
 fn quote_stamp(as_of: Option<NaiveDate>) -> String {
@@ -1784,6 +1866,31 @@ pub async fn invest_from_screen(
                 }
                 (as_of, book)
             };
+            if let Some(raw) = body.into_portfolio_id {
+                let existing = load(conn, raw, user_id).await?;
+                let linked = screen_links(conn, user_id).await?;
+                if linked.get(&existing.id) != Some(&screen.public_id) {
+                    return Err(refuse(
+                        "That portfolio was not built from this screen; invest into a new one instead.",
+                    ));
+                }
+                let report = add_to_holdings(conn, &existing, &book).await?;
+                sqlx::query(
+                    "UPDATE portfolio_sleeve SET capital = capital + $2::numeric \
+                     WHERE portfolio_id = $1 AND kind = 'screen' AND screen_id = $3",
+                )
+                .bind(existing.id)
+                .bind(sleeve_capital(&book).to_sci_string())
+                .bind(screen.id)
+                .execute(&mut *conn)
+                .await
+                .map_err(db::fail)?;
+                let detail = PortfolioWriteDetailOut {
+                    portfolio: portfolio_out(conn, &existing).await?,
+                    report,
+                };
+                return Ok(out_of(book, as_of, Some(detail)));
+            }
             let name = body.name.unwrap_or_else(|| screen.name.clone());
             let parent = match body.parent_id {
                 Some(raw) => Some(load(conn, raw, user_id).await?.id),
@@ -1794,6 +1901,15 @@ pub async fn invest_from_screen(
                 insert_portfolio(conn, user_id, &name, parent, broker_account_id, "MY_SCREEN")
                     .await?;
             let report = write_holdings(conn, &portfolio, &book).await?;
+            // These shares were bought today: period P&L counts from this date, not the period start.
+            sqlx::query(
+                "UPDATE portfolio_holding SET first_bought_on = (now() AT TIME ZONE 'Asia/Kolkata')::date \
+                 WHERE portfolio_id = $1 AND first_bought_on IS NULL",
+            )
+            .bind(portfolio.id)
+            .execute(&mut *conn)
+            .await
+            .map_err(db::fail)?;
             attach_screen_sleeve(conn, portfolio.id, &screen, &book).await?;
             let detail = PortfolioWriteDetailOut {
                 portfolio: portfolio_out(conn, &portfolio).await?,

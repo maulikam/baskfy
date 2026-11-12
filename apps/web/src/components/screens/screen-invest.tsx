@@ -45,10 +45,39 @@ export function ScreenInvestActions({
   );
   const primary = linked[0] ?? null;
   const [mode, setMode] = useState<Mode | null>(null);
+  // Until the portfolio list has loaded we cannot know whether this screen already has one; a plain
+  // Invest offered in that gap created a duplicate (Maulik, 12 Nov 2026: two "AVG SHARP 12-1M").
+  const unknown = portfolios.data === undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {primary ? (
+      {unknown ? (
+        portfolios.isError ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full px-5"
+            data-testid="screen-invest-retry"
+            title="Your portfolios could not be loaded, so Baskfy cannot tell whether this screen already has one"
+            onClick={() => void portfolios.refetch()}
+          >
+            Portfolios didn&rsquo;t load · retry
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className="rounded-full px-5"
+            data-testid="screen-invest-checking"
+            disabled
+            title="Checking whether this screen already has a portfolio"
+          >
+            Checking…
+          </Button>
+        )
+      ) : primary ? (
         <>
           <Button
             type="button"
